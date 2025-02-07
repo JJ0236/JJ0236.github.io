@@ -38,7 +38,7 @@
             border-radius: 10px;
             box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
             text-decoration: none;
-            transition: transform 0.3s ease-out, left 0.5s ease-in-out, top 0.5s ease-in-out;
+            animation: float 3s infinite ease-in-out alternate;
         }
 
         /* Soft, complementary colors */
@@ -50,81 +50,27 @@
 
         @keyframes float {
             0% { transform: translateY(0); }
-            100% { transform: translateY(10px); }
+            100% { transform: translateY(15px); }
         }
 
-        .nav-box {
-            animation: float 3s infinite ease-in-out alternate;
-        }
+        /* Strategic Floating Positions */
+        .nav-box:nth-child(2) { top: 20%; left: 50%; transform: translateX(-50%); } /* Top Center */
+        .nav-box:nth-child(3) { top: 40%; left: 75%; } /* Upper Right */
+        .nav-box:nth-child(4) { top: 65%; left: 75%; } /* Lower Right */
+        .nav-box:nth-child(5) { top: 65%; left: 25%; } /* Lower Left */
+        .nav-box:nth-child(6) { top: 40%; left: 25%; } /* Upper Left */
 
     </style>
 </head>
 <body>
     <h1>Welcome</h1>
 
-    <!-- Navigation Boxes -->
-    <a href="#" class="nav-box" id="box1">Page 5</a> <!-- 12 o'clock -->
-    <a href="#" class="nav-box" id="box2">Page 1</a> <!-- 2 o'clock -->
-    <a href="#" class="nav-box" id="box3">Page 2</a> <!-- 5 o'clock -->
-    <a href="#" class="nav-box" id="box4">Page 3</a> <!-- 7 o'clock -->
-    <a href="#" class="nav-box" id="box5">Page 4</a> <!-- 10 o'clock -->
-
-    <script>
-        const boxes = document.querySelectorAll('.nav-box');
-        let timeout;
-
-        // Store original positions
-        const originalPositions = [
-            { top: "15%", left: "50%" },  // 12 o'clock
-            { top: "30%", left: "70%" },  // 2 o'clock
-            { top: "70%", left: "70%" },  // 5 o'clock
-            { top: "70%", left: "30%" },  // 7 o'clock
-            { top: "30%", left: "30%" }   // 10 o'clock
-        ];
-
-        // Set initial positions
-        boxes.forEach((box, index) => {
-            box.style.top = originalPositions[index].top;
-            box.style.left = originalPositions[index].left;
-
-            box.addEventListener("mousemove", (event) => moveAway(event, box));
-            box.addEventListener("mouseleave", resetTimer);
-        });
-
-        function moveAway(event, box) {
-            clearTimeout(timeout); // Reset return timer
-            const boxRect = box.getBoundingClientRect();
-            const cursorX = event.clientX;
-            const cursorY = event.clientY;
-            const boxCenterX = boxRect.left + boxRect.width / 2;
-            const boxCenterY = boxRect.top + boxRect.height / 2;
-            
-            // Calculate direction to move away
-            const deltaX = boxCenterX - cursorX;
-            const deltaY = boxCenterY - cursorY;
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-            // Move away in opposite direction
-            const moveX = (deltaX / distance) * 250;
-            const moveY = (deltaY / distance) * 250;
-
-            box.style.transform = `translate(${moveX}px, ${moveY}px)`;
-        }
-
-        function resetTimer() {
-            clearTimeout(timeout);
-            timeout = setTimeout(resetBoxes, 3000); // Reset after 3 seconds
-        }
-
-        function resetBoxes() {
-            boxes.forEach((box, index) => {
-                box.style.transform = "translate(0,0)";
-                box.style.top = originalPositions[index].top;
-                box.style.left = originalPositions[index].left;
-            });
-        }
-
-    </script>
+    <!-- Floating Navigation Boxes -->
+    <a href="#" class="nav-box">Page 5</a> <!-- Top Center -->
+    <a href="#" class="nav-box">Page 1</a> <!-- Upper Right -->
+    <a href="#" class="nav-box">Page 2</a> <!-- Lower Right -->
+    <a href="#" class="nav-box">Page 3</a> <!-- Lower Left -->
+    <a href="#" class="nav-box">Page 4</a> <!-- Upper Left -->
 
 </body>
 </html>
