@@ -1,101 +1,126 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Josh's Corner</title>
-    <style>
-        body {
-            background-color: #85a6d4;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            position: relative;
-            overflow: hidden;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Josh's Corner</title>
+  <style>
+    /* Remove default margins and hide overflow */
+    body {
+      background-color: #85a6d4;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
 
-        .container {
-            position: relative;
-            text-align: center;
-        }
+    /* Make the container fill the viewport */
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
 
-        h1 {
-            font-size: 2.5rem;
-            color: white;
-            max-width: 80%;
-            margin-bottom: 30px;
-        }
+    /* Center the heading absolutely in the container */
+    .container h1 {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 2.5rem;
+      color: white;
+      text-align: center;
+      max-width: 80%;
+      margin: 0;
+    }
 
-        .nav-box {
-            position: absolute;
-            width: 160px;
-            height: 80px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: white;
-            border-radius: 10px;
-            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
-            text-decoration: none;
-            opacity: 0; /* Start hidden */
-            transform: translate(-50%, -50%) scale(0.5); /* Start stacked & small */
-            transition: all 1.5s ease-in-out;
-        }
+    /* Base styles for the nav boxes */
+    .nav-box {
+      position: absolute;
+      width: 160px;
+      height: 80px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: white;
+      border-radius: 10px;
+      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+      text-decoration: none;
+      opacity: 0; /* Start hidden */
+      transition: all 1.5s ease-in-out;
+      /* Start centered with a smaller scale */
+      transform: translate(-50%, -50%) scale(0.5);
+    }
 
-        /* Soft Muted Colors */
-        .nav-box:nth-child(2) { background-color: #f4d35e; } /* Muted Yellow */
-        .nav-box:nth-child(3) { background-color: #ee964b; } /* Soft Coral */
-        .nav-box:nth-child(4) { background-color: #3d5a80; } /* Pastel Teal */
-        .nav-box:nth-child(5) { background-color: #e07a5f; } /* Warm Peach */
-        .nav-box:nth-child(6) { background-color: #81b29a; } /* Desaturated Green */
+    /* Soft Muted Colors for each box */
+    .nav-box:nth-child(2) { background-color: #f4d35e; } /* Page 5 */
+    .nav-box:nth-child(3) { background-color: #ee964b; } /* Page 1 */
+    .nav-box:nth-child(4) { background-color: #3d5a80; } /* Page 2 */
+    .nav-box:nth-child(5) { background-color: #e07a5f; } /* Page 3 */
+    .nav-box:nth-child(6) { background-color: #81b29a; } /* Page 4 */
 
-        @keyframes float {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(15px); }
-        }
+    /* Position the nav boxes around the center (adjust these values as needed) */
+    /* Note: The h1 is the first child so the nav boxes are child 2 to 6 */
+    .nav-box:nth-child(2) { /* Page 5 - Top Center */
+      top: calc(50% - 150px);
+      left: 50%;
+    }
+    .nav-box:nth-child(3) { /* Page 1 - Upper Right */
+      top: calc(50% - 100px);
+      left: calc(50% + 100px);
+    }
+    .nav-box:nth-child(4) { /* Page 2 - Lower Right */
+      top: calc(50% + 100px);
+      left: calc(50% + 100px);
+    }
+    .nav-box:nth-child(5) { /* Page 3 - Lower Left */
+      top: calc(50% + 100px);
+      left: calc(50% - 100px);
+    }
+    .nav-box:nth-child(6) { /* Page 4 - Upper Left */
+      top: calc(50% - 100px);
+      left: calc(50% - 100px);
+    }
 
-        /* Hidden on load, then move into position */
-        .nav-box.show {
-            opacity: 1;
-            transform: translate(0, 0) scale(1);
-            animation: float 3s infinite ease-in-out alternate;
-        }
+    /* When the .show class is added, the boxes scale up and fade in */
+    .nav-box.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      animation: float 3s infinite ease-in-out alternate;
+    }
 
-        /* Target positions after animation */
-        .nav-box:nth-child(2) { top: 10%; left: 50%; } /* Top Center */
-        .nav-box:nth-child(3) { top: 30%; left: 85%; } /* Upper Right */
-        .nav-box:nth-child(4) { top: 70%; left: 85%; } /* Lower Right */
-        .nav-box:nth-child(5) { top: 70%; left: 15%; } /* Lower Left */
-        .nav-box:nth-child(6) { top: 30%; left: 15%; } /* Upper Left */
-
-    </style>
+    /* Simple float animation that adds a little vertical movement */
+    @keyframes float {
+      0% {
+        transform: translate(-50%, -50%) scale(1) translateY(0);
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1) translateY(15px);
+      }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Hey, I'm Josh!<br>Welcome to my corner of the web</h1>
+  <div class="container">
+    <h1>Hey, I'm Josh!<br>Welcome to my corner of the web</h1>
+    <!-- Floating Navigation Boxes -->
+    <a href="#" class="nav-box">Page 5</a> <!-- Top Center -->
+    <a href="#" class="nav-box">Page 1</a> <!-- Upper Right -->
+    <a href="#" class="nav-box">Page 2</a> <!-- Lower Right -->
+    <a href="#" class="nav-box">Page 3</a> <!-- Lower Left -->
+    <a href="#" class="nav-box">Page 4</a> <!-- Upper Left -->
+  </div>
 
-        <!-- Floating Navigation Boxes -->
-        <a href="#" class="nav-box">Page 5</a> <!-- Top Center -->
-        <a href="#" class="nav-box">Page 1</a> <!-- Upper Right -->
-        <a href="#" class="nav-box">Page 2</a> <!-- Lower Right -->
-        <a href="#" class="nav-box">Page 3</a> <!-- Lower Left -->
-        <a href="#" class="nav-box">Page 4</a> <!-- Upper Left -->
-    </div>
-
-    <script>
-        // Wait until page loads, then spread out boxes
-        window.addEventListener("load", function () {
-            setTimeout(() => {
-                document.querySelectorAll('.nav-box').forEach(box => {
-                    box.classList.add("show");
-                });
-            }, 500); // Start animation after 0.5s delay
+  <script>
+    // Once the page loads, add the "show" class to animate the nav boxes
+    window.addEventListener("load", function () {
+      setTimeout(() => {
+        document.querySelectorAll('.nav-box').forEach(box => {
+          box.classList.add("show");
         });
-    </script>
+      }, 500); // Delay before animation starts
+    });
+  </script>
 </body>
 </html>
