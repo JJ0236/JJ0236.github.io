@@ -38,7 +38,7 @@
             border-radius: 10px;
             box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
             text-decoration: none;
-            transition: transform 0.2s ease-out, left 0.5s ease-in-out, top 0.5s ease-in-out;
+            transition: transform 0.3s ease-out, left 0.5s ease-in-out, top 0.5s ease-in-out;
         }
 
         /* Soft, complementary colors */
@@ -87,17 +87,24 @@
             box.style.top = originalPositions[index].top;
             box.style.left = originalPositions[index].left;
 
-            box.addEventListener("mouseover", (event) => moveAway(event, box));
+            box.addEventListener("mousemove", (event) => moveAway(event, box));
             box.addEventListener("mouseleave", resetTimer);
         });
 
         function moveAway(event, box) {
             clearTimeout(timeout); // Reset return timer
             const boxRect = box.getBoundingClientRect();
-            const deltaX = event.clientX - (boxRect.left + boxRect.width / 2);
-            const deltaY = event.clientY - (boxRect.top + boxRect.height / 2);
-            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const cursorX = event.clientX;
+            const cursorY = event.clientY;
+            const boxCenterX = boxRect.left + boxRect.width / 2;
+            const boxCenterY = boxRect.top + boxRect.height / 2;
             
+            // Calculate direction to move away
+            const deltaX = boxCenterX - cursorX;
+            const deltaY = boxCenterY - cursorY;
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+            // Move away in opposite direction
             const moveX = (deltaX / distance) * 250;
             const moveY = (deltaY / distance) * 250;
 
