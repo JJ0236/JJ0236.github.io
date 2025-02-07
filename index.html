@@ -5,34 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner</title>
   <style>
-    /* Remove default margins and hide overflow */
+    /* Reset and base styles */
     body {
-      background-color: #85a6d4;
       margin: 0;
+      background-color: #85a6d4;
       font-family: Arial, sans-serif;
       overflow: hidden;
     }
-
-    /* Make the container fill the viewport */
+    
     .container {
       position: relative;
       width: 100vw;
       height: 100vh;
     }
-
-    /* Center the heading absolutely in the container */
+    
+    /* Center the main text in the viewport */
     .container h1 {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 2.5rem;
       color: white;
+      font-size: 2.5rem;
       text-align: center;
       max-width: 80%;
       margin: 0;
     }
-
+    
     /* Base styles for the nav boxes */
     .nav-box {
       position: absolute;
@@ -45,52 +44,66 @@
       font-weight: bold;
       color: white;
       border-radius: 10px;
-      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
       text-decoration: none;
-      opacity: 0; /* Start hidden */
+      opacity: 0; /* Hidden initially */
       transition: all 1.5s ease-in-out;
-      /* Start centered with a smaller scale */
+      /* Start centered (will animate into position) */
       transform: translate(-50%, -50%) scale(0.5);
     }
-
-    /* Soft Muted Colors for each box */
-    .nav-box:nth-child(2) { background-color: #f4d35e; } /* Page 5 */
-    .nav-box:nth-child(3) { background-color: #ee964b; } /* Page 1 */
-    .nav-box:nth-child(4) { background-color: #3d5a80; } /* Page 2 */
-    .nav-box:nth-child(5) { background-color: #e07a5f; } /* Page 3 */
-    .nav-box:nth-child(6) { background-color: #81b29a; } /* Page 4 */
-
-    /* Position the nav boxes around the center (adjust these values as needed) */
-    /* Note: The h1 is the first child so the nav boxes are child 2 to 6 */
-    .nav-box:nth-child(2) { /* Page 5 - Top Center */
+    
+    /* Arrange the boxes in a circle (radius = 150px)
+       We’re using pre‑calculated offsets from the center.
+       The angles (in degrees) chosen for each box are:
+         • Box 1: 270° (directly above the center)
+         • Box 2: 342° (upper right)
+         • Box 3: 54° (lower right)
+         • Box 4: 126° (lower left)
+         • Box 5: 198° (upper left)
+    */
+    
+    /* For anchor elements, nth-of-type counts only <a> tags.
+       This lets us ignore the <h1> when positioning.
+    */
+    .nav-box:nth-of-type(1) {
+      /* Angle 270°: (x = 150*cos(270)=0, y = 150*sin(270) = -150) */
+      left: calc(50% + 0px);
       top: calc(50% - 150px);
-      left: 50%;
+      background-color: #f4d35e;
     }
-    .nav-box:nth-child(3) { /* Page 1 - Upper Right */
-      top: calc(50% - 100px);
-      left: calc(50% + 100px);
+    .nav-box:nth-of-type(2) {
+      /* Angle 342°: (x = 150*cos(18)=~142.66, y = 150*sin(342)=150*sin(-18)=~ -46.35) */
+      left: calc(50% + 142.66px);
+      top: calc(50% - 46.35px);
+      background-color: #ee964b;
     }
-    .nav-box:nth-child(4) { /* Page 2 - Lower Right */
-      top: calc(50% + 100px);
-      left: calc(50% + 100px);
+    .nav-box:nth-of-type(3) {
+      /* Angle 54°: (x = 150*cos(54)=~88.17, y = 150*sin(54)=~121.35) */
+      left: calc(50% + 88.17px);
+      top: calc(50% + 121.35px);
+      background-color: #3d5a80;
     }
-    .nav-box:nth-child(5) { /* Page 3 - Lower Left */
-      top: calc(50% + 100px);
-      left: calc(50% - 100px);
+    .nav-box:nth-of-type(4) {
+      /* Angle 126°: (x = 150*cos(126)=~ -88.17, y = 150*sin(126)=~121.35) */
+      left: calc(50% - 88.17px);
+      top: calc(50% + 121.35px);
+      background-color: #e07a5f;
     }
-    .nav-box:nth-child(6) { /* Page 4 - Upper Left */
-      top: calc(50% - 100px);
-      left: calc(50% - 100px);
+    .nav-box:nth-of-type(5) {
+      /* Angle 198°: (x = 150*cos(198)=~ -142.66, y = 150*sin(198)=~ -46.35) */
+      left: calc(50% - 142.66px);
+      top: calc(50% - 46.35px);
+      background-color: #81b29a;
     }
-
-    /* When the .show class is added, the boxes scale up and fade in */
+    
+    /* When the "show" class is added, the nav boxes fade in, scale up, and float gently */
     .nav-box.show {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
       animation: float 3s infinite ease-in-out alternate;
     }
-
-    /* Simple float animation that adds a little vertical movement */
+    
+    /* A gentle vertical float animation */
     @keyframes float {
       0% {
         transform: translate(-50%, -50%) scale(1) translateY(0);
@@ -104,22 +117,22 @@
 <body>
   <div class="container">
     <h1>Hey, I'm Josh!<br>Welcome to my corner of the web</h1>
-    <!-- Floating Navigation Boxes -->
-    <a href="#" class="nav-box">Page 5</a> <!-- Top Center -->
-    <a href="#" class="nav-box">Page 1</a> <!-- Upper Right -->
-    <a href="#" class="nav-box">Page 2</a> <!-- Lower Right -->
-    <a href="#" class="nav-box">Page 3</a> <!-- Lower Left -->
-    <a href="#" class="nav-box">Page 4</a> <!-- Upper Left -->
+    <!-- Five Navigation Boxes -->
+    <a href="#" class="nav-box">Page 5</a>
+    <a href="#" class="nav-box">Page 1</a>
+    <a href="#" class="nav-box">Page 2</a>
+    <a href="#" class="nav-box">Page 3</a>
+    <a href="#" class="nav-box">Page 4</a>
   </div>
-
+  
   <script>
-    // Once the page loads, add the "show" class to animate the nav boxes
+    // After the page loads, add the "show" class to animate the nav boxes into position.
     window.addEventListener("load", function () {
       setTimeout(() => {
         document.querySelectorAll('.nav-box').forEach(box => {
           box.classList.add("show");
         });
-      }, 500); // Delay before animation starts
+      }, 500); // Start animation after a 0.5s delay
     });
   </script>
 </body>
