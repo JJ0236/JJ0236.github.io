@@ -38,10 +38,10 @@
             border-radius: 10px;
             box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
             text-decoration: none;
-            transition: transform 0.3s ease-out;
+            transition: transform 0.2s ease-out, left 0.5s ease-in-out, top 0.5s ease-in-out;
         }
 
-        /* Soft, muted colors that match the background */
+        /* Soft, complementary colors */
         .nav-box:nth-child(2) { background-color: #f4d35e; } /* Muted Yellow */
         .nav-box:nth-child(3) { background-color: #ee964b; } /* Soft Coral */
         .nav-box:nth-child(4) { background-color: #3d5a80; } /* Pastel Teal */
@@ -63,60 +63,60 @@
     <h1>Welcome</h1>
 
     <!-- Navigation Boxes -->
-    <a href="#" class="nav-box" id="box1">Page 5</a>
-    <a href="#" class="nav-box" id="box2">Page 1</a>
-    <a href="#" class="nav-box" id="box3">Page 2</a>
-    <a href="#" class="nav-box" id="box4">Page 3</a>
-    <a href="#" class="nav-box" id="box5">Page 4</a>
+    <a href="#" class="nav-box" id="box1">Page 5</a> <!-- 12 o'clock -->
+    <a href="#" class="nav-box" id="box2">Page 1</a> <!-- 2 o'clock -->
+    <a href="#" class="nav-box" id="box3">Page 2</a> <!-- 5 o'clock -->
+    <a href="#" class="nav-box" id="box4">Page 3</a> <!-- 7 o'clock -->
+    <a href="#" class="nav-box" id="box5">Page 4</a> <!-- 10 o'clock -->
 
     <script>
-        // Randomly position the boxes around the "Welcome" text
-        function placeBoxes() {
-            const boxes = document.querySelectorAll('.nav-box');
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
+        const boxes = document.querySelectorAll('.nav-box');
+        let timeout;
 
-            boxes.forEach(box => {
-                let randomX = (Math.random() - 0.5) * window.innerWidth * 0.6 + centerX;
-                let randomY = (Math.random() - 0.5) * window.innerHeight * 0.5 + centerY;
+        // Store original positions
+        const originalPositions = [
+            { top: "15%", left: "50%" },  // 12 o'clock
+            { top: "30%", left: "70%" },  // 2 o'clock
+            { top: "70%", left: "70%" },  // 5 o'clock
+            { top: "70%", left: "30%" },  // 7 o'clock
+            { top: "30%", left: "30%" }   // 10 o'clock
+        ];
 
-                // Ensure boxes don't overlap the "Welcome" text
-                if (Math.abs(randomX - centerX) < 120) randomX += 150 * (Math.random() > 0.5 ? 1 : -1);
-                if (Math.abs(randomY - centerY) < 80) randomY += 100 * (Math.random() > 0.5 ? 1 : -1);
+        // Set initial positions
+        boxes.forEach((box, index) => {
+            box.style.top = originalPositions[index].top;
+            box.style.left = originalPositions[index].left;
 
-                box.style.left = `${randomX}px`;
-                box.style.top = `${randomY}px`;
-            });
-        }
+            box.addEventListener("mouseover", (event) => moveAway(event, box));
+            box.addEventListener("mouseleave", resetTimer);
+        });
 
-        // Make boxes move away from the cursor
-        function runAway(event) {
-            const box = event.target;
+        function moveAway(event, box) {
+            clearTimeout(timeout); // Reset return timer
             const boxRect = box.getBoundingClientRect();
-            const centerX = boxRect.left + boxRect.width / 2;
-            const centerY = boxRect.top + boxRect.height / 2;
-
-            const deltaX = centerX - event.clientX;
-            const deltaY = centerY - event.clientY;
-
+            const deltaX = event.clientX - (boxRect.left + boxRect.width / 2);
+            const deltaY = event.clientY - (boxRect.top + boxRect.height / 2);
             const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-            const moveX = (deltaX / distance) * 100;
-            const moveY = (deltaY / distance) * 100;
+            
+            const moveX = (deltaX / distance) * 250;
+            const moveY = (deltaY / distance) * 250;
 
             box.style.transform = `translate(${moveX}px, ${moveY}px)`;
         }
 
-        function resetBox(event) {
-            event.target.style.transform = 'translate(0, 0)';
+        function resetTimer() {
+            clearTimeout(timeout);
+            timeout = setTimeout(resetBoxes, 3000); // Reset after 3 seconds
         }
 
-        document.addEventListener("DOMContentLoaded", placeBoxes);
-        document.querySelectorAll(".nav-box").forEach(box => {
-            box.addEventListener("mouseover", runAway);
-            box.addEventListener("mouseleave", resetBox);
-        });
+        function resetBoxes() {
+            boxes.forEach((box, index) => {
+                box.style.transform = "translate(0,0)";
+                box.style.top = originalPositions[index].top;
+                box.style.left = originalPositions[index].left;
+            });
+        }
 
-        window.addEventListener("resize", placeBoxes);
     </script>
 
 </body>
