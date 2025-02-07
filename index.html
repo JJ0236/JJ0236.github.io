@@ -37,11 +37,11 @@
             color: white;
             border-radius: 10px;
             box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
-            animation: float 3s infinite ease-in-out alternate;
             text-decoration: none;
+            transition: transform 0.3s ease-out;
         }
 
-        /* Updated colors that match the background */
+        /* Soft, muted colors that match the background */
         .nav-box:nth-child(2) { background-color: #f4d35e; } /* Muted Yellow */
         .nav-box:nth-child(3) { background-color: #ee964b; } /* Soft Coral */
         .nav-box:nth-child(4) { background-color: #3d5a80; } /* Pastel Teal */
@@ -53,12 +53,9 @@
             100% { transform: translateY(10px); }
         }
 
-        /* Positioning Navigation Boxes */
-        .nav-box:nth-child(2) { top: 10%; left: 50%; transform: translateX(-50%); } /* 12 o'clock */
-        .nav-box:nth-child(3) { top: 50%; left: 80%; transform: translateY(-50%); } /* 3 o'clock */
-        .nav-box:nth-child(4) { top: 75%; left: 65%; transform: translateY(-50%); } /* 5 o'clock */
-        .nav-box:nth-child(5) { top: 75%; left: 35%; transform: translateY(-50%); } /* 7 o'clock */
-        .nav-box:nth-child(6) { top: 50%; left: 20%; transform: translateY(-50%); } /* 9 o'clock */
+        .nav-box {
+            animation: float 3s infinite ease-in-out alternate;
+        }
 
     </style>
 </head>
@@ -66,11 +63,61 @@
     <h1>Welcome</h1>
 
     <!-- Navigation Boxes -->
-    <a href="#" class="nav-box">Page 5</a> <!-- 12 o'clock -->
-    <a href="#" class="nav-box">Page 1</a> <!-- 3 o'clock -->
-    <a href="#" class="nav-box">Page 2</a> <!-- 5 o'clock -->
-    <a href="#" class="nav-box">Page 3</a> <!-- 7 o'clock -->
-    <a href="#" class="nav-box">Page 4</a> <!-- 9 o'clock -->
+    <a href="#" class="nav-box" id="box1">Page 5</a>
+    <a href="#" class="nav-box" id="box2">Page 1</a>
+    <a href="#" class="nav-box" id="box3">Page 2</a>
+    <a href="#" class="nav-box" id="box4">Page 3</a>
+    <a href="#" class="nav-box" id="box5">Page 4</a>
+
+    <script>
+        // Randomly position the boxes around the "Welcome" text
+        function placeBoxes() {
+            const boxes = document.querySelectorAll('.nav-box');
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+
+            boxes.forEach(box => {
+                let randomX = (Math.random() - 0.5) * window.innerWidth * 0.6 + centerX;
+                let randomY = (Math.random() - 0.5) * window.innerHeight * 0.5 + centerY;
+
+                // Ensure boxes don't overlap the "Welcome" text
+                if (Math.abs(randomX - centerX) < 120) randomX += 150 * (Math.random() > 0.5 ? 1 : -1);
+                if (Math.abs(randomY - centerY) < 80) randomY += 100 * (Math.random() > 0.5 ? 1 : -1);
+
+                box.style.left = `${randomX}px`;
+                box.style.top = `${randomY}px`;
+            });
+        }
+
+        // Make boxes move away from the cursor
+        function runAway(event) {
+            const box = event.target;
+            const boxRect = box.getBoundingClientRect();
+            const centerX = boxRect.left + boxRect.width / 2;
+            const centerY = boxRect.top + boxRect.height / 2;
+
+            const deltaX = centerX - event.clientX;
+            const deltaY = centerY - event.clientY;
+
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            const moveX = (deltaX / distance) * 100;
+            const moveY = (deltaY / distance) * 100;
+
+            box.style.transform = `translate(${moveX}px, ${moveY}px)`;
+        }
+
+        function resetBox(event) {
+            event.target.style.transform = 'translate(0, 0)';
+        }
+
+        document.addEventListener("DOMContentLoaded", placeBoxes);
+        document.querySelectorAll(".nav-box").forEach(box => {
+            box.addEventListener("mouseover", runAway);
+            box.addEventListener("mouseleave", resetBox);
+        });
+
+        window.addEventListener("resize", placeBoxes);
+    </script>
 
 </body>
 </html>
