@@ -18,12 +18,8 @@
         }
 
         .container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
             position: relative;
+            text-align: center;
         }
 
         h1 {
@@ -46,7 +42,9 @@
             border-radius: 10px;
             box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
             text-decoration: none;
-            animation: float 3s infinite ease-in-out alternate;
+            opacity: 0; /* Start hidden */
+            transform: translate(-50%, -50%) scale(0.5); /* Start stacked & small */
+            transition: all 1.5s ease-in-out;
         }
 
         /* Soft Muted Colors */
@@ -58,15 +56,22 @@
 
         @keyframes float {
             0% { transform: translateY(0); }
-            100% { transform: translateY(10px); }
+            100% { transform: translateY(15px); }
         }
 
-        /* ✨ NEW: Fixed Box Positions ✨ */
-        .nav-box:nth-child(2) { top: 20%; left: 50%; transform: translate(-50%, -50%); } /* Above Text */
-        .nav-box:nth-child(3) { top: 35%; left: 75%; transform: translate(-50%, -50%); } /* Upper Right */
-        .nav-box:nth-child(4) { top: 65%; left: 75%; transform: translate(-50%, -50%); } /* Lower Right */
-        .nav-box:nth-child(5) { top: 65%; left: 25%; transform: translate(-50%, -50%); } /* Lower Left */
-        .nav-box:nth-child(6) { top: 35%; left: 25%; transform: translate(-50%, -50%); } /* Upper Left */
+        /* Hidden on load, then move into position */
+        .nav-box.show {
+            opacity: 1;
+            transform: translate(0, 0) scale(1);
+            animation: float 3s infinite ease-in-out alternate;
+        }
+
+        /* Target positions after animation */
+        .nav-box:nth-child(2) { top: 10%; left: 50%; } /* Top Center */
+        .nav-box:nth-child(3) { top: 30%; left: 85%; } /* Upper Right */
+        .nav-box:nth-child(4) { top: 70%; left: 85%; } /* Lower Right */
+        .nav-box:nth-child(5) { top: 70%; left: 15%; } /* Lower Left */
+        .nav-box:nth-child(6) { top: 30%; left: 15%; } /* Upper Left */
 
     </style>
 </head>
@@ -75,11 +80,22 @@
         <h1>Hey, I'm Josh!<br>Welcome to my corner of the web</h1>
 
         <!-- Floating Navigation Boxes -->
-        <a href="#" class="nav-box">Page 5</a> <!-- Above -->
+        <a href="#" class="nav-box">Page 5</a> <!-- Top Center -->
         <a href="#" class="nav-box">Page 1</a> <!-- Upper Right -->
         <a href="#" class="nav-box">Page 2</a> <!-- Lower Right -->
         <a href="#" class="nav-box">Page 3</a> <!-- Lower Left -->
         <a href="#" class="nav-box">Page 4</a> <!-- Upper Left -->
     </div>
+
+    <script>
+        // Wait until page loads, then spread out boxes
+        window.addEventListener("load", function () {
+            setTimeout(() => {
+                document.querySelectorAll('.nav-box').forEach(box => {
+                    box.classList.add("show");
+                });
+            }, 500); // Start animation after 0.5s delay
+        });
+    </script>
 </body>
 </html>
