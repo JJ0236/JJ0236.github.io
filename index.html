@@ -7,7 +7,7 @@
   <!-- Google Font for a professional look -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    /* Reset and base styles */
+    /* Base styles */
     body {
       margin: 0;
       background-color: #85a6d4;
@@ -24,7 +24,7 @@
     /* Center the main text in the viewport */
     .container h1 {
       position: absolute;
-      top: 50%;
+      top: 40%;
       left: 50%;
       transform: translate(-50%, -50%);
       color: white;
@@ -32,7 +32,7 @@
       text-align: center;
       margin: 0;
       line-height: 1.4;
-      z-index: 10; /* Ensure heading stays above the nav boxes */
+      z-index: 10;
     }
     
     /* Style for the subtitle */
@@ -62,7 +62,7 @@
       z-index: 5;
     }
     
-    /* Adjusted positions for the nav boxes so they surround the text */
+    /* Desktop positions: Nav boxes surrounding the text */
     .nav-box:nth-of-type(1) { /* Top center */
       left: 50%;
       top: calc(50% - 200px);
@@ -89,20 +89,68 @@
       background-color: #81b29a;
     }
     
-    /* When the "show" class is added, the nav boxes fade in, scale up, and float gently */
+    /* Animation for nav boxes */
     .nav-box.show {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
       animation: float 3s infinite ease-in-out alternate;
     }
     
-    /* A gentle vertical float animation */
     @keyframes float {
       0% {
         transform: translate(-50%, -50%) scale(1) translateY(0);
       }
       100% {
         transform: translate(-50%, -50%) scale(1) translateY(10px);
+      }
+    }
+    
+    /* Mobile layout adjustments */
+    @media (max-width: 768px) {
+      /* Allow scrolling if needed */
+      body {
+        overflow: auto;
+      }
+      
+      /* Adjust container height to auto so content isn’t cut off */
+      .container {
+        height: auto;
+        padding-bottom: 120px; /* Extra space for nav boxes */
+      }
+      
+      /* Resize the heading and move it up */
+      .container h1 {
+        top: 20%;
+        font-size: 2.5rem;
+      }
+      
+      /* Stack nav boxes vertically along the bottom */
+      .nav-box {
+        left: 50%;
+        /* Remove the desktop-specific transform, only center horizontally */
+        transform: translateX(-50%) scale(0.5);
+      }
+      
+      .nav-box:nth-of-type(1) {
+        top: calc(100% - 250px);
+      }
+      .nav-box:nth-of-type(2) {
+        top: calc(100% - 190px);
+      }
+      .nav-box:nth-of-type(3) {
+        top: calc(100% - 130px);
+      }
+      .nav-box:nth-of-type(4) {
+        top: calc(100% - 70px);
+      }
+      .nav-box:nth-of-type(5) {
+        top: calc(100% - 10px);
+      }
+      
+      /* When shown on mobile, disable the floating animation for clarity */
+      .nav-box.show {
+        transform: translateX(-50%) scale(1);
+        animation: none;
       }
     }
   </style>
@@ -122,13 +170,13 @@
   </div>
   
   <script>
-    // After the page loads, add the "show" class to animate the nav boxes into position.
+    // Add the "show" class to nav boxes after page load to trigger animations
     window.addEventListener("load", function () {
       setTimeout(() => {
         document.querySelectorAll('.nav-box').forEach(box => {
           box.classList.add("show");
         });
-      }, 500); // Start animation after a 0.5s delay
+      }, 500);
     });
   </script>
 </body>
