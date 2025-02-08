@@ -26,11 +26,12 @@
       font-size: 2.5rem;
       margin-bottom: 1em;
     }
-    /* Home Icon Styles - for non-home pages only */
+    /* Home Icon Styles - now at the top center */
     .home-icon {
       position: fixed;
       top: 20px;
-      left: 20px;
+      left: 50%;
+      transform: translateX(-50%);
       width: 32px;
       height: 32px;
       color: #333;
@@ -39,7 +40,7 @@
       z-index: 100;
     }
     .home-icon:hover {
-      transform: scale(1.1);
+      transform: translateX(-50%) scale(1.1);
     }
     /* Floating animation for experience sections */
     @keyframes float {
@@ -71,13 +72,13 @@
       animation-play-state: paused;
     }
     .experience-section:nth-of-type(1):hover {
-      background-color: #819E81; /* Darker variant */
+      background-color: #819E81; /* Darker variant of Soft Olive */
     }
     .experience-section:nth-of-type(2):hover {
-      background-color: #5C8AB8; /* Darker variant */
+      background-color: #5C8AB8; /* Darker variant of Soft Sky Blue */
     }
     .experience-section:nth-of-type(3):hover {
-      background-color: #E69E70; /* Darker variant */
+      background-color: #E69E70; /* Darker variant of Soft Peach */
     }
     /* Headings and Sub-info */
     .experience-section h2 {
@@ -110,7 +111,7 @@
       <path d="M9 21V12H15V21"/>
     </svg>
   </a>
-
+  
   <div class="container">
     <h1>Experience</h1>
     
