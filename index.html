@@ -5,20 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Redirect to mobile version if viewport is narrow -->
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      if (window.innerWidth < 768) {
-        window.location.href = "mobile.html";
-      }
-    });
-  </script>
-  
-  <!-- Google Font -->
+  <!-- Google Font for a professional look -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
-    /* Basic Styles */
+    /* Basic Desktop Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
@@ -40,7 +31,6 @@
       font-size: 3rem;
       text-align: center;
       margin: 0;
-      line-height: 1.4;
       z-index: 10;
     }
     h1 .subtitle {
@@ -48,59 +38,57 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Orbit container now spans the full viewport and is centered */
-    .orbit {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 100vw;
-      height: 100vh;
-      /* Translate so that the center of the orbit container aligns with the viewport center */
-      transform: translate(-50%, -50%);
-      transform-origin: 50% 50%;
-      animation: orbit-rotate 60s linear infinite;
-    }
-    @keyframes orbit-rotate {
-      from { transform: translate(-50%, -50%) rotate(0deg); }
-      to   { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    /* Each orbit item is positioned relative to the center (50%/50% of .orbit) */
-    .orbit-item {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      /* Rotate by the specified angle and then translate outward by 200px */
-      transform: rotate(var(--angle)) translateX(200px);
-      transform-origin: 50% 50%;
-    }
-    /* The counter element cancels out the rotation so that the button stays horizontal */
-    .counter {
-      animation: counter-rotate 60s linear infinite;
-    }
-    @keyframes counter-rotate {
-      from { transform: rotate(calc(-1 * var(--angle))); }
-      to   { transform: rotate(calc(-1 * var(--angle) - 360deg)); }
-    }
-    /* Nav Button Styling */
+    /* Navigation Button (Nav Box) Styles */
     .nav-box {
-      display: block;
+      position: absolute;
       width: 160px;
       height: 60px;
-      line-height: 60px;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 1.2rem;
       font-weight: bold;
       color: white;
       border-radius: 10px;
-      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
       text-decoration: none;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    /* Comfortable Button Colors */
-    .orbit-item:nth-child(1) .nav-box { background-color: #8FAF8F; } /* Soft Olive */
-    .orbit-item:nth-child(2) .nav-box { background-color: #6699CC; } /* Soft Sky Blue */
-    .orbit-item:nth-child(3) .nav-box { background-color: #FFB07C; } /* Soft Peach */
-    .orbit-item:nth-child(4) .nav-box { background-color: #66B2B2; } /* Soft Teal */
-    .orbit-item:nth-child(5) .nav-box { background-color: #E57373; } /* Soft Salmon */
+    .nav-box:hover {
+      transform: translate(-50%, -50%) scale(1.05);
+      box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
+    }
+    /* Position the buttons around the centered text */
+    .nav-box:nth-of-type(1) {
+      left: 50%;
+      top: calc(50% - 200px);
+      background-color: #8FAF8F; /* Soft Olive */
+      transform: translate(-50%, -50%);
+    }
+    .nav-box:nth-of-type(2) {
+      left: calc(50% + 220px);
+      top: calc(50% - 80px);
+      background-color: #6699CC; /* Soft Sky Blue */
+      transform: translate(-50%, -50%);
+    }
+    .nav-box:nth-of-type(3) {
+      left: calc(50% + 180px);
+      top: calc(50% + 160px);
+      background-color: #FFB07C; /* Soft Peach */
+      transform: translate(-50%, -50%);
+    }
+    .nav-box:nth-of-type(4) {
+      left: calc(50% - 180px);
+      top: calc(50% + 160px);
+      background-color: #66B2B2; /* Soft Teal */
+      transform: translate(-50%, -50%);
+    }
+    .nav-box:nth-of-type(5) {
+      left: calc(50% - 220px);
+      top: calc(50% - 80px);
+      background-color: #E57373; /* Soft Salmon */
+      transform: translate(-50%, -50%);
+    }
   </style>
 </head>
 <body>
@@ -109,35 +97,12 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- Orbit container that rotates around the center -->
-    <div class="orbit">
-      <!-- Each orbit-item is given a starting angle via the CSS custom property --angle -->
-      <div class="orbit-item" style="--angle: 0deg;">
-        <div class="counter">
-          <a href="#" class="nav-box">Page 1</a>
-        </div>
-      </div>
-      <div class="orbit-item" style="--angle: 72deg;">
-        <div class="counter">
-          <a href="#" class="nav-box">Page 2</a>
-        </div>
-      </div>
-      <div class="orbit-item" style="--angle: 144deg;">
-        <div class="counter">
-          <a href="#" class="nav-box">Page 3</a>
-        </div>
-      </div>
-      <div class="orbit-item" style="--angle: 216deg;">
-        <div class="counter">
-          <a href="#" class="nav-box">Page 4</a>
-        </div>
-      </div>
-      <div class="orbit-item" style="--angle: 288deg;">
-        <div class="counter">
-          <a href="#" class="nav-box">Page 5</a>
-        </div>
-      </div>
-    </div>
+    <!-- Navigation Buttons -->
+    <a href="#" class="nav-box">Page 1</a>
+    <a href="#" class="nav-box">Page 2</a>
+    <a href="#" class="nav-box">Page 3</a>
+    <a href="#" class="nav-box">Page 4</a>
+    <a href="#" class="nav-box">Page 5</a>
   </div>
 </body>
 </html>
