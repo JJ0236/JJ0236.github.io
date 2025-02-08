@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Google Font -->
+  <!-- Google Font for a professional look -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
@@ -39,7 +39,7 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Boxes with Floating Animation */
+    /* Navigation Boxes – Positioned around the title with a gentle floating animation */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -68,43 +68,38 @@
       50%  { transform: translate(-50%, -50%) translateY(-10px); }
       100% { transform: translate(-50%, -50%) translateY(0); }
     }
-    /* Nav Box Positions (set on the radial lines corresponding to the wedge centers) */
-    /* Page 1 (Soft Olive): center at 270°; r = 200px */
+    /* Position the nav boxes around the title */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
-      background-color: #8FAF8F;
+      background-color: #8FAF8F; /* Soft Olive (Green) */
       animation-delay: 0s;
     }
-    /* Page 2 (Soft Sky Blue): center at 342°; r ≈ 220px (offset ≈ +209, -68) */
     .nav-box:nth-of-type(2) {
-      left: calc(50% + 209px);
-      top: calc(50% - 68px);
-      background-color: #6699CC;
+      left: calc(50% + 220px);
+      top: calc(50% - 80px);
+      background-color: #6699CC; /* Soft Sky Blue */
       animation-delay: 0.5s;
     }
-    /* Page 3 (Soft Peach): center at 54°; r ≈ 180px (offset ≈ +106, +146) */
     .nav-box:nth-of-type(3) {
-      left: calc(50% + 106px);
-      top: calc(50% + 146px);
-      background-color: #FFB07C;
+      left: calc(50% + 180px);
+      top: calc(50% + 160px);
+      background-color: #FFB07C; /* Soft Peach */
       animation-delay: 1s;
     }
-    /* Page 4 (Soft Teal): center at 126°; r ≈ 180px (offset ≈ -106, +146) */
     .nav-box:nth-of-type(4) {
-      left: calc(50% - 106px);
-      top: calc(50% + 146px);
-      background-color: #66B2B2;
+      left: calc(50% - 180px);
+      top: calc(50% + 160px);
+      background-color: #66B2B2; /* Soft Teal */
       animation-delay: 1.5s;
     }
-    /* Page 5 (Soft Salmon): center at 198°; r ≈ 220px (offset ≈ -209, -68) */
     .nav-box:nth-of-type(5) {
-      left: calc(50% - 209px);
-      top: calc(50% - 68px);
-      background-color: #E57373;
+      left: calc(50% - 220px);
+      top: calc(50% - 80px);
+      background-color: #E57373; /* Soft Salmon */
       animation-delay: 2s;
     }
-    /* Responsive SVG Overlay – Divides the screen into 5 equal (48° wide) wedges */
+    /* Responsive SVG Overlay with 5 Equal Wedges */
     .sectors {
       position: absolute;
       top: 0;
@@ -114,11 +109,13 @@
       z-index: 10;
       pointer-events: none;
     }
+    /* Each sector is defined as a circular sector using a very large radius (R = 1000)
+       so the arc extends well beyond the viewBox. The viewBox is "0 0 100 100" with center (50,50). */
     .sector {
       fill: transparent;
       transition: fill 0.3s ease, filter 0.3s ease;
     }
-    /* Hover Effects – When hovering a nav box, fill its corresponding sector with a glow */
+    /* Hover Effects – When hovering over a nav box, fill its corresponding sector with a glow */
     .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
       fill: rgba(143,175,143,0.3);
       filter: drop-shadow(0 0 8px #8FAF8F);
@@ -154,41 +151,41 @@
     <a href="#" class="nav-box">Page 4</a>
     <a href="#" class="nav-box">Page 5</a>
     
-    <!-- SVG Overlay with 5 Wedges (each 48° wide) -->
+    <!-- Responsive SVG Overlay with 5 Equal Wedges -->
     <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <!-- Sector 1 (Page 1): Center at 270°, boundaries 246° to 294° -->
+      <!-- Sector 1 (for Page 1 - Green): now with boundaries at 240° and 300° -->
       <path id="sector1" class="sector" d="
         M50,50 
-        L -356.7,-863.5 
-        A1000,1000 0 0,1 456.7,-863.5 
+        L -450,-816 
+        A1000,1000 0 0,1 550,-816 
         Z
       "/>
-      <!-- Sector 2 (Page 2): Center at 342°, boundaries 318° to 6° -->
+      <!-- Sector 2 (for Page 2 - Blue): boundaries at 300° and 24° (as before) -->
       <path id="sector2" class="sector" d="
         M50,50 
-        L 793.1,-619.1 
-        A1000,1000 0 0,1 1044.5,154.5 
+        L 550,-816 
+        A1000,1000 0 0,1 963.5,456.7 
         Z
       "/>
-      <!-- Sector 3 (Page 3): Center at 54°, boundaries 30° to 78° -->
+      <!-- Sector 3 (for Page 3 - Peach): boundaries at 18° and 90° -->
       <path id="sector3" class="sector" d="
         M50,50 
-        L 916,550 
-        A1000,1000 0 0,1 257.9,1028.1 
+        L 1001.1,359 
+        A1000,1000 0 0,1 50,1050 
         Z
       "/>
-      <!-- Sector 4 (Page 4): Center at 126°, boundaries 102° to 150° -->
+      <!-- Sector 4 (for Page 4 - Teal): boundaries at 90° and 162° -->
       <path id="sector4" class="sector" d="
         M50,50 
-        L -157.9,1028.1 
-        A1000,1000 0 0,1 -816,550 
+        L 50,1050 
+        A1000,1000 0 0,1 -901.1,359 
         Z
       "/>
-      <!-- Sector 5 (Page 5): Center at 198°, boundaries 174° to 222° -->
+      <!-- Sector 5 (for Page 5 - Salmon): boundaries at 156° and 240° -->
       <path id="sector5" class="sector" d="
         M50,50 
-        L -944.5,154.5 
-        A1000,1000 0 0,1 -693.1,-619.1 
+        L -863.5,456.7 
+        A1000,1000 0 0,1 -450,-816 
         Z
       "/>
     </svg>
