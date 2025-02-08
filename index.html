@@ -7,7 +7,7 @@
   <!-- Google Font (Roboto) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
-  <!-- Mobile Detection Script -->
+  <!-- Mobile Detection: Check on load and on resize -->
   <script>
     function checkMobile() {
       if (window.innerWidth < 768) {
@@ -51,10 +51,10 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Floating Animation for Nav Boxes */
+    /* Floating Animation: 5s duration to create a sequential wave effect */
     @keyframes float {
-      0% { transform: translate(-50%, -50%) translateY(0); }
-      50% { transform: translate(-50%, -50%) translateY(-10px); }
+      0%   { transform: translate(-50%, -50%) translateY(0); }
+      50%  { transform: translate(-50%, -50%) translateY(-15px); }
       100% { transform: translate(-50%, -50%) translateY(0); }
     }
     /* Navigation Box Outer Styles */
@@ -72,14 +72,22 @@
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
       transform: translate(-50%, -50%);
-      animation: float 4s ease-in-out infinite;
+      animation: float 5s ease-in-out infinite;
       transition: box-shadow 0.3s ease, background-color 0.3s ease;
       z-index: 15;
     }
+    /* Sequential Delays for Wave Effect */
+    .nav-box:nth-of-type(1) { animation-delay: 0s; }
+    .nav-box:nth-of-type(2) { animation-delay: 1s; }
+    .nav-box:nth-of-type(3) { animation-delay: 2s; }
+    .nav-box:nth-of-type(4) { animation-delay: 3s; }
+    .nav-box:nth-of-type(5) { animation-delay: 4s; }
+    
     .nav-box:hover {
+      /* On hover, we do not pause the float (so the wave continues) but the inner element scales */
       box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
-    /* Position the nav boxes around the center */
+    /* Positions and Colors for Each Nav Box */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
@@ -105,23 +113,7 @@
       top: calc(50% - 80px);
       background-color: #E57373; /* Soft Salmon */
     }
-    /* Hover Effects on Outer Box: Darken background and enhance shadow */
-    .nav-box:nth-of-type(1):hover {
-      background-color: #819E81;
-    }
-    .nav-box:nth-of-type(2):hover {
-      background-color: #5C8AB8;
-    }
-    .nav-box:nth-of-type(3):hover {
-      background-color: #E69E70;
-    }
-    .nav-box:nth-of-type(4):hover {
-      background-color: #66B2B2; /* Adjust if needed */
-    }
-    .nav-box:nth-of-type(5):hover {
-      background-color: #E57373; /* Darker variant */
-    }
-    /* Inner content for scaling on hover and proper centering */
+    /* Inner content for scaling on hover and perfect centering using flexbox */
     .nav-inner {
       display: flex;
       align-items: center;
@@ -134,7 +126,7 @@
     .nav-box:hover .nav-inner {
       transform: scale(1.05);
     }
-    /* Optional: SVG Overlay with 5 Equal Wedges */
+    /* Optional: SVG Overlay with 5 Equal Wedges for Hover Glow Effect */
     .sectors {
       position: absolute;
       top: 0;
