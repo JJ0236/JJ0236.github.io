@@ -4,12 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
-  
-  <!-- Google Font for a professional look -->
+  <!-- Google Font (Roboto) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
+  <!-- Mobile Detection Script -->
+  <script>
+    function checkMobile() {
+      if (window.innerWidth < 768) {
+        // Redirect to mobile version if not already there.
+        if (!location.pathname.endsWith("mobile.html")) {
+          window.location.href = "mobile.html";
+        }
+      }
+    }
+    // Check on page load
+    window.addEventListener("load", checkMobile);
+    // Also check on window resize (optional)
+    window.addEventListener("resize", checkMobile);
+  </script>
+  
   <style>
-    /* Basic Styles */
+    /* Global Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
@@ -22,7 +37,7 @@
       width: 100vw;
       height: 100vh;
     }
-    /* Centered Title */
+    /* Centered Heading */
     h1 {
       position: absolute;
       top: 50%;
@@ -39,7 +54,13 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Boxes – Positioned around the title with a gentle floating animation */
+    /* Floating Animation for Nav Boxes */
+    @keyframes float {
+      0% { transform: translate(-50%, -50%) translateY(0); }
+      50% { transform: translate(-50%, -50%) translateY(-10px); }
+      100% { transform: translate(-50%, -50%) translateY(0); }
+    }
+    /* Navigation Box Outer Styles */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -55,51 +76,52 @@
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
       transform: translate(-50%, -50%);
       animation: float 4s ease-in-out infinite;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      transition: box-shadow 0.3s ease, background-color 0.3s ease;
       z-index: 15;
     }
     .nav-box:hover {
-      animation-play-state: paused;
-      transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
+      /* On hover, keep the floating animation running while scaling via inner element */
       box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
-    @keyframes float {
-      0%   { transform: translate(-50%, -50%) translateY(0); }
-      50%  { transform: translate(-50%, -50%) translateY(-10px); }
-      100% { transform: translate(-50%, -50%) translateY(0); }
-    }
-    /* Position the nav boxes around the title */
+    /* Position the nav boxes around the center */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
       background-color: #8FAF8F; /* Soft Olive */
-      animation-delay: 0s;
     }
     .nav-box:nth-of-type(2) {
       left: calc(50% + 220px);
       top: calc(50% - 80px);
       background-color: #6699CC; /* Soft Sky Blue */
-      animation-delay: 0.5s;
     }
     .nav-box:nth-of-type(3) {
       left: calc(50% + 180px);
       top: calc(50% + 160px);
       background-color: #FFB07C; /* Soft Peach */
-      animation-delay: 1s;
     }
     .nav-box:nth-of-type(4) {
       left: calc(50% - 180px);
       top: calc(50% + 160px);
       background-color: #66B2B2; /* Soft Teal */
-      animation-delay: 1.5s;
     }
     .nav-box:nth-of-type(5) {
       left: calc(50% - 220px);
       top: calc(50% - 80px);
       background-color: #E57373; /* Soft Salmon */
-      animation-delay: 2s;
     }
-    /* Responsive SVG Overlay with 5 Equal Wedges */
+    /* Inner content for scaling on hover (preserves floating effect) */
+    .nav-inner {
+      display: inline-block;
+      transition: transform 0.3s ease;
+      width: 100%;
+      height: 100%;
+      line-height: 60px;
+      border-radius: 10px;
+    }
+    .nav-box:hover .nav-inner {
+      transform: scale(1.05);
+    }
+    /* Optional: Responsive SVG Overlay with 5 Equal Wedges */
     .sectors {
       position: absolute;
       top: 0;
@@ -113,7 +135,6 @@
       fill: transparent;
       transition: fill 0.3s ease, filter 0.3s ease;
     }
-    /* Hover Effects – When hovering over a nav box, fill its corresponding sector with a glow */
     .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
       fill: rgba(143,175,143,0.3);
       filter: drop-shadow(0 0 8px #8FAF8F);
@@ -138,48 +159,52 @@
 </head>
 <body>
   <div class="container">
-    <h1>
-      Josh Hicks<br>
-      <span class="subtitle">Information Systems</span>
-    </h1>
-    <!-- Navigation Boxes with Updated Labels and Correct Links -->
-    <a href="contact.html" class="nav-box">Contact Me</a>
-    <a href="about.html" class="nav-box">About Me</a>
-    <a href="experience.html" class="nav-box">Experience</a>
-    <a href="projects.html" class="nav-box">Projects</a>
-    <a href="wip.html" class="nav-box">WIP</a>
+    <!-- Center Heading -->
+    <h1>Josh Hicks<br><span class="subtitle">Information Systems</span></h1>
     
-    <!-- Responsive SVG Overlay with 5 Equal Wedges -->
+    <!-- Navigation Boxes with Nested Inner Elements -->
+    <a href="contact.html" class="nav-box">
+      <div class="nav-inner">Contact Me</div>
+    </a>
+    <a href="about.html" class="nav-box">
+      <div class="nav-inner">About Me</div>
+    </a>
+    <a href="experience.html" class="nav-box">
+      <div class="nav-inner">Experience</div>
+    </a>
+    <a href="projects.html" class="nav-box">
+      <div class="nav-inner">Projects</div>
+    </a>
+    <a href="wip.html" class="nav-box">
+      <div class="nav-inner">WIP</div>
+    </a>
+    
+    <!-- Optional SVG Overlay -->
     <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <!-- Sector 1 (for Contact Me - Soft Olive) -->
       <path id="sector1" class="sector" d="
         M50,50 
         L -450,-816 
         A1000,1000 0 0,1 550,-816 
         Z
       "/>
-      <!-- Sector 2 (for About Me - Soft Sky Blue) -->
       <path id="sector2" class="sector" d="
         M50,50 
         L 550,-816 
         A1000,1000 0 0,1 963.5,456.7 
         Z
       "/>
-      <!-- Sector 3 (for Experience - Soft Peach) -->
       <path id="sector3" class="sector" d="
         M50,50 
         L 1001.1,359 
         A1000,1000 0 0,1 50,1050 
         Z
       "/>
-      <!-- Sector 4 (for Projects - Soft Teal) -->
       <path id="sector4" class="sector" d="
         M50,50 
         L 50,1050 
         A1000,1000 0 0,1 -901.1,359 
         Z
       "/>
-      <!-- Sector 5 (for WIP - Soft Salmon) -->
       <path id="sector5" class="sector" d="
         M50,50 
         L -863.5,456.7 
