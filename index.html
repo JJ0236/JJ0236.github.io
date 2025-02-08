@@ -7,7 +7,7 @@
   <!-- Google Font for a professional look -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    /* Base styles */
+    /* Base styles for desktop layout */
     body {
       margin: 0;
       background-color: #85a6d4;
@@ -21,7 +21,7 @@
       height: 100vh;
     }
     
-    /* Center the main text in the viewport */
+    /* Centered title styling (desktop) */
     .container h1 {
       position: absolute;
       top: 40%;
@@ -35,14 +35,14 @@
       z-index: 10;
     }
     
-    /* Style for the subtitle */
+    /* Subtitle styling */
     .container h1 .subtitle {
       display: block;
       font-size: 1.5rem;
       font-weight: 400;
     }
     
-    /* Base styles for the nav boxes */
+    /* Base styles for the navigation boxes */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -54,42 +54,42 @@
       font-weight: bold;
       color: white;
       border-radius: 10px;
-      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.2);
       text-decoration: none;
-      opacity: 0; /* Hidden initially */
+      opacity: 0; /* Initially hidden */
       transition: all 1.5s ease-in-out;
       transform: translate(-50%, -50%) scale(0.5);
       z-index: 5;
     }
     
-    /* Desktop positions: Nav boxes surrounding the text */
-    .nav-box:nth-of-type(1) { /* Top center */
-      left: 50%;
-      top: calc(50% - 200px);
-      background-color: #f4d35e;
+    /* Desktop positions: Nav boxes surrounding the title */
+    .nav-box:nth-of-type(1) { 
+      left: 50%; 
+      top: calc(50% - 200px); 
+      background-color: #f4d35e; 
     }
-    .nav-box:nth-of-type(2) { /* Upper right */
-      left: calc(50% + 220px);
-      top: calc(50% - 80px);
-      background-color: #ee964b;
+    .nav-box:nth-of-type(2) { 
+      left: calc(50% + 220px); 
+      top: calc(50% - 80px); 
+      background-color: #ee964b; 
     }
-    .nav-box:nth-of-type(3) { /* Bottom right */
-      left: calc(50% + 180px);
-      top: calc(50% + 160px);
-      background-color: #3d5a80;
+    .nav-box:nth-of-type(3) { 
+      left: calc(50% + 180px); 
+      top: calc(50% + 160px); 
+      background-color: #3d5a80; 
     }
-    .nav-box:nth-of-type(4) { /* Bottom left */
-      left: calc(50% - 180px);
-      top: calc(50% + 160px);
-      background-color: #e07a5f;
+    .nav-box:nth-of-type(4) { 
+      left: calc(50% - 180px); 
+      top: calc(50% + 160px); 
+      background-color: #e07a5f; 
     }
-    .nav-box:nth-of-type(5) { /* Upper left */
-      left: calc(50% - 220px);
-      top: calc(50% - 80px);
-      background-color: #81b29a;
+    .nav-box:nth-of-type(5) { 
+      left: calc(50% - 220px); 
+      top: calc(50% - 80px); 
+      background-color: #81b29a; 
     }
     
-    /* Animation for nav boxes */
+    /* When the "show" class is added, animate the nav boxes in */
     .nav-box.show {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
@@ -105,51 +105,38 @@
       }
     }
     
-    /* Mobile layout adjustments */
+    /* Mobile layout: stack the title and nav boxes vertically */
     @media (max-width: 768px) {
-      /* Allow scrolling if needed */
       body {
-        overflow: auto;
+        overflow-y: auto;
       }
       
-      /* Adjust container height to auto so content isn’t cut off */
+      /* Use a flex container for a vertical stack */
       .container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
         height: auto;
-        padding-bottom: 120px; /* Extra space for nav boxes */
       }
       
-      /* Resize the heading and move it up */
+      /* Make the title static (non-absolute) and place it at the top */
       .container h1 {
-        top: 20%;
+        position: static;
+        transform: none;
         font-size: 2.5rem;
+        margin-bottom: 20px;
       }
       
-      /* Stack nav boxes vertically along the bottom */
+      /* Adjust the nav boxes to be static and stack them */
       .nav-box {
-        left: 50%;
-        /* Remove the desktop-specific transform, only center horizontally */
-        transform: translateX(-50%) scale(0.5);
-      }
-      
-      .nav-box:nth-of-type(1) {
-        top: calc(100% - 250px);
-      }
-      .nav-box:nth-of-type(2) {
-        top: calc(100% - 190px);
-      }
-      .nav-box:nth-of-type(3) {
-        top: calc(100% - 130px);
-      }
-      .nav-box:nth-of-type(4) {
-        top: calc(100% - 70px);
-      }
-      .nav-box:nth-of-type(5) {
-        top: calc(100% - 10px);
-      }
-      
-      /* When shown on mobile, disable the floating animation for clarity */
-      .nav-box.show {
-        transform: translateX(-50%) scale(1);
+        position: static;
+        width: 80%;
+        max-width: 300px;
+        height: 50px;
+        margin: 10px 0;
+        opacity: 1;
+        transform: scale(1);
         animation: none;
       }
     }
@@ -170,7 +157,7 @@
   </div>
   
   <script>
-    // Add the "show" class to nav boxes after page load to trigger animations
+    // Add the "show" class to nav boxes after page load (for desktop animation)
     window.addEventListener("load", function () {
       setTimeout(() => {
         document.querySelectorAll('.nav-box').forEach(box => {
