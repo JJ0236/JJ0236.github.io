@@ -37,9 +37,9 @@
       padding: 1em;
       border-radius: 10px;
       animation: float 4s ease-in-out infinite;
-      transition: transform 0.3s ease, background-color 0.3s ease, font-weight 0.3s ease;
+      transition: transform 0.3s ease, background-color 0.3s ease;
     }
-    /* Default background colors for each experience box, matching the main nav boxes */
+    /* Default background colors for each experience box, matching your nav boxes */
     .experience-section:nth-of-type(1) {
       background-color: #8FAF8F; /* Soft Olive */
     }
@@ -50,16 +50,14 @@
       background-color: #FFB07C; /* Soft Peach */
     }
     /* Hover Effects:
-       - The box enlarges (scale 1.05 and translates upward 10px).
+       - The box grows (scales to 1.1) and moves upward by 10px.
        - The background color darkens.
-       - All text inside becomes bolder.
+       - Only the title (<h2>) becomes bolder.
     */
     .experience-section:hover {
-      background-color: rgba(0, 0, 0, 0.1); /* Temporary fallback, will be overridden per section */
-      transform: scale(1.05) translateY(-10px);
+      transform: scale(1.1) translateY(-10px);
       animation-play-state: paused;
     }
-    /* Individual hover background adjustments */
     .experience-section:nth-of-type(1):hover {
       background-color: #819E81; /* Darker variant of #8FAF8F */
     }
@@ -69,8 +67,7 @@
     .experience-section:nth-of-type(3):hover {
       background-color: #E69E70; /* Darker variant of #FFB07C */
     }
-    /* Make all text inside the section bolder on hover */
-    .experience-section:hover * {
+    .experience-section:hover h2 {
       font-weight: 700;
     }
     /* Headings and Sub-info */
@@ -78,6 +75,7 @@
       margin: 0 0 0.5em;
       font-size: 1.75rem;
       color: #fff;
+      font-weight: 400;
     }
     .sub-info {
       font-size: 1rem;
