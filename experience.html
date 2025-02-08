@@ -25,34 +25,65 @@
       font-size: 2.5rem;
       margin-bottom: 1em;
     }
+    /* Floating animation */
+    @keyframes float {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
+    /* Experience Box Styles */
     .experience-section {
       margin-bottom: 2em;
       padding: 1em;
       border-radius: 10px;
+      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, background-color 0.3s ease, font-weight 0.3s ease;
     }
-    /* Different background colors for each experience box */
+    /* Default background colors (matching main nav boxes) */
     .experience-section:nth-of-type(1) {
-      background-color: #E0F7E9; /* Light Green */
+      background-color: #8FAF8F;
     }
     .experience-section:nth-of-type(2) {
-      background-color: #E0F4FA; /* Light Blue */
+      background-color: #6699CC;
     }
     .experience-section:nth-of-type(3) {
-      background-color: #FFF0E0; /* Light Peach */
+      background-color: #FFB07C;
     }
+    /* Hover Effects: darken background, scale up and translate upward, and make headings bolder */
+    .experience-section:nth-of-type(1):hover {
+      background-color: #819E81; /* Darker variant of #8FAF8F */
+      transform: scale(1.05) translateY(-10px);
+      animation-play-state: paused;
+    }
+    .experience-section:nth-of-type(2):hover {
+      background-color: #5C8AB8; /* Darker variant of #6699CC */
+      transform: scale(1.05) translateY(-10px);
+      animation-play-state: paused;
+    }
+    .experience-section:nth-of-type(3):hover {
+      background-color: #E69E70; /* Darker variant of #FFB07C */
+      transform: scale(1.05) translateY(-10px);
+      animation-play-state: paused;
+    }
+    .experience-section:hover h2 {
+      font-weight: 700;
+    }
+    /* Headings and Sub-info */
     .experience-section h2 {
-      margin: 0;
+      margin: 0 0 0.5em;
       font-size: 1.75rem;
-      color: #333;
+      color: #fff;
     }
     .sub-info {
       font-size: 1rem;
-      color: #666;
+      color: #f0f0f0;
       margin-bottom: 0.5em;
     }
+    /* Lists */
     ul {
       list-style-type: disc;
       padding-left: 20px;
+      color: #fff;
     }
     li {
       margin-bottom: 0.5em;
