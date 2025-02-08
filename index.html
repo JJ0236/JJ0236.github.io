@@ -30,13 +30,14 @@
       text-align: center;
       max-width: 80%;
       margin: 0;
+      line-height: 1.4;
     }
     
     /* Base styles for the nav boxes */
     .nav-box {
       position: absolute;
       width: 160px;
-      height: 80px;
+      height: 60px;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -51,35 +52,30 @@
       transform: translate(-50%, -50%) scale(0.5);
     }
     
-    /* Adjusted positions to prevent overlap */
-    .nav-box:nth-of-type(1) {
-      /* Top center */
-      left: calc(50% + 0px);
-      top: calc(50% - 180px);
+    /* Adjusted positions to fully surround the text */
+    .nav-box:nth-of-type(1) { /* Top center */
+      left: 50%;
+      top: calc(50% - 150px);
       background-color: #f4d35e;
     }
-    .nav-box:nth-of-type(2) {
-      /* Upper right */
-      left: calc(50% + 180px);
-      top: calc(50% - 30px);
+    .nav-box:nth-of-type(2) { /* Upper right */
+      left: calc(50% + 200px);
+      top: calc(50% - 60px);
       background-color: #ee964b;
     }
-    .nav-box:nth-of-type(3) {
-      /* Bottom right */
-      left: calc(50% + 100px);
-      top: calc(50% + 140px);
+    .nav-box:nth-of-type(3) { /* Bottom right */
+      left: calc(50% + 150px);
+      top: calc(50% + 100px);
       background-color: #3d5a80;
     }
-    .nav-box:nth-of-type(4) {
-      /* Bottom left */
-      left: calc(50% - 100px);
-      top: calc(50% + 140px);
+    .nav-box:nth-of-type(4) { /* Bottom left */
+      left: calc(50% - 150px);
+      top: calc(50% + 100px);
       background-color: #e07a5f;
     }
-    .nav-box:nth-of-type(5) {
-      /* Upper left */
-      left: calc(50% - 180px);
-      top: calc(50% - 30px);
+    .nav-box:nth-of-type(5) { /* Upper left */
+      left: calc(50% - 200px);
+      top: calc(50% - 60px);
       background-color: #81b29a;
     }
     
@@ -96,7 +92,7 @@
         transform: translate(-50%, -50%) scale(1) translateY(0);
       }
       100% {
-        transform: translate(-50%, -50%) scale(1) translateY(15px);
+        transform: translate(-50%, -50%) scale(1) translateY(10px);
       }
     }
   </style>
