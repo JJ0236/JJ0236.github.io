@@ -39,7 +39,7 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Boxes – Positioned as before, with a gentle floating "wave" animation */
+    /* Navigation Boxes – Positioned around the title with a gentle “floating” (up–down) animation */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -53,7 +53,7 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      /* Center the element on its coordinate */
+      /* Center each box on its coordinate */
       transform: translate(-50%, -50%);
       animation: float 4s ease-in-out infinite;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -69,7 +69,7 @@
       50%  { transform: translate(-50%, -50%) translateY(-10px); }
       100% { transform: translate(-50%, -50%) translateY(0); }
     }
-    /* Position the nav boxes around the title */
+    /* Position the nav boxes (using the same positions as before) */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
@@ -100,7 +100,7 @@
       background-color: #E57373; /* Soft Salmon */
       animation-delay: 2s;
     }
-    /* SVG Overlay for the Sectors */
+    /* SVG Overlay with Circular Sectors (inscribed in a 100×100 square) */
     .sectors {
       position: absolute;
       top: 0;
@@ -110,30 +110,30 @@
       z-index: 10;
       pointer-events: none;
     }
+    /* Each sector is defined as a circular sector (using an SVG path with an arc) */
     .sector {
       fill: transparent;
       transition: fill 0.3s ease, filter 0.3s ease;
     }
-    /* When hovering a nav box, glow the corresponding sector.
-       We use the general sibling selector (~) assuming the SVG comes after the nav boxes. */
+    /* When hovering over a nav box, fill its corresponding sector with a glow of the same color */
     .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
-      fill: rgba(143,175,143,0.3); /* Soft Olive */
+      fill: rgba(143,175,143,0.3);
       filter: drop-shadow(0 0 8px #8FAF8F);
     }
     .nav-box:nth-of-type(2):hover ~ .sectors #sector2 {
-      fill: rgba(102,153,204,0.3); /* Soft Sky Blue */
+      fill: rgba(102,153,204,0.3);
       filter: drop-shadow(0 0 8px #6699CC);
     }
     .nav-box:nth-of-type(3):hover ~ .sectors #sector3 {
-      fill: rgba(255,176,124,0.3); /* Soft Peach */
+      fill: rgba(255,176,124,0.3);
       filter: drop-shadow(0 0 8px #FFB07C);
     }
     .nav-box:nth-of-type(4):hover ~ .sectors #sector4 {
-      fill: rgba(102,178,178,0.3); /* Soft Teal */
+      fill: rgba(102,178,178,0.3);
       filter: drop-shadow(0 0 8px #66B2B2);
     }
     .nav-box:nth-of-type(5):hover ~ .sectors #sector5 {
-      fill: rgba(229,115,115,0.3); /* Soft Salmon */
+      fill: rgba(229,115,115,0.3);
       filter: drop-shadow(0 0 8px #E57373);
     }
   </style>
@@ -150,21 +150,39 @@
     <a href="#" class="nav-box">Page 3</a>
     <a href="#" class="nav-box">Page 4</a>
     <a href="#" class="nav-box">Page 5</a>
-    <!-- SVG Overlay: The viewBox is 0 0 100 100 so that (50,50) is the center.
-         The polygons below define five sectors whose vertices all meet at (50,50)
-         and whose outer points are determined by intersecting rays with the edges.
-         (These values are approximated for a square container.) -->
+    
+    <!-- SVG Overlay with 5 Circular Sectors -->
     <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <!-- Sector 1: Top (for Box 1) -->
-      <polygon id="sector1" class="sector" points="50,50 13.7,0 86.3,0" />
-      <!-- Sector 2: Top-right (for Box 2) -->
-      <polygon id="sector2" class="sector" points="50,50 86.3,0 100,66.3" />
-      <!-- Sector 3: Bottom-right (for Box 3) -->
-      <polygon id="sector3" class="sector" points="50,50 100,66.3 50,100" />
-      <!-- Sector 4: Bottom-left (for Box 4) -->
-      <polygon id="sector4" class="sector" points="50,50 50,100 0,66.3" />
-      <!-- Sector 5: Top-left (for Box 5) -->
-      <polygon id="sector5" class="sector" points="50,50 0,66.3 13.7,0" />
+      <!-- Sector 1: Centered at 0° (top) with boundaries at -36° and 36° -->
+      <path id="sector1" class="sector"
+            d="M50,50 
+               L20.61,9.55 
+               A50,50 0 0 1 79.39,9.55 
+               Z" />
+      <!-- Sector 2: Centered at 72° with boundaries at 36° and 108° -->
+      <path id="sector2" class="sector"
+            d="M50,50 
+               L79.39,9.55 
+               A50,50 0 0 1 97.56,65.45 
+               Z" />
+      <!-- Sector 3: Centered at 144° with boundaries at 108° and 180° -->
+      <path id="sector3" class="sector"
+            d="M50,50 
+               L97.56,65.45 
+               A50,50 0 0 1 50,100 
+               Z" />
+      <!-- Sector 4: Centered at 216° with boundaries at 180° and 252° -->
+      <path id="sector4" class="sector"
+            d="M50,50 
+               L50,100 
+               A50,50 0 0 1 2.44,34.55 
+               Z" />
+      <!-- Sector 5: Centered at 288° with boundaries at 252° and 324° -->
+      <path id="sector5" class="sector"
+            d="M50,50 
+               L2.44,34.55 
+               A50,50 0 0 1 20.61,9.55 
+               Z" />
     </svg>
   </div>
 </body>
