@@ -48,31 +48,39 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Rotating container that orbits the buttons */
-    .rotating-container {
+    /* Orbit Container: centered and rotating */
+    .orbit {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      /* Zero width/height so that its origin is at the center */
+      width: 0;
+      height: 0;
+      transform-origin: center;
+      animation: orbitRotate 60s linear infinite;
+    }
+    @keyframes orbitRotate {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    /* Each orbit item positions its content at a fixed radius (200px) */
+    .orbit-item {
       position: absolute;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      transform-origin: center center;
-      animation: rotateAround 60s linear infinite;
+      /* Rotate by its starting angle, then translate upward (negative Y) by the radius */
+      transform: rotate(var(--offset)) translateY(-200px);
+      transform-origin: center;
     }
-    @keyframes rotateAround {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    /* Each wrapper counter-rotates so its content stays horizontal */
-    .nav-wrapper {
-      position: absolute;
-      transform-origin: center center;
+    /* Counter-rotate the inner wrapper so that the button stays horizontal */
+    .counter-rotate {
       animation: counterRotate 60s linear infinite;
     }
     @keyframes counterRotate {
       from { transform: rotate(0deg); }
-      to { transform: rotate(-360deg); }
+      to   { transform: rotate(-360deg); }
     }
-    /* The actual button style */
+    /* Nav Button Style */
     .nav-box {
       display: block;
       width: 160px;
@@ -86,12 +94,12 @@
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
       text-decoration: none;
     }
-    /* Button Colors (applied via the order of .nav-wrapper) */
-    .rotating-container .nav-wrapper:nth-of-type(1) .nav-box { background-color: #8FAF8F; } /* Soft Olive */
-    .rotating-container .nav-wrapper:nth-of-type(2) .nav-box { background-color: #6699CC; } /* Soft Sky Blue */
-    .rotating-container .nav-wrapper:nth-of-type(3) .nav-box { background-color: #FFB07C; } /* Soft Peach */
-    .rotating-container .nav-wrapper:nth-of-type(4) .nav-box { background-color: #66B2B2; } /* Soft Teal */
-    .rotating-container .nav-wrapper:nth-of-type(5) .nav-box { background-color: #E57373; } /* Soft Salmon */
+    /* Comfortable Button Colors */
+    .orbit-item:nth-child(1) .nav-box { background-color: #8FAF8F; } /* Soft Olive */
+    .orbit-item:nth-child(2) .nav-box { background-color: #6699CC; } /* Soft Sky Blue */
+    .orbit-item:nth-child(3) .nav-box { background-color: #FFB07C; } /* Soft Peach */
+    .orbit-item:nth-child(4) .nav-box { background-color: #66B2B2; } /* Soft Teal */
+    .orbit-item:nth-child(5) .nav-box { background-color: #E57373; } /* Soft Salmon */
   </style>
 </head>
 <body>
@@ -100,22 +108,33 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- Rotating container holding the orbiting buttons -->
-    <div class="rotating-container">
-      <div class="nav-wrapper" style="left: 50%; top: calc(50% - 200px);">
-        <a href="#" class="nav-box">Page 1</a>
+    <!-- Orbit container for the rotating buttons -->
+    <div class="orbit">
+      <!-- Each orbit item uses a different starting angle so that they are evenly spaced -->
+      <div class="orbit-item" style="--offset: 0deg;">
+        <div class="counter-rotate">
+          <a href="#" class="nav-box">Page 1</a>
+        </div>
       </div>
-      <div class="nav-wrapper" style="left: calc(50% + 220px); top: calc(50% - 80px);">
-        <a href="#" class="nav-box">Page 2</a>
+      <div class="orbit-item" style="--offset: 72deg;">
+        <div class="counter-rotate">
+          <a href="#" class="nav-box">Page 2</a>
+        </div>
       </div>
-      <div class="nav-wrapper" style="left: calc(50% + 180px); top: calc(50% + 160px);">
-        <a href="#" class="nav-box">Page 3</a>
+      <div class="orbit-item" style="--offset: 144deg;">
+        <div class="counter-rotate">
+          <a href="#" class="nav-box">Page 3</a>
+        </div>
       </div>
-      <div class="nav-wrapper" style="left: calc(50% - 180px); top: calc(50% + 160px);">
-        <a href="#" class="nav-box">Page 4</a>
+      <div class="orbit-item" style="--offset: 216deg;">
+        <div class="counter-rotate">
+          <a href="#" class="nav-box">Page 4</a>
+        </div>
       </div>
-      <div class="nav-wrapper" style="left: calc(50% - 220px); top: calc(50% - 80px);">
-        <a href="#" class="nav-box">Page 5</a>
+      <div class="orbit-item" style="--offset: 288deg;">
+        <div class="counter-rotate">
+          <a href="#" class="nav-box">Page 5</a>
+        </div>
       </div>
     </div>
   </div>
