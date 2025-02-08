@@ -48,51 +48,38 @@
       text-decoration: none;
       opacity: 0; /* Hidden initially */
       transition: all 1.5s ease-in-out;
-      /* Start centered (will animate into position) */
       transform: translate(-50%, -50%) scale(0.5);
     }
     
-    /* Arrange the boxes in a circle (radius = 150px)
-       We’re using pre‑calculated offsets from the center.
-       The angles (in degrees) chosen for each box are:
-         • Box 1: 270° (directly above the center)
-         • Box 2: 342° (upper right)
-         • Box 3: 54° (lower right)
-         • Box 4: 126° (lower left)
-         • Box 5: 198° (upper left)
-    */
-    
-    /* For anchor elements, nth-of-type counts only <a> tags.
-       This lets us ignore the <h1> when positioning.
-    */
+    /* Adjusted positions to prevent overlap */
     .nav-box:nth-of-type(1) {
-      /* Angle 270°: (x = 150*cos(270)=0, y = 150*sin(270) = -150) */
+      /* Top center */
       left: calc(50% + 0px);
-      top: calc(50% - 150px);
+      top: calc(50% - 180px);
       background-color: #f4d35e;
     }
     .nav-box:nth-of-type(2) {
-      /* Angle 342°: (x = 150*cos(18)=~142.66, y = 150*sin(342)=150*sin(-18)=~ -46.35) */
-      left: calc(50% + 142.66px);
-      top: calc(50% - 46.35px);
+      /* Upper right */
+      left: calc(50% + 180px);
+      top: calc(50% - 30px);
       background-color: #ee964b;
     }
     .nav-box:nth-of-type(3) {
-      /* Angle 54°: (x = 150*cos(54)=~88.17, y = 150*sin(54)=~121.35) */
-      left: calc(50% + 88.17px);
-      top: calc(50% + 121.35px);
+      /* Bottom right */
+      left: calc(50% + 100px);
+      top: calc(50% + 140px);
       background-color: #3d5a80;
     }
     .nav-box:nth-of-type(4) {
-      /* Angle 126°: (x = 150*cos(126)=~ -88.17, y = 150*sin(126)=~121.35) */
-      left: calc(50% - 88.17px);
-      top: calc(50% + 121.35px);
+      /* Bottom left */
+      left: calc(50% - 100px);
+      top: calc(50% + 140px);
       background-color: #e07a5f;
     }
     .nav-box:nth-of-type(5) {
-      /* Angle 198°: (x = 150*cos(198)=~ -142.66, y = 150*sin(198)=~ -46.35) */
-      left: calc(50% - 142.66px);
-      top: calc(50% - 46.35px);
+      /* Upper left */
+      left: calc(50% - 180px);
+      top: calc(50% - 30px);
       background-color: #81b29a;
     }
     
@@ -118,11 +105,11 @@
   <div class="container">
     <h1>My name's Josh<br>Welcome to my corner of the web</h1>
     <!-- Five Navigation Boxes -->
-    <a href="#" class="nav-box">Page 5</a>
     <a href="#" class="nav-box">Page 1</a>
     <a href="#" class="nav-box">Page 2</a>
     <a href="#" class="nav-box">Page 3</a>
     <a href="#" class="nav-box">Page 4</a>
+    <a href="#" class="nav-box">Page 5</a>
   </div>
   
   <script>
