@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Client-Side Detection: Redirect to mobile.html if viewport is narrow -->
+  <!-- Redirect to mobile version if viewport is narrow -->
   <script>
     document.addEventListener("DOMContentLoaded", function() {
       if (window.innerWidth < 768) {
@@ -14,11 +14,11 @@
     });
   </script>
   
-  <!-- Google Font for a professional look -->
+  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
-    /* Basic Desktop Styles */
+    /* Basic Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
@@ -31,7 +31,7 @@
       height: 100vh;
     }
     /* Centered Title */
-    .container h1 {
+    h1 {
       position: absolute;
       top: 50%;
       left: 50%;
@@ -43,36 +43,37 @@
       line-height: 1.4;
       z-index: 10;
     }
-    .container h1 .subtitle {
+    h1 .subtitle {
       display: block;
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* The Orbit Container is centered and rotates continuously */
+    /* Orbit container now spans the full viewport and is centered */
     .orbit {
       position: absolute;
       top: 50%;
       left: 50%;
-      width: 0;
-      height: 0;
-      transform-origin: center;
+      width: 100vw;
+      height: 100vh;
+      /* Translate so that the center of the orbit container aligns with the viewport center */
+      transform: translate(-50%, -50%);
+      transform-origin: 50% 50%;
       animation: orbit-rotate 60s linear infinite;
     }
     @keyframes orbit-rotate {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
+      from { transform: translate(-50%, -50%) rotate(0deg); }
+      to   { transform: translate(-50%, -50%) rotate(360deg); }
     }
-    /* Each Orbit Item positions its content on a circle of radius 200px */
+    /* Each orbit item is positioned relative to the center (50%/50% of .orbit) */
     .orbit-item {
       position: absolute;
-      top: 0;
-      left: 0;
-      /* Rotate by its starting angle, then translate right by 200px */
+      top: 50%;
+      left: 50%;
+      /* Rotate by the specified angle and then translate outward by 200px */
       transform: rotate(var(--angle)) translateX(200px);
-      transform-origin: center;
+      transform-origin: 50% 50%;
     }
-    /* The Counter element cancels out both the orbit container’s rotation and the item’s initial angle.
-       It animates from –(initial angle) to –(initial angle + 360deg) in sync with the orbit animation. */
+    /* The counter element cancels out the rotation so that the button stays horizontal */
     .counter {
       animation: counter-rotate 60s linear infinite;
     }
@@ -80,7 +81,7 @@
       from { transform: rotate(calc(-1 * var(--angle))); }
       to   { transform: rotate(calc(-1 * var(--angle) - 360deg)); }
     }
-    /* Nav Box Styling */
+    /* Nav Button Styling */
     .nav-box {
       display: block;
       width: 160px;
@@ -108,10 +109,9 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- The Orbit container rotates around the centered title -->
+    <!-- Orbit container that rotates around the center -->
     <div class="orbit">
-      <!-- Each orbit-item uses a custom --angle (in degrees) to set its starting position.
-           They are evenly spaced around the circle. -->
+      <!-- Each orbit-item is given a starting angle via the CSS custom property --angle -->
       <div class="orbit-item" style="--angle: 0deg;">
         <div class="counter">
           <a href="#" class="nav-box">Page 1</a>
