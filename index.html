@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Google Font for a professional look -->
+  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
@@ -39,7 +39,7 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Boxes – Positioned around the title with a gentle floating animation */
+    /* Navigation Boxes – positioned around the title with a gentle floating animation */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -53,7 +53,6 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      /* Center each box on its coordinate */
       transform: translate(-50%, -50%);
       animation: float 4s ease-in-out infinite;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -70,6 +69,13 @@
       100% { transform: translate(-50%, -50%) translateY(0); }
     }
     /* Position the nav boxes around the title */
+    /* Using the following approximate positions:
+         Box 1: top center
+         Box 2: top right
+         Box 3: bottom right
+         Box 4: bottom left
+         Box 5: top left
+         (These positions are the same as previous examples.) */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
@@ -100,7 +106,7 @@
       background-color: #E57373; /* Soft Salmon */
       animation-delay: 2s;
     }
-    /* SVG Overlay with Responsive Sectors */
+    /* SVG Overlay – responsive and fills the entire screen */
     .sectors {
       position: absolute;
       top: 0;
@@ -110,14 +116,52 @@
       z-index: 10;
       pointer-events: none;
     }
-    /* Each sector is defined as a polygon that uses the 100×100 viewBox.
-       These polygons all meet at the center (50,50) and their outer points are chosen so that,
-       when the SVG stretches (preserveAspectRatio="none"), they fill the wedge from the center to the screen edge. */
+    /* Each sector is defined as a circular sector (using a large radius so it covers the full screen)
+       The SVG’s viewBox is "0 0 100 100" with the center at (50,50).
+       We use R = 1000 so the arcs extend well beyond the viewBox. */
     .sector {
       fill: transparent;
       transition: fill 0.3s ease, filter 0.3s ease;
     }
-    /* Hover Effects for Each Sector */
+    /* Wedge boundaries in SVG (angles in SVG coordinate system, where 0° is to the right and angles increase clockwise):
+         We want five equal wedges of 72° each.
+         We'll assign them as follows (using an offset so that the wedge for Box 1 is centered at 270°):
+         
+         • Wedge 1 (for Box 1): center = 270°, boundaries = 234° to 306°
+         • Wedge 2 (for Box 2): center = 342°, boundaries = 306° to 18° (wraps around)
+         • Wedge 3 (for Box 3): center = 54°, boundaries = 18° to 90°
+         • Wedge 4 (for Box 4): center = 126°, boundaries = 90° to 162°
+         • Wedge 5 (for Box 5): center = 198°, boundaries = 162° to 234°
+    */
+    /* We pre-calculate (using R = 1000) the endpoints for each boundary.
+       (These coordinates are computed with x = 50 + 1000*cos(angle) and y = 50 + 1000*sin(angle),
+        with angles in degrees converted to radians.) */
+    /* Sector 1: boundaries at 234° and 306° */
+    /* 234°: cos234 = -0.5878, sin234 = -0.8090 → P1 = (50 - 587.8, 50 - 8090*? Wait, 1000* sin(234°) = 1000*(-0.8090) = -809) 
+       P1 ≈ (50 - 587.8, 50 - 809) = (-537.8, -759)
+       306°: cos306 = 0.5878, sin306 = -0.8090 → P2 ≈ (50 + 587.8, 50 - 809) = (637.8, -759)
+    */
+    /* Sector 2: boundaries at 306° and 18° 
+       306°: (637.8, -759) (same as above)
+       18°: cos18 = 0.9511, sin18 = 0.3090 → P ≈ (50 + 951.1, 50 + 309) = (1001.1, 359)
+    */
+    /* Sector 3: boundaries at 18° and 90°
+       18°: (1001.1, 359)
+       90°: cos90 = 0, sin90 = 1 → (50, 50+1000) = (50, 1050)
+    */
+    /* Sector 4: boundaries at 90° and 162°
+       90°: (50, 1050)
+       162°: cos162 = -0.9511, sin162 = 0.3090 → (50 - 951.1, 50 + 309) = (-901.1, 359)
+    */
+    /* Sector 5: boundaries at 162° and 234°
+       162°: (-901.1, 359)
+       234°: (-537.8, -759)
+    */
+    /* We define each sector as a path from the center (50,50) to the first boundary, then an arc (with R=1000) to the second boundary, and back to the center. */
+    .sectors path {
+      stroke: none;
+    }
+    /* Hover effects – when hovering a nav box, fill its corresponding sector */
     .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
       fill: rgba(143,175,143,0.3);
       filter: drop-shadow(0 0 8px #8FAF8F);
@@ -153,18 +197,43 @@
     <a href="#" class="nav-box">Page 4</a>
     <a href="#" class="nav-box">Page 5</a>
     
-    <!-- Responsive SVG Overlay with Sectors -->
+    <!-- Responsive SVG Overlay with 5 Equal Wedges -->
     <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <!-- Sector 1: Top wedge -->
-      <polygon id="sector1" class="sector" points="50,50 0,0 100,0" />
-      <!-- Sector 2: Right wedge -->
-      <polygon id="sector2" class="sector" points="50,50 100,0 100,50" />
-      <!-- Sector 3: Bottom wedge -->
-      <polygon id="sector3" class="sector" points="50,50 100,50 100,100" />
-      <!-- Sector 4: Left-bottom wedge -->
-      <polygon id="sector4" class="sector" points="50,50 100,100 0,100" />
-      <!-- Sector 5: Left-top wedge -->
-      <polygon id="sector5" class="sector" points="50,50 0,100 0,0" />
+      <!-- Sector 1 (for Box 1): boundaries at 234° and 306° -->
+      <path id="sector1" class="sector" d="
+        M50,50 
+        L -537.8,-759 
+        A1000,1000 0 0,1 637.8,-759 
+        Z
+      "/>
+      <!-- Sector 2 (for Box 2): boundaries at 306° and 18° -->
+      <path id="sector2" class="sector" d="
+        M50,50 
+        L 637.8,-759 
+        A1000,1000 0 0,1 1001.1,359 
+        Z
+      "/>
+      <!-- Sector 3 (for Box 3): boundaries at 18° and 90° -->
+      <path id="sector3" class="sector" d="
+        M50,50 
+        L 1001.1,359 
+        A1000,1000 0 0,1 50,1050 
+        Z
+      "/>
+      <!-- Sector 4 (for Box 4): boundaries at 90° and 162° -->
+      <path id="sector4" class="sector" d="
+        M50,50 
+        L 50,1050 
+        A1000,1000 0 0,1 -901.1,359 
+        Z
+      "/>
+      <!-- Sector 5 (for Box 5): boundaries at 162° and 234° -->
+      <path id="sector5" class="sector" d="
+        M50,50 
+        L -901.1,359 
+        A1000,1000 0 0,1 -537.8,-759 
+        Z
+      "/>
     </svg>
   </div>
 </body>
