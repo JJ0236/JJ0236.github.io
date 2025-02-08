@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Google Font -->
+  <!-- Google Font for a professional look -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
-    /* Basic styles */
+    /* Basic Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
@@ -39,7 +39,7 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Boxes (static positions with a gentle floating "wave" animation) */
+    /* Navigation Boxes – Positioned as before, with a gentle floating "wave" animation */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -53,9 +53,8 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      /* Center each element on its coordinate */
+      /* Center the element on its coordinate */
       transform: translate(-50%, -50%);
-      /* Apply a floating animation */
       animation: float 4s ease-in-out infinite;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
       z-index: 15;
@@ -65,13 +64,12 @@
       transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
       box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
-    /* Floating keyframes */
     @keyframes float {
       0%   { transform: translate(-50%, -50%) translateY(0); }
       50%  { transform: translate(-50%, -50%) translateY(-10px); }
       100% { transform: translate(-50%, -50%) translateY(0); }
     }
-    /* Position each nav box and add staggered animation delays for the wave effect */
+    /* Position the nav boxes around the title */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
@@ -102,10 +100,7 @@
       background-color: #E57373; /* Soft Salmon */
       animation-delay: 2s;
     }
-    
-    /* SVG Sectors Overlay
-       The SVG covers the entire container and (using clip-path polygons) defines five triangular sectors (approximated here).
-       These sectors sit behind the nav boxes and are initially transparent. */
+    /* SVG Overlay for the Sectors */
     .sectors {
       position: absolute;
       top: 0;
@@ -119,27 +114,26 @@
       fill: transparent;
       transition: fill 0.3s ease, filter 0.3s ease;
     }
-    /* Hover Effects:
-       When you hover over a nav box, the corresponding sector (by index) glows with the same color.
-       (We use the general sibling combinator "~" assuming the nav boxes come before the SVG in the DOM.) */
+    /* When hovering a nav box, glow the corresponding sector.
+       We use the general sibling selector (~) assuming the SVG comes after the nav boxes. */
     .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
-      fill: rgba(143,175,143,0.3);
+      fill: rgba(143,175,143,0.3); /* Soft Olive */
       filter: drop-shadow(0 0 8px #8FAF8F);
     }
     .nav-box:nth-of-type(2):hover ~ .sectors #sector2 {
-      fill: rgba(102,153,204,0.3);
+      fill: rgba(102,153,204,0.3); /* Soft Sky Blue */
       filter: drop-shadow(0 0 8px #6699CC);
     }
     .nav-box:nth-of-type(3):hover ~ .sectors #sector3 {
-      fill: rgba(255,176,124,0.3);
+      fill: rgba(255,176,124,0.3); /* Soft Peach */
       filter: drop-shadow(0 0 8px #FFB07C);
     }
     .nav-box:nth-of-type(4):hover ~ .sectors #sector4 {
-      fill: rgba(102,178,178,0.3);
+      fill: rgba(102,178,178,0.3); /* Soft Teal */
       filter: drop-shadow(0 0 8px #66B2B2);
     }
     .nav-box:nth-of-type(5):hover ~ .sectors #sector5 {
-      fill: rgba(229,115,115,0.3);
+      fill: rgba(229,115,115,0.3); /* Soft Salmon */
       filter: drop-shadow(0 0 8px #E57373);
     }
   </style>
@@ -156,18 +150,21 @@
     <a href="#" class="nav-box">Page 3</a>
     <a href="#" class="nav-box">Page 4</a>
     <a href="#" class="nav-box">Page 5</a>
-    <!-- SVG overlay with five sectors (triangular slices) -->
-    <svg class="sectors" viewBox="-30 -20 180 160" preserveAspectRatio="none">
-      <!-- Sector 1 (top): calculated using a circle centered at (50,50) with radius ~80 -->
-      <polygon id="sector1" class="sector" points="50,50 3,-14.7 97,-14.7" />
-      <!-- Sector 2 (top-right) -->
-      <polygon id="sector2" class="sector" points="50,50 97,-14.7 126.1,74.7" />
-      <!-- Sector 3 (bottom-right) -->
-      <polygon id="sector3" class="sector" points="50,50 126.1,74.7 50,130" />
-      <!-- Sector 4 (bottom-left) -->
-      <polygon id="sector4" class="sector" points="50,50 50,130 -26.1,74.7" />
-      <!-- Sector 5 (top-left) -->
-      <polygon id="sector5" class="sector" points="50,50 -26.1,74.7 3,-14.7" />
+    <!-- SVG Overlay: The viewBox is 0 0 100 100 so that (50,50) is the center.
+         The polygons below define five sectors whose vertices all meet at (50,50)
+         and whose outer points are determined by intersecting rays with the edges.
+         (These values are approximated for a square container.) -->
+    <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <!-- Sector 1: Top (for Box 1) -->
+      <polygon id="sector1" class="sector" points="50,50 13.7,0 86.3,0" />
+      <!-- Sector 2: Top-right (for Box 2) -->
+      <polygon id="sector2" class="sector" points="50,50 86.3,0 100,66.3" />
+      <!-- Sector 3: Bottom-right (for Box 3) -->
+      <polygon id="sector3" class="sector" points="50,50 100,66.3 50,100" />
+      <!-- Sector 4: Bottom-left (for Box 4) -->
+      <polygon id="sector4" class="sector" points="50,50 50,100 0,66.3" />
+      <!-- Sector 5: Top-left (for Box 5) -->
+      <polygon id="sector5" class="sector" points="50,50 0,66.3 13.7,0" />
     </svg>
   </div>
 </body>
