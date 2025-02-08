@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner</title>
+  <!-- Google Font for a professional look -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Reset and base styles */
     body {
       margin: 0;
       background-color: #85a6d4;
-      font-family: Arial, sans-serif;
+      font-family: 'Roboto', sans-serif;
       overflow: hidden;
     }
     
@@ -26,11 +28,18 @@
       left: 50%;
       transform: translate(-50%, -50%);
       color: white;
-      font-size: 2.5rem;
+      font-size: 3rem;
       text-align: center;
-      max-width: 80%;
       margin: 0;
       line-height: 1.4;
+      z-index: 10; /* Ensure heading stays above the nav boxes */
+    }
+    
+    /* Style for the subtitle */
+    .container h1 .subtitle {
+      display: block;
+      font-size: 1.5rem;
+      font-weight: 400;
     }
     
     /* Base styles for the nav boxes */
@@ -50,32 +59,33 @@
       opacity: 0; /* Hidden initially */
       transition: all 1.5s ease-in-out;
       transform: translate(-50%, -50%) scale(0.5);
+      z-index: 5;
     }
     
-    /* Adjusted positions to fully surround the text */
+    /* Adjusted positions for the nav boxes so they surround the text */
     .nav-box:nth-of-type(1) { /* Top center */
       left: 50%;
-      top: calc(50% - 150px);
+      top: calc(50% - 200px);
       background-color: #f4d35e;
     }
     .nav-box:nth-of-type(2) { /* Upper right */
-      left: calc(50% + 200px);
-      top: calc(50% - 60px);
+      left: calc(50% + 220px);
+      top: calc(50% - 80px);
       background-color: #ee964b;
     }
     .nav-box:nth-of-type(3) { /* Bottom right */
-      left: calc(50% + 150px);
-      top: calc(50% + 100px);
+      left: calc(50% + 180px);
+      top: calc(50% + 160px);
       background-color: #3d5a80;
     }
     .nav-box:nth-of-type(4) { /* Bottom left */
-      left: calc(50% - 150px);
-      top: calc(50% + 100px);
+      left: calc(50% - 180px);
+      top: calc(50% + 160px);
       background-color: #e07a5f;
     }
     .nav-box:nth-of-type(5) { /* Upper left */
-      left: calc(50% - 200px);
-      top: calc(50% - 60px);
+      left: calc(50% - 220px);
+      top: calc(50% - 80px);
       background-color: #81b29a;
     }
     
@@ -99,7 +109,10 @@
 </head>
 <body>
   <div class="container">
-    <h1>My name's Josh<br>Welcome to my corner of the web</h1>
+    <h1>
+      Josh Hicks<br>
+      <span class="subtitle">Information Systems</span>
+    </h1>
     <!-- Five Navigation Boxes -->
     <a href="#" class="nav-box">Page 1</a>
     <a href="#" class="nav-box">Page 2</a>
