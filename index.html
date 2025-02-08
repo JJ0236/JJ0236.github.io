@@ -21,7 +21,7 @@
     /* Desktop Styles */
     body {
       margin: 0;
-      background-color: #85a6d4;
+      background-color: #F5E7DE;
       font-family: 'Roboto', sans-serif;
       overflow: hidden;
     }
@@ -36,7 +36,7 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      color: white;
+      color: #333;  /* Dark text for good contrast with the light background */
       font-size: 3rem;
       text-align: center;
       margin: 0;
@@ -67,31 +67,31 @@
       transform: translate(-50%, -50%) scale(0.5);
       z-index: 5;
     }
-    /* Positioning the nav boxes around the title */
+    /* Positioning the nav boxes around the title with comfortable colors */
     .nav-box:nth-of-type(1) { /* Top center */
       left: 50%;
       top: calc(50% - 200px);
-      background-color: #FF7043;
+      background-color: #8FAF8F;
     }
     .nav-box:nth-of-type(2) { /* Upper right */
       left: calc(50% + 220px);
       top: calc(50% - 80px);
-      background-color: #26A69A;
+      background-color: #6699CC;
     }
     .nav-box:nth-of-type(3) { /* Bottom right */
       left: calc(50% + 180px);
       top: calc(50% + 160px);
-      background-color: #e07a5f;
+      background-color: #FFB07C;
     }
     .nav-box:nth-of-type(4) { /* Bottom left */
       left: calc(50% - 180px);
       top: calc(50% + 160px);
-      background-color: #66BB6A;
+      background-color: #66B2B2;
     }
     .nav-box:nth-of-type(5) { /* Upper left */
       left: calc(50% - 220px);
       top: calc(50% - 80px);
-      background-color: #AB47BC;
+      background-color: #E57373;
     }
     /* Animate the nav boxes into view */
     .nav-box.show {
