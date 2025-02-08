@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Josh's Corner - Mobile</title>
+  
+  <!-- Google Font for a professional look -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    /* Mobile Styles */
+    body {
+      margin: 0;
+      background-color: #85a6d4;
+      font-family: 'Roboto', sans-serif;
+      overflow-y: auto;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    /* Title styling (stacked at the top) */
+    .container h1 {
+      font-size: 2.5rem;
+      text-align: center;
+      color: white;
+      margin: 0 0 20px;
+    }
+    .container h1 .subtitle {
+      font-size: 1.5rem;
+      font-weight: 400;
+    }
+    /* Navigation Boxes (Mobile - stacked vertically) */
+    .nav-box {
+      width: 80%;
+      max-width: 300px;
+      height: 50px;
+      margin: 10px 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: white;
+      border-radius: 10px;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+      text-decoration: none;
+    }
+    /* Assign different background colors to each nav box */
+    .nav-box:nth-of-type(1) { background-color: #f4d35e; }
+    .nav-box:nth-of-type(2) { background-color: #ee964b; }
+    .nav-box:nth-of-type(3) { background-color: #3d5a80; }
+    .nav-box:nth-of-type(4) { background-color: #e07a5f; }
+    .nav-box:nth-of-type(5) { background-color: #81b29a; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      Josh Hicks<br>
+      <span class="subtitle">Information Systems</span>
+    </h1>
+    <!-- Five Navigation Boxes, now neatly stacked below the title -->
+    <a href="#" class="nav-box">Page 1</a>
+    <a href="#" class="nav-box">Page 2</a>
+    <a href="#" class="nav-box">Page 3</a>
+    <a href="#" class="nav-box">Page 4</a>
+    <a href="#" class="nav-box">Page 5</a>
+  </div>
+</body>
+</html>
