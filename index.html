@@ -52,23 +52,26 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      /* Initially center the element on its position */
-      transform: translate(-50%, -50%);
-      /* Apply a gentle float animation */
-      animation: float 4s ease-in-out infinite;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      /* The following animation creates a gentle wave (vertical bobbing) */
+      animation: wave 4s ease-in-out infinite;
     }
-    /* When hovered, scale up and slightly lift the button (animation is paused) */
-    .nav-box:hover {
-      animation: none;
-      transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
-      box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
-    }
-    /* Floating Keyframes: gently move up and down */
-    @keyframes float {
+    /* Wave Animation: move up then back down */
+    @keyframes wave {
       0%   { transform: translate(-50%, -50%) translateY(0); }
       50%  { transform: translate(-50%, -50%) translateY(-10px); }
       100% { transform: translate(-50%, -50%) translateY(0); }
+    }
+    /* Stagger the animation delays for a sequential wave effect */
+    .nav-box:nth-of-type(1) { animation-delay: 0s; }
+    .nav-box:nth-of-type(2) { animation-delay: 0.2s; }
+    .nav-box:nth-of-type(3) { animation-delay: 0.4s; }
+    .nav-box:nth-of-type(4) { animation-delay: 0.6s; }
+    .nav-box:nth-of-type(5) { animation-delay: 0.8s; }
+    /* Hover Effect: pause animation and slightly scale up */
+    .nav-box:hover {
+      animation-play-state: paused;
+      transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
+      box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
     /* Position the buttons around the centered title */
     .nav-box:nth-of-type(1) {
@@ -104,7 +107,7 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- Navigation Buttons (static, with floating effect) -->
+    <!-- Navigation Buttons arranged around the centered title -->
     <a href="#" class="nav-box">Page 1</a>
     <a href="#" class="nav-box">Page 2</a>
     <a href="#" class="nav-box">Page 3</a>
