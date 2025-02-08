@@ -1,25 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Contact Me</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact Me - Josh's Corner</title>
+  <!-- Google Font (Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
     body {
-      font-family: sans-serif;
+      margin: 0;
       background-color: #F5E7DE;
+      font-family: 'Roboto', sans-serif;
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      margin: 0;
+      color: #333;
+    }
+    .contact-container {
+      text-align: center;
+      padding: 20px;
     }
     h1 {
-      color: #333;
+      font-size: 3rem;
+      margin-bottom: 0.5em;
+    }
+    p {
+      font-size: 1.2rem;
+      margin: 0.5em 0;
+    }
+    a.email-link {
+      color: #6699CC;  /* Soft Sky Blue for a clickable feel */
+      text-decoration: none;
+      font-weight: bold;
+      transition: color 0.3s ease;
+    }
+    a.email-link:hover {
+      color: #FFB07C;  /* Soft Peach on hover */
     }
   </style>
 </head>
 <body>
-  <h1>This is the Contact Me page</h1>
+  <div class="contact-container">
+    <h1>Contact Me</h1>
+    <p>You can reach me at:</p>
+    <p><a class="email-link" href="mailto:findme@joshhicks.info">findme@joshhicks.info</a></p>
+  </div>
 </body>
 </html>
