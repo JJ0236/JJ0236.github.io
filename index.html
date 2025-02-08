@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Desktop</title>
   
-  <!-- Google Font for a professional look -->
+  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   
   <style>
@@ -38,7 +38,7 @@
       font-size: 1.5rem;
       font-weight: 400;
     }
-    /* Navigation Button (Nav Box) Styles */
+    /* Navigation Box Styles */
     .nav-box {
       position: absolute;
       width: 160px;
@@ -52,52 +52,54 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      /* The following animation creates a gentle wave (vertical bobbing) */
-      animation: wave 4s ease-in-out infinite;
+      /* Center the element on its coordinate */
+      transform: translate(-50%, -50%);
+      /* Apply the floating animation (4s cycle) */
+      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    /* Wave Animation: move up then back down */
-    @keyframes wave {
-      0%   { transform: translate(-50%, -50%) translateY(0); }
-      50%  { transform: translate(-50%, -50%) translateY(-10px); }
-      100% { transform: translate(-50%, -50%) translateY(0); }
-    }
-    /* Stagger the animation delays for a sequential wave effect */
-    .nav-box:nth-of-type(1) { animation-delay: 0s; }
-    .nav-box:nth-of-type(2) { animation-delay: 0.2s; }
-    .nav-box:nth-of-type(3) { animation-delay: 0.4s; }
-    .nav-box:nth-of-type(4) { animation-delay: 0.6s; }
-    .nav-box:nth-of-type(5) { animation-delay: 0.8s; }
-    /* Hover Effect: pause animation and slightly scale up */
+    /* Pause the animation on hover and add a scale-up effect */
     .nav-box:hover {
       animation-play-state: paused;
       transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
       box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
-    /* Position the buttons around the centered title */
+    /* Keyframes for the floating effect */
+    @keyframes float {
+      0%   { transform: translate(-50%, -50%) translateY(0); }
+      50%  { transform: translate(-50%, -50%) translateY(-10px); }
+      100% { transform: translate(-50%, -50%) translateY(0); }
+    }
+    /* Position the buttons around the centered title with staggered animation delays */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
       background-color: #8FAF8F; /* Soft Olive */
+      animation-delay: 0s;
     }
     .nav-box:nth-of-type(2) {
       left: calc(50% + 220px);
       top: calc(50% - 80px);
       background-color: #6699CC; /* Soft Sky Blue */
+      animation-delay: 0.5s;
     }
     .nav-box:nth-of-type(3) {
       left: calc(50% + 180px);
       top: calc(50% + 160px);
       background-color: #FFB07C; /* Soft Peach */
+      animation-delay: 1s;
     }
     .nav-box:nth-of-type(4) {
       left: calc(50% - 180px);
       top: calc(50% + 160px);
       background-color: #66B2B2; /* Soft Teal */
+      animation-delay: 1.5s;
     }
     .nav-box:nth-of-type(5) {
       left: calc(50% - 220px);
       top: calc(50% - 80px);
       background-color: #E57373; /* Soft Salmon */
+      animation-delay: 2s;
     }
   </style>
 </head>
@@ -107,7 +109,7 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- Navigation Buttons arranged around the centered title -->
+    <!-- Navigation Boxes Positioned Around the Title -->
     <a href="#" class="nav-box">Page 1</a>
     <a href="#" class="nav-box">Page 2</a>
     <a href="#" class="nav-box">Page 3</a>
