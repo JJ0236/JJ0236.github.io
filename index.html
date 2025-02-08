@@ -52,42 +52,49 @@
       border-radius: 10px;
       text-decoration: none;
       box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+      /* Initially center the element on its position */
+      transform: translate(-50%, -50%);
+      /* Apply a gentle float animation */
+      animation: float 4s ease-in-out infinite;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
+    /* When hovered, scale up and slightly lift the button (animation is paused) */
     .nav-box:hover {
-      transform: translate(-50%, -50%) scale(1.05);
+      animation: none;
+      transform: translate(-50%, -50%) translateY(-10px) scale(1.05);
       box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
     }
-    /* Position the buttons around the centered text */
+    /* Floating Keyframes: gently move up and down */
+    @keyframes float {
+      0%   { transform: translate(-50%, -50%) translateY(0); }
+      50%  { transform: translate(-50%, -50%) translateY(-10px); }
+      100% { transform: translate(-50%, -50%) translateY(0); }
+    }
+    /* Position the buttons around the centered title */
     .nav-box:nth-of-type(1) {
       left: 50%;
       top: calc(50% - 200px);
       background-color: #8FAF8F; /* Soft Olive */
-      transform: translate(-50%, -50%);
     }
     .nav-box:nth-of-type(2) {
       left: calc(50% + 220px);
       top: calc(50% - 80px);
       background-color: #6699CC; /* Soft Sky Blue */
-      transform: translate(-50%, -50%);
     }
     .nav-box:nth-of-type(3) {
       left: calc(50% + 180px);
       top: calc(50% + 160px);
       background-color: #FFB07C; /* Soft Peach */
-      transform: translate(-50%, -50%);
     }
     .nav-box:nth-of-type(4) {
       left: calc(50% - 180px);
       top: calc(50% + 160px);
       background-color: #66B2B2; /* Soft Teal */
-      transform: translate(-50%, -50%);
     }
     .nav-box:nth-of-type(5) {
       left: calc(50% - 220px);
       top: calc(50% - 80px);
       background-color: #E57373; /* Soft Salmon */
-      transform: translate(-50%, -50%);
     }
   </style>
 </head>
@@ -97,7 +104,7 @@
       Josh Hicks<br>
       <span class="subtitle">Information Systems</span>
     </h1>
-    <!-- Navigation Buttons -->
+    <!-- Navigation Buttons (static, with floating effect) -->
     <a href="#" class="nav-box">Page 1</a>
     <a href="#" class="nav-box">Page 2</a>
     <a href="#" class="nav-box">Page 3</a>
