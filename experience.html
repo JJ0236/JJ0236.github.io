@@ -15,6 +15,7 @@
       color: #333;
       padding: 20px;
       line-height: 1.6;
+      position: relative;
     }
     .container {
       max-width: 800px;
@@ -24,6 +25,21 @@
       text-align: center;
       font-size: 2.5rem;
       margin-bottom: 1em;
+    }
+    /* Home Icon Styles - for non-home pages only */
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: scale(1.1);
     }
     /* Floating animation for experience sections */
     @keyframes float {
@@ -39,7 +55,7 @@
       animation: float 4s ease-in-out infinite;
       transition: transform 0.3s ease, background-color 0.3s ease;
     }
-    /* Default background colors for each experience box (matching main nav boxes) */
+    /* Default background colors for each experience box (matching your nav boxes) */
     .experience-section:nth-of-type(1) {
       background-color: #8FAF8F; /* Soft Olive */
     }
@@ -55,13 +71,13 @@
       animation-play-state: paused;
     }
     .experience-section:nth-of-type(1):hover {
-      background-color: #819E81; /* Darker variant of Soft Olive */
+      background-color: #819E81; /* Darker variant */
     }
     .experience-section:nth-of-type(2):hover {
-      background-color: #5C8AB8; /* Darker variant of Soft Sky Blue */
+      background-color: #5C8AB8; /* Darker variant */
     }
     .experience-section:nth-of-type(3):hover {
-      background-color: #E69E70; /* Darker variant of Soft Peach */
+      background-color: #E69E70; /* Darker variant */
     }
     /* Headings and Sub-info */
     .experience-section h2 {
@@ -87,6 +103,14 @@
   </style>
 </head>
 <body>
+  <!-- Home Icon (visible on non-home pages) -->
+  <a href="index.html" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+
   <div class="container">
     <h1>Experience</h1>
     
