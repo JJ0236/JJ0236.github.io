@@ -1,25 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Experience</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Experience - Josh's Corner</title>
+  <!-- Google Font (Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    /* Global Styles */
     body {
-      font-family: sans-serif;
-      background-color: #F5E7DE;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
       margin: 0;
+      background-color: #F5E7DE;
+      font-family: 'Roboto', sans-serif;
+      color: #333;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
     }
     h1 {
+      text-align: center;
+      font-size: 2.5rem;
+      margin-bottom: 1em;
+    }
+    .experience-section {
+      margin-bottom: 2em;
+      padding-bottom: 1em;
+      border-bottom: 1px solid #ccc;
+    }
+    .experience-section:last-child {
+      border-bottom: none;
+    }
+    .experience-section h2 {
+      margin: 0;
+      font-size: 1.75rem;
       color: #333;
+    }
+    .sub-info {
+      font-size: 1rem;
+      color: #666;
+      margin-bottom: 0.5em;
+    }
+    ul {
+      list-style-type: disc;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 0.5em;
     }
   </style>
 </head>
 <body>
-  <h1>This is the Experience page</h1>
+  <div class="container">
+    <h1>Experience</h1>
+    
+    <div class="experience-section">
+      <h2>JB Hunt Center For Innovation - Bentonville, Arkansas</h2>
+      <div class="sub-info">Generalist and Maker | September 2024 - Current</div>
+      <ul>
+        <li>Assisted patrons in utilizing advanced technological resources, including audio/video studios, simulation labs, fabrication lab, and large-format printing studios.</li>
+        <li>Oversaw the scheduling, maintenance, and troubleshooting of various high-tech equipment to ensure optimal functionality and accessibility.</li>
+        <li>Developed Educational Programs: Collaborated with library staff to design and implement educational workshops and programs that leverage the center's resources.</li>
+        <li>Developed user guides and online resources to assist patrons in independently navigating the center's offerings.</li>
+      </ul>
+    </div>
+    
+    <div class="experience-section">
+      <h2>Best Buy - Fayetteville, Arkansas</h2>
+      <div class="sub-info">Geek Squad Agent | December 2023 – April 2024</div>
+      <ul>
+        <li>Diagnosed and repaired issues with computers and consumer electronics, ensuring optimal device performance.</li>
+        <li>Assisted customers with technology-related inquiries, offering knowledgeable solutions and maintaining a positive check-in and check-out experience.</li>
+        <li>Performed delivery, installation, integration, networking, and repair of consumer electronics devices, with a primary focus on computing.</li>
+        <li>Worked closely with fellow agents to provide comprehensive support, sharing insights and strategies to enhance service quality.</li>
+      </ul>
+    </div>
+    
+    <div class="experience-section">
+      <h2>Academics Plus Charter Schools - Scott, Arkansas</h2>
+      <div class="sub-info">IT Intern | August 2022 – May 2023</div>
+      <ul>
+        <li>Repaired and maintained Chromebooks to ensure seamless functionality for students and staff.</li>
+        <li>Assisted teachers with technology issues, providing troubleshooting and training on various devices.</li>
+        <li>Managed IT tickets and server maintenance, resolving technical problems efficiently.</li>
+      </ul>
+    </div>
+  </div>
 </body>
 </html>
