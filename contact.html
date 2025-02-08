@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contact Me - Josh's Corner</title>
+  <title>Contact - Josh's Corner</title>
   <!-- Google Font (Roboto) -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
   <style>
@@ -11,40 +11,59 @@
       margin: 0;
       background-color: #F5E7DE;
       font-family: 'Roboto', sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
       color: #333;
-    }
-    .contact-container {
-      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       padding: 20px;
+      min-height: 100vh;
+      position: relative;
+    }
+    /* Home Icon at Top Center */
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.1);
     }
     h1 {
-      font-size: 3rem;
-      margin-bottom: 0.5em;
+      font-size: 2.5rem;
+      margin-bottom: 1em;
+      text-align: center;
     }
     p {
       font-size: 1.2rem;
-      margin: 0.5em 0;
+      text-align: center;
     }
     a.email-link {
-      color: #6699CC;  /* Soft Sky Blue for a clickable feel */
+      color: #6699CC;
       text-decoration: none;
       font-weight: bold;
       transition: color 0.3s ease;
     }
     a.email-link:hover {
-      color: #FFB07C;  /* Soft Peach on hover */
+      color: #FFB07C;
     }
   </style>
 </head>
 <body>
-  <div class="contact-container">
-    <h1>Contact Me</h1>
-    <p>You can reach me at:</p>
-    <p><a class="email-link" href="mailto:findme@joshhicks.info">findme@joshhicks.info</a></p>
-  </div>
+  <a href="index.html" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+  <h1>Contact</h1>
+  <p>This is the Contact page.</p>
+  <p>Email: <a class="email-link" href="mailto:findme@joshhicks.info">findme@joshhicks.info</a></p>
 </body>
 </html>
