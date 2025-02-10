@@ -20,7 +20,7 @@
       min-height: 100vh;
       position: relative;
     }
-    /* Home Icon at Top Center */
+    /* Home Icon at Top Center (optional on contact page) */
     .home-icon {
       position: fixed;
       top: 20px;
@@ -36,18 +36,12 @@
     .home-icon:hover {
       transform: translateX(-50%) scale(1.1);
     }
-    /* Heading Styles */
+    /* Heading */
     h1 {
       font-size: 2.5rem;
-      margin-top: 150px; /* Increased top margin to push heading further down */
+      margin-top: 100px;
       margin-bottom: 40px;
       text-align: center;
-    }
-    h1 small {
-      display: block;
-      font-size: 1.2rem;
-      font-weight: 400;
-      margin-top: 5px;
     }
     /* Container for the two ovals */
     .contact-container {
@@ -59,12 +53,9 @@
     }
     /* Floating Oval Button Styles with 3D Effect */
     .contact-oval {
-      width: 220px;       /* Slightly wider to accommodate two lines */
-      height: 100px;      /* Increased height for two lines of text */
-      background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
+      width: 220px;
+      height: 100px;
       border-radius: 50px;
-      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), 
-                  -8px -8px 16px rgba(255,255,255,0.8);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -77,6 +68,7 @@
       transition: transform 0.3s ease;
       text-decoration: none;
       cursor: pointer;
+      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), -8px -8px 16px rgba(255,255,255,0.8);
     }
     .contact-oval:hover {
       transform: scale(1.05);
@@ -86,7 +78,18 @@
       50% { transform: translateY(-10px); }
       100% { transform: translateY(0); }
     }
-    /* Content inside the ovals */
+    /* Email oval styles */
+    #email-oval {
+      background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
+    }
+    #email-oval .contact-info {
+      font-size: 0.9rem; /* Smaller font for email info */
+    }
+    /* Phone oval styles */
+    #phone-oval {
+      background: linear-gradient(145deg, #E57373, #D45C5C);
+    }
+    /* Content inside each oval */
     .contact-content {
       display: flex;
       flex-direction: column;
@@ -104,7 +107,7 @@
   </style>
 </head>
 <body>
-  <!-- Home Icon at Top Center -->
+  <!-- Optional Home Icon (remove if not needed on contact page) -->
   <a href="index.html" class="home-icon" title="Home">
     <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
@@ -112,21 +115,15 @@
     </svg>
   </a>
   
-  <!-- Updated Heading -->
-  <h1>
-    Talk to me<br>
-    <small>(please)</small>
-  </h1>
-  
-  <!-- Contact Options Container -->
+  <h1>How to contact me?</h1>
   <div class="contact-container">
-    <a href="mailto:findme@joshhicks.info" class="contact-oval">
+    <a href="mailto:findme@joshhicks.info" class="contact-oval" id="email-oval">
       <div class="contact-content">
         <div class="contact-label">Email me</div>
         <div class="contact-info">findme@joshhicks.info</div>
       </div>
     </a>
-    <a href="tel:501-398-1524" class="contact-oval">
+    <a href="tel:501-398-1524" class="contact-oval" id="phone-oval">
       <div class="contact-content">
         <div class="contact-label">Call me</div>
         <div class="contact-info">501-398-1524</div>
