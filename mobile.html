@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Mobile</title>
-  <!-- Google Font (Montserrat for a modern, cool vibe) -->
+  <!-- Google Font (Montserrat for a modern look) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
@@ -13,85 +13,96 @@
       background-color: #F5E7DE;
       font-family: 'Montserrat', sans-serif;
       color: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       padding: 20px;
-      min-height: 100vh;
-      overflow: hidden;
+      overflow-x: hidden;
     }
-    /* Container for vertical scrolling */
-    .container {
-      width: 100%;
-      max-width: 600px;
-      height: 100%;
-      overflow-y: auto;
-      scroll-snap-type: y mandatory;
-      -webkit-overflow-scrolling: touch;
-    }
-    /* Main Heading */
-    h1 {
-      font-size: 2.5rem;
+    /* Header Styles */
+    .header {
       text-align: center;
       margin-top: 40px;
       margin-bottom: 20px;
     }
-    h1 span {
+    .header h1 {
+      font-size: 2.5rem;
+      margin: 0;
+    }
+    .header span {
       font-size: 1.2rem;
       color: #666;
     }
-    /* Navigation Box Styles */
-    .nav-box {
+    /* Carousel Container for Vertical Scrolling */
+    .carousel-container {
+      width: 100%;
+      max-width: 600px;
+      height: calc(100vh - 140px); /* full height minus header space */
+      margin: 0 auto;
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+    /* Each Card in the Carousel */
+    .card {
       scroll-snap-align: center;
       width: 100%;
-      padding: 20px;
+      height: 150px; /* fixed height for each card */
       margin-bottom: 20px;
       border-radius: 12px;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 1.2rem;
       font-weight: bold;
       color: #fff;
-      text-decoration: none;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      position: relative;
-      box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease;
+      /* These colors match your desktop nav box colors */
     }
-    .nav-box:hover {
-      transform: scale(1.05);
-      box-shadow: 0px 4px 8px rgba(0,0,0,0.3);
-    }
-    @keyframes float {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-      100% { transform: translateY(0); }
-    }
-    /* Colors for Each Nav Box (unchanged from desktop) */
-    .nav-box:nth-of-type(1) {
-      background-color: #8FAF8F; /* Soft Olive */
-    }
-    .nav-box:nth-of-type(2) {
-      background-color: #6699CC; /* Soft Sky Blue */
-    }
-    .nav-box:nth-of-type(3) {
-      background-color: #FFB07C; /* Soft Peach */
-    }
-    .nav-box:nth-of-type(4) {
-      background-color: #66B2B2; /* Soft Teal */
-    }
-    .nav-box:nth-of-type(5) {
-      background-color: #E57373; /* Soft Salmon */
+    .card:nth-of-type(1) { background-color: #8FAF8F; } /* Soft Olive */
+    .card:nth-of-type(2) { background-color: #6699CC; } /* Soft Sky Blue */
+    .card:nth-of-type(3) { background-color: #FFB07C; } /* Soft Peach */
+    .card:nth-of-type(4) { background-color: #66B2B2; } /* Soft Teal */
+    .card:nth-of-type(5) { background-color: #E57373; } /* Soft Salmon */
+    /* For a 3D effect */
+    .card {
+      perspective: 800px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Josh Hicks<br><span>Information Systems</span></h1>
-    <a href="contact.html" class="nav-box">Contact Me</a>
-    <a href="about.html" class="nav-box">About Me</a>
-    <a href="experience.html" class="nav-box">Experience</a>
-    <a href="projects.html" class="nav-box">Projects</a>
-    <a href="wip.html" class="nav-box">WIP</a>
+  <div class="header">
+    <h1>Josh Hicks</h1>
+    <span>Information Systems</span>
   </div>
+  <div class="carousel-container">
+    <div class="card">Contact Me</div>
+    <div class="card">About Me</div>
+    <div class="card">Experience</div>
+    <div class="card">Projects</div>
+    <div class="card">WIP</div>
+  </div>
+  
+  <script>
+    // Add a scroll listener to create a roll effect
+    const container = document.querySelector('.carousel-container');
+    const cards = document.querySelectorAll('.card');
+    container.addEventListener('scroll', () => {
+      const containerRect = container.getBoundingClientRect();
+      cards.forEach(card => {
+        // Get the vertical center of the container
+        const containerCenter = containerRect.top + containerRect.height / 2;
+        // Get the center of the card
+        const cardRect = card.getBoundingClientRect();
+        const cardCenter = cardRect.top + cardRect.height / 2;
+        // Compute the offset from the container center (in pixels)
+        const offset = cardCenter - containerCenter;
+        // Map the offset to a rotation angle. 
+        // Adjust the divisor to control how much rotation occurs.
+        const maxRotation = 15; // maximum rotation in degrees
+        const rotation = Math.max(-maxRotation, Math.min(maxRotation, (offset / containerRect.height) * 60));
+        // Apply a rotation about the X axis (i.e. roll)
+        card.style.transform = `rotateX(${rotation}deg)`;
+      });
+    });
+  </script>
 </body>
 </html>
