@@ -3,21 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>About - Josh's Corner</title>
-  <!-- Google Font (Roboto) -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <title>About Me - Josh's Corner</title>
+  <!-- Google Font (Montserrat for a modern, cool vibe) -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    /* Global Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
-      font-family: 'Roboto', sans-serif;
+      font-family: 'Montserrat', sans-serif;
       color: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       padding: 20px;
-      min-height: 100vh;
-      position: relative;
+      overflow-x: hidden;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding-top: 150px;
     }
     /* Home Icon at Top Center */
     .home-icon {
@@ -35,26 +37,95 @@
     .home-icon:hover {
       transform: translateX(-50%) scale(1.1);
     }
+    /* Main Heading */
     h1 {
-      font-size: 2.5rem;
-      margin-bottom: 1em;
+      font-size: 3rem;
       text-align: center;
+      margin-bottom: 10px;
     }
-    p {
-      font-size: 1.2rem;
+    .subtitle {
       text-align: center;
+      font-size: 1.2rem;
+      color: #666;
+      margin-bottom: 40px;
+    }
+    /* Section Styles with Cool Effects */
+    .section {
+      background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      opacity: 0;
+      transform: translateY(30px);
+      animation: fadeInUp 1s forwards;
+    }
+    /* Staggered delays for sequential reveal */
+    .section:nth-of-type(1) {
+      animation-delay: 0.2s;
+    }
+    .section:nth-of-type(2) {
+      animation-delay: 0.4s;
+    }
+    .section:nth-of-type(3) {
+      animation-delay: 0.6s;
+    }
+    .section:nth-of-type(4) {
+      animation-delay: 0.8s;
+    }
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .section h2 {
+      font-size: 2rem;
+      margin-bottom: 15px;
+      color: #333;
+    }
+    .section p {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
     }
   </style>
 </head>
 <body>
+  <!-- Home Icon at Top Center -->
   <a href="index.html" class="home-icon" title="Home">
     <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
       <path d="M9 21V12H15V21"/>
     </svg>
   </a>
-  <h1>About Me</h1>
-  <p>This is the About page.</p>
-  <p>More details coming soon.</p>
+  
+  <div class="container">
+    <h1>About Me</h1>
+    <div class="subtitle">Get to know who I am and what drives me</div>
+    
+    <!-- Section 1: Who I Am -->
+    <div class="section">
+      <h2>Who I Am</h2>
+      <p>Hello! I'm Josh Hicks—a creative and curious individual with a passion for technology and innovation. I love exploring the intersection of engineering and creativity to build solutions that make a difference.</p>
+    </div>
+    
+    <!-- Section 2: My Academic Journey -->
+    <div class="section">
+      <h2>My Academic Journey</h2>
+      <p>I'm currently pursuing a degree in computer engineering at the University of Arkansas. My academic experiences empower me to dive deep into technical challenges and engage in cutting-edge projects.</p>
+    </div>
+    
+    <!-- Section 3: Interests &amp; Hobbies -->
+    <div class="section">
+      <h2>Interests &amp; Hobbies</h2>
+      <p>Outside of my studies, I enjoy working on personal tech projects, exploring robotics, and experimenting with new software and hardware. I'm always on the lookout for innovative ways to learn and create.</p>
+    </div>
+    
+    <!-- Section 4: What Drives Me -->
+    <div class="section">
+      <h2>What Drives Me</h2>
+      <p>I am driven by the desire to merge technology with creativity, forging solutions that positively impact society. I continually seek opportunities to grow, learn, and push the boundaries of what's possible.</p>
+    </div>
+  </div>
 </body>
 </html>
