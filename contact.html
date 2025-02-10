@@ -11,15 +11,14 @@
       margin: 0;
       background-color: #F5E7DE;
       font-family: 'Roboto', sans-serif;
-      color: #333;
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 20px;
       min-height: 100vh;
-      position: relative;
+      color: #333;
     }
-    /* Home Icon at Top Center */
+    /* Home Icon at Top Center (if needed on this page) */
     .home-icon {
       position: fixed;
       top: 20px;
@@ -35,14 +34,28 @@
     .home-icon:hover {
       transform: translateX(-50%) scale(1.1);
     }
-    h1 {
+    /* Oval Heading Container */
+    .heading-oval {
+      background-color: #8FAF8F; /* Same as the Contact Me nav box */
+      border-radius: 50px;       /* Creates an oval shape */
+      padding: 20px 40px;        /* Adjust the vertical/horizontal padding as needed */
+      margin-top: 80px;          /* Move the oval down a bit more */
+      text-align: center;
+      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
+    }
+    .heading-oval h1 {
+      margin: 0;
       font-size: 2.5rem;
-      margin-bottom: 1em;
+      color: #fff;
+    }
+    /* Content Styles */
+    .content {
+      margin-top: 40px;
       text-align: center;
     }
-    p {
+    .content p {
       font-size: 1.2rem;
-      text-align: center;
+      margin: 10px 0;
     }
     a.email-link {
       color: #6699CC;
@@ -56,14 +69,23 @@
   </style>
 </head>
 <body>
+  <!-- Optional Home Icon -->
   <a href="index.html" class="home-icon" title="Home">
     <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
       <path d="M9 21V12H15V21"/>
     </svg>
   </a>
-  <h1>Contact</h1>
-  <p>This is the Contact page.</p>
-  <p>Email: <a class="email-link" href="mailto:findme@joshhicks.info">findme@joshhicks.info</a></p>
+  
+  <!-- Oval Heading -->
+  <div class="heading-oval">
+    <h1>Contact</h1>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="content">
+    <p>This is the Contact page.</p>
+    <p>Email: <a class="email-link" href="mailto:findme@joshhicks.info">findme@joshhicks.info</a></p>
+  </div>
 </body>
 </html>
