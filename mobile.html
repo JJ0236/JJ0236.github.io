@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Josh's Corner - Mobile</title>
   <!-- Google Font (Montserrat for a modern look) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
@@ -13,14 +13,14 @@
       background-color: #F5E7DE;
       font-family: 'Montserrat', sans-serif;
       color: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       padding: 20px;
       min-height: 100vh;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
-    /* Header */
+    /* Header with Name and Major */
     .header {
       text-align: center;
       margin-top: 40px;
@@ -36,43 +36,71 @@
       color: #666;
       margin-top: 5px;
     }
-    /* Container for the navigation buttons */
-    .nav-container {
-      width: 100%;
-      max-width: 600px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
+    /* Floating animation for buttons */
+    @keyframes float {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+      100% { transform: translateY(0); }
     }
-    /* Navigation Button Styles (Small Rounded Rectangles) */
-    .nav-box {
+    /* Contact Me Button (Single, centered) */
+    .contact-container {
       width: 100%;
-      padding: 15px;
-      text-align: center;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+    .nav-button {
+      width: 180px;
+      height: 70px;
+      background-color: #8FAF8F; /* Soft Olive (for Contact Me) */
+      border-radius: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 1.2rem;
       font-weight: bold;
       color: #fff;
-      border-radius: 35px;
       text-decoration: none;
       box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
       animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
-    .nav-box:hover {
+    .nav-button:hover {
       transform: scale(1.05);
       box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     }
-    @keyframes float {
-      0% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
-      100% { transform: translateY(0); }
+    /* Grid Container for the Other 4 Buttons */
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 600px;
     }
-    /* Colors for Each Nav Button (same as desktop) */
-    .nav-box:nth-of-type(1) { background-color: #8FAF8F; } /* Soft Olive */
-    .nav-box:nth-of-type(2) { background-color: #6699CC; } /* Soft Sky Blue */
-    .nav-box:nth-of-type(3) { background-color: #FFB07C; } /* Soft Peach */
-    .nav-box:nth-of-type(4) { background-color: #66B2B2; } /* Soft Teal */
-    .nav-box:nth-of-type(5) { background-color: #E57373; } /* Soft Salmon */
+    .grid-button {
+      width: 100%;
+      height: 70px;
+      border-radius: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .grid-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    /* Colors for Grid Buttons (matching desktop) */
+    #btn-about { background-color: #6699CC; }    /* Soft Sky Blue */
+    #btn-experience { background-color: #FFB07C; } /* Soft Peach */
+    #btn-projects { background-color: #66B2B2; }     /* Soft Teal */
+    #btn-wip { background-color: #E57373; }         /* Soft Salmon */
   </style>
 </head>
 <body>
@@ -81,12 +109,17 @@
     <span>Information Systems</span>
   </div>
   
-  <div class="nav-container">
-    <a href="contact.html" class="nav-box">Contact Me</a>
-    <a href="about.html" class="nav-box">About Me</a>
-    <a href="experience.html" class="nav-box">Experience</a>
-    <a href="projects.html" class="nav-box">Projects</a>
-    <a href="wip.html" class="nav-box">WIP</a>
+  <!-- Contact Me Button at the Top -->
+  <div class="contact-container">
+    <a href="contact.html" class="nav-button">Contact Me</a>
+  </div>
+  
+  <!-- 2x2 Grid for the Other Buttons -->
+  <div class="grid-container">
+    <a href="about.html" class="grid-button" id="btn-about">About Me</a>
+    <a href="experience.html" class="grid-button" id="btn-experience">Experience</a>
+    <a href="projects.html" class="grid-button" id="btn-projects">Projects</a>
+    <a href="wip.html" class="grid-button" id="btn-wip">WIP</a>
   </div>
 </body>
 </html>
