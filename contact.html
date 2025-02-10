@@ -18,14 +18,32 @@
       align-items: center;
       padding: 20px;
       min-height: 100vh;
+      position: relative;
     }
+    /* Home Icon at Top Center */
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.1);
+    }
+    /* Page Heading */
     h1 {
       font-size: 2.5rem;
-      margin-top: 80px;
+      margin-top: 100px;
       margin-bottom: 40px;
       text-align: center;
     }
-    /* Container for the two ovals */
+    /* Container for the contact ovals */
     .contact-container {
       display: flex;
       justify-content: center;
@@ -33,14 +51,13 @@
       width: 100%;
       max-width: 600px;
     }
-    /* Floating Oval Button Styles with 3D effect */
+    /* Floating Oval Button Styles with 3D Effect */
     .contact-oval {
-      width: 220px;       /* Wider to accommodate two lines */
-      height: 100px;      /* Increased height for two lines */
+      width: 220px;       /* Skinnier width */
+      height: 100px;      /* Height for two lines of text */
       background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
       border-radius: 50px;
-      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), 
-                  -8px -8px 16px rgba(255,255,255,0.8);
+      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), -8px -8px 16px rgba(255,255,255,0.8);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -80,6 +97,14 @@
   </style>
 </head>
 <body>
+  <!-- Home Icon at Top Center -->
+  <a href="index.html" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+  
   <h1>How to contact me?</h1>
   <div class="contact-container">
     <a href="mailto:findme@joshhicks.info" class="contact-oval">
