@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Josh's Corner - Mobile</title>
-  <!-- Google Font (Montserrat for a modern, cool vibe) -->
+  <!-- Google Font (Montserrat for a modern look) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
@@ -12,63 +12,67 @@
       margin: 0;
       background-color: #F5E7DE;
       font-family: 'Montserrat', sans-serif;
-      overflow: hidden;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       padding: 20px;
+      min-height: 100vh;
+      overflow-y: auto;
     }
-    /* Header with Name and Major */
+    /* Header */
     .header {
       text-align: center;
       margin-top: 40px;
-      margin-bottom: 20px;
+      margin-bottom: 40px;
     }
     .header h1 {
       font-size: 2.5rem;
       margin: 0;
     }
     .header span {
+      display: block;
       font-size: 1.2rem;
       color: #666;
+      margin-top: 5px;
     }
-    /* Carousel Container for Vertical Scrolling */
-    .carousel-container {
-      height: calc(100vh - 100px); /* full viewport height minus header */
-      overflow-y: auto;
-      scroll-snap-type: y mandatory;
-      -webkit-overflow-scrolling: touch;
-      position: relative;
-      perspective: 800px; /* enable 3D effect */
-    }
-    .carousel-container::-webkit-scrollbar {
-      display: none;
-    }
-    /* Each Snap Card: a small rounded rectangle (the nav button) */
-    .snap-card {
-      scroll-snap-align: center;
-      width: 220px;
-      height: 100px;
-      margin: 40px auto; /* center horizontally and add vertical spacing */
-      border-radius: 35px;
+    /* Container for the navigation buttons */
+    .nav-container {
+      width: 100%;
+      max-width: 600px;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+    /* Navigation Button Styles (Small Rounded Rectangles) */
+    .nav-box {
+      width: 100%;
+      padding: 15px;
+      text-align: center;
       font-size: 1.2rem;
       font-weight: bold;
       color: #fff;
+      border-radius: 35px;
       text-decoration: none;
       box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-      transition: transform 0.3s ease;
-      transform-origin: center;
-      /* No default transform here; JS will add rotation */
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      animation: float 4s ease-in-out infinite;
     }
-    .snap-card:hover {
-      transform: scale(1.05); /* Slight enlarge on hover */
+    .nav-box:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
     }
-    /* Background Colors (matching your desktop nav boxes) */
-    #card1 { background-color: #8FAF8F; }  /* Soft Olive */
-    #card2 { background-color: #6699CC; }  /* Soft Sky Blue */
-    #card3 { background-color: #FFB07C; }  /* Soft Peach */
-    #card4 { background-color: #66B2B2; }  /* Soft Teal */
-    #card5 { background-color: #E57373; }  /* Soft Salmon */
+    @keyframes float {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
+    /* Colors for Each Nav Button (same as desktop) */
+    .nav-box:nth-of-type(1) { background-color: #8FAF8F; } /* Soft Olive */
+    .nav-box:nth-of-type(2) { background-color: #6699CC; } /* Soft Sky Blue */
+    .nav-box:nth-of-type(3) { background-color: #FFB07C; } /* Soft Peach */
+    .nav-box:nth-of-type(4) { background-color: #66B2B2; } /* Soft Teal */
+    .nav-box:nth-of-type(5) { background-color: #E57373; } /* Soft Salmon */
   </style>
 </head>
 <body>
@@ -77,43 +81,12 @@
     <span>Information Systems</span>
   </div>
   
-  <div class="carousel-container" id="carousel">
-    <a href="contact.html" class="snap-card" id="card1">Contact Me</a>
-    <a href="about.html" class="snap-card" id="card2">About Me</a>
-    <a href="experience.html" class="snap-card" id="card3">Experience</a>
-    <a href="projects.html" class="snap-card" id="card4">Projects</a>
-    <a href="wip.html" class="snap-card" id="card5">WIP</a>
+  <div class="nav-container">
+    <a href="contact.html" class="nav-box">Contact Me</a>
+    <a href="about.html" class="nav-box">About Me</a>
+    <a href="experience.html" class="nav-box">Experience</a>
+    <a href="projects.html" class="nav-box">Projects</a>
+    <a href="wip.html" class="nav-box">WIP</a>
   </div>
-  
-  <script>
-    const carousel = document.getElementById('carousel');
-    const cards = document.querySelectorAll('.snap-card');
-    
-    function updateRotation() {
-      // Get container's bounding rectangle relative to viewport
-      const containerRect = carousel.getBoundingClientRect();
-      // The vertical center of the container:
-      const containerCenter = containerRect.top + containerRect.height / 2;
-      
-      cards.forEach(card => {
-        const rect = card.getBoundingClientRect();
-        // The vertical center of the card:
-        const cardCenter = rect.top + rect.height / 2;
-        // Compute offset from container center:
-        const offset = cardCenter - containerCenter;
-        // Map offset to a rotation angle (rotateX effect):
-        // When the card is at center, offset is 0 => rotation is 0.
-        const maxRotation = 30; // maximum rotation angle in degrees
-        const rotation = (offset / (containerRect.height / 2)) * maxRotation;
-        // Apply the rotation. We use only rotateX since the card is already centered.
-        card.style.transform = `rotateX(${rotation}deg)`;
-      });
-    }
-    
-    // Update rotation on scroll, load, and resize.
-    carousel.addEventListener('scroll', updateRotation);
-    window.addEventListener('resize', updateRotation);
-    window.addEventListener('load', updateRotation);
-  </script>
 </body>
 </html>
