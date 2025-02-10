@@ -4,14 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Contact - Josh's Corner</title>
-  <!-- Google Font (Roboto) -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <!-- Google Font (Montserrat) -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
     body {
       margin: 0;
       background-color: #F5E7DE;
-      font-family: 'Roboto', sans-serif;
+      font-family: 'Montserrat', sans-serif;
       color: #333;
       display: flex;
       flex-direction: column;
@@ -36,14 +36,20 @@
     .home-icon:hover {
       transform: translateX(-50%) scale(1.1);
     }
-    /* Page Heading */
+    /* Heading Styles */
     h1 {
       font-size: 2.5rem;
-      margin-top: 100px;
+      margin-top: 150px; /* Increased top margin to push heading further down */
       margin-bottom: 40px;
       text-align: center;
     }
-    /* Container for the contact ovals */
+    h1 small {
+      display: block;
+      font-size: 1.2rem;
+      font-weight: 400;
+      margin-top: 5px;
+    }
+    /* Container for the two ovals */
     .contact-container {
       display: flex;
       justify-content: center;
@@ -53,11 +59,12 @@
     }
     /* Floating Oval Button Styles with 3D Effect */
     .contact-oval {
-      width: 220px;       /* Skinnier width */
-      height: 100px;      /* Height for two lines of text */
+      width: 220px;       /* Slightly wider to accommodate two lines */
+      height: 100px;      /* Increased height for two lines of text */
       background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
       border-radius: 50px;
-      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), -8px -8px 16px rgba(255,255,255,0.8);
+      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), 
+                  -8px -8px 16px rgba(255,255,255,0.8);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -105,7 +112,13 @@
     </svg>
   </a>
   
-  <h1>How to contact me?</h1>
+  <!-- Updated Heading -->
+  <h1>
+    Talk to me<br>
+    <small>(please)</small>
+  </h1>
+  
+  <!-- Contact Options Container -->
   <div class="contact-container">
     <a href="mailto:findme@joshhicks.info" class="contact-oval">
       <div class="contact-content">
