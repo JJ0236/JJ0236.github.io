@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Josh's Corner - Mobile</title>
-  <!-- Google Font (Montserrat for a modern look) -->
+  <!-- Google Font (Montserrat for a modern, cool look) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
@@ -12,12 +12,15 @@
       margin: 0;
       background-color: #F5E7DE;
       font-family: 'Montserrat', sans-serif;
-      overflow: hidden;
+      overflow-x: hidden;
+      padding: 20px;
+      color: #333;
     }
-    /* Header (Name and Major) */
+    /* Header with Name and Major */
     .header {
       text-align: center;
-      padding: 20px;
+      margin-top: 40px;
+      margin-bottom: 20px;
     }
     .header h1 {
       font-size: 2.5rem;
@@ -29,18 +32,29 @@
       color: #666;
       margin-top: 5px;
     }
-    /* Carousel Container: full height minus header */
+    /* Carousel Container */
     .carousel-container {
-      height: calc(100vh - 80px);
-      overflow-y: scroll;
+      height: calc(100vh - 120px); /* full viewport height minus header space */
+      overflow-y: auto;
       scroll-snap-type: y mandatory;
       -webkit-overflow-scrolling: touch;
-      perspective: 800px; /* Add perspective for 3D effect */
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      position: relative;
     }
-    /* Each Card */
+    .carousel-container::-webkit-scrollbar {
+      display: none;
+    }
+    /* Card Styles (Rounded Rectangle) */
     .card {
       scroll-snap-align: center;
-      height: 100vh;
+      height: 80vh;  /* Card occupies roughly 80% of the viewport height */
+      width: 90%;
+      max-width: 600px;
+      margin: 0 auto 20px auto; /* space between cards */
+      background-color: #8FAF8F; /* default; each card gets its own color below */
+      border-radius: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -48,14 +62,17 @@
       font-weight: bold;
       color: #fff;
       transition: transform 0.2s ease-out;
-      /* Each card is positioned relative to the viewport */
+      perspective: 800px; /* for 3D roll effect */
+      position: relative;
     }
-    /* Card Background Colors (unchanged from desktop) */
+    /* Set colors for each card (matching your desktop nav box colors) */
     #card1 { background-color: #8FAF8F; } /* Soft Olive */
     #card2 { background-color: #6699CC; } /* Soft Sky Blue */
     #card3 { background-color: #FFB07C; } /* Soft Peach */
     #card4 { background-color: #66B2B2; } /* Soft Teal */
     #card5 { background-color: #E57373; } /* Soft Salmon */
+    
+    /* JavaScript will adjust the rotation of each card based on scroll */
   </style>
 </head>
 <body>
@@ -74,29 +91,30 @@
   <script>
     const container = document.querySelector('.carousel-container');
     const cards = document.querySelectorAll('.card');
-    
+
     function updateCards() {
-      // Get the container's bounding rectangle.
+      // Get the bounding rectangle of the container.
       const containerRect = container.getBoundingClientRect();
-      // Compute the vertical center of the container.
+      // The center of the container in the viewport:
       const containerCenter = containerRect.top + containerRect.height / 2;
       
       cards.forEach(card => {
         const rect = card.getBoundingClientRect();
-        // Compute the vertical center of the card.
+        // The center of the card:
         const cardCenter = rect.top + rect.height / 2;
-        // Compute the difference from the container's center.
-        const diff = cardCenter - containerCenter;
-        // For a full card (height ~ viewport height), diff will be between roughly - (containerRect.height/2) and + (containerRect.height/2)
-        // Map this difference to a rotation angle. Adjust the multiplier for effect intensity.
+        // Calculate offset from the container's center
+        const offset = cardCenter - containerCenter;
+        // Map the offset to a rotation angle (rotateX effect).
+        // When a card is at the center, offset is 0 so rotation is 0.
+        // When it's further away, we rotate it more.
         const maxRotation = 30; // maximum rotation in degrees
-        const rotation = (diff / (containerRect.height/2)) * maxRotation;
-        // Apply a rotation along the X axis for a "roll" effect.
+        const rotation = Math.max(-maxRotation, Math.min(maxRotation, (offset / (containerRect.height / 2)) * maxRotation));
+        // Apply rotation along the X axis.
         card.style.transform = `rotateX(${rotation}deg)`;
       });
     }
     
-    // Update card transforms on scroll and on load.
+    // Update card rotation on scroll, load, and resize.
     container.addEventListener('scroll', updateCards);
     window.addEventListener('load', updateCards);
     window.addEventListener('resize', updateCards);
