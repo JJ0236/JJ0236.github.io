@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Contact - Josh's Corner</title>
-  <!-- Google Font (Montserrat) -->
+  <!-- Google Font (Montserrat for a modern vibe) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
@@ -20,7 +20,7 @@
       min-height: 100vh;
       position: relative;
     }
-    /* Home Icon at Top Center (optional on contact page) */
+    /* Home Icon at Top Center */
     .home-icon {
       position: fixed;
       top: 20px;
@@ -36,12 +36,21 @@
     .home-icon:hover {
       transform: translateX(-50%) scale(1.1);
     }
-    /* Heading */
-    h1 {
-      font-size: 2.5rem;
-      margin-top: 100px;
-      margin-bottom: 40px;
+    /* Header */
+    .header {
       text-align: center;
+      margin-top: 80px;
+      margin-bottom: 40px;
+    }
+    .header h1 {
+      font-size: 2.5rem;
+      margin: 0;
+    }
+    .header small {
+      display: block;
+      font-size: 1.2rem;
+      color: #666;
+      margin-top: 5px;
     }
     /* Container for the two ovals */
     .contact-container {
@@ -55,7 +64,9 @@
     .contact-oval {
       width: 220px;
       height: 100px;
+      background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
       border-radius: 50px;
+      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), -8px -8px 16px rgba(255,255,255,0.8);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -68,7 +79,6 @@
       transition: transform 0.3s ease;
       text-decoration: none;
       cursor: pointer;
-      box-shadow: 8px 8px 16px rgba(190,190,190,0.8), -8px -8px 16px rgba(255,255,255,0.8);
     }
     .contact-oval:hover {
       transform: scale(1.05);
@@ -78,18 +88,7 @@
       50% { transform: translateY(-10px); }
       100% { transform: translateY(0); }
     }
-    /* Email oval styles */
-    #email-oval {
-      background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
-    }
-    #email-oval .contact-info {
-      font-size: 0.9rem; /* Smaller font for email info */
-    }
-    /* Phone oval styles */
-    #phone-oval {
-      background: linear-gradient(145deg, #E57373, #D45C5C);
-    }
-    /* Content inside each oval */
+    /* Content inside the ovals */
     .contact-content {
       display: flex;
       flex-direction: column;
@@ -102,12 +101,19 @@
       margin-bottom: 5px;
     }
     .contact-info {
-      font-size: 1rem;
+      font-size: 0.9rem;
+    }
+    /* Specific Colors for Each Oval */
+    #email-oval {
+      background: linear-gradient(145deg, #8FAF8F, #7CAE7C);
+    }
+    #phone-oval {
+      background: linear-gradient(145deg, #E57373, #D45C5C);
     }
   </style>
 </head>
 <body>
-  <!-- Optional Home Icon (remove if not needed on contact page) -->
+  <!-- Home Icon at Top Center -->
   <a href="index.html" class="home-icon" title="Home">
     <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
@@ -115,7 +121,10 @@
     </svg>
   </a>
   
-  <h1>How to contact me?</h1>
+  <div class="header">
+    <h1>Talk to me<br><small>(please)</small></h1>
+  </div>
+  
   <div class="contact-container">
     <a href="mailto:findme@joshhicks.info" class="contact-oval" id="email-oval">
       <div class="contact-content">
