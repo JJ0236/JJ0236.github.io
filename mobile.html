@@ -12,68 +12,63 @@
       margin: 0;
       background-color: #F5E7DE;
       font-family: 'Montserrat', sans-serif;
-      color: #333;
       overflow: hidden;
+      padding: 20px;
     }
     /* Header with Name and Major */
     .header {
       text-align: center;
-      padding: 20px;
+      margin-top: 40px;
+      margin-bottom: 20px;
     }
     .header h1 {
       font-size: 2.5rem;
       margin: 0;
     }
     .header span {
-      display: block;
       font-size: 1.2rem;
       color: #666;
-      margin-top: 5px;
     }
-    /* Carousel Container: full-screen vertical scrolling with snap */
+    /* Carousel Container for Vertical Scrolling */
     .carousel-container {
-      height: calc(100vh - 80px); /* Subtract header height */
+      height: calc(100vh - 100px); /* full viewport height minus header */
       overflow-y: auto;
       scroll-snap-type: y mandatory;
       -webkit-overflow-scrolling: touch;
       position: relative;
-      perspective: 800px; /* Enable 3D effect */
+      perspective: 800px; /* enable 3D effect */
     }
     .carousel-container::-webkit-scrollbar {
       display: none;
     }
-    /* Each Snap Card takes up the full viewport height */
+    /* Each Snap Card: a small rounded rectangle (the nav button) */
     .snap-card {
-      height: 100vh;
-      scroll-snap-align: start;
+      scroll-snap-align: center;
+      width: 220px;
+      height: 100px;
+      margin: 40px auto; /* center horizontally and add vertical spacing */
+      border-radius: 35px;
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
-    }
-    /* The small button (rounded rectangle) inside each card */
-    .nav-button {
-      padding: 15px 25px;
-      background-color: #8FAF8F; /* Default color; each card will override this */
-      border-radius: 50px;
       font-size: 1.2rem;
       font-weight: bold;
       color: #fff;
       text-decoration: none;
-      box-shadow: 4px 4px 10px rgba(0,0,0,0.2);
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-      /* We will adjust rotation on the card container, so no additional transform here */
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+      transition: transform 0.3s ease;
+      transform-origin: center;
+      /* No default transform here; JS will add rotation */
     }
-    .nav-button:hover {
-      transform: scale(1.05);
-      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    .snap-card:hover {
+      transform: scale(1.05); /* Slight enlarge on hover */
     }
-    /* Colors for each button, matching your desktop theme */
-    #card1 .nav-button { background-color: #8FAF8F; } /* Soft Olive */
-    #card2 .nav-button { background-color: #6699CC; } /* Soft Sky Blue */
-    #card3 .nav-button { background-color: #FFB07C; } /* Soft Peach */
-    #card4 .nav-button { background-color: #66B2B2; } /* Soft Teal */
-    #card5 .nav-button { background-color: #E57373; } /* Soft Salmon */
+    /* Background Colors (matching your desktop nav boxes) */
+    #card1 { background-color: #8FAF8F; }  /* Soft Olive */
+    #card2 { background-color: #6699CC; }  /* Soft Sky Blue */
+    #card3 { background-color: #FFB07C; }  /* Soft Peach */
+    #card4 { background-color: #66B2B2; }  /* Soft Teal */
+    #card5 { background-color: #E57373; }  /* Soft Salmon */
   </style>
 </head>
 <body>
@@ -83,53 +78,42 @@
   </div>
   
   <div class="carousel-container" id="carousel">
-    <div class="snap-card" id="card1">
-      <a href="contact.html" class="nav-button">Contact Me</a>
-    </div>
-    <div class="snap-card" id="card2">
-      <a href="about.html" class="nav-button">About Me</a>
-    </div>
-    <div class="snap-card" id="card3">
-      <a href="experience.html" class="nav-button">Experience</a>
-    </div>
-    <div class="snap-card" id="card4">
-      <a href="projects.html" class="nav-button">Projects</a>
-    </div>
-    <div class="snap-card" id="card5">
-      <a href="wip.html" class="nav-button">WIP</a>
-    </div>
+    <a href="contact.html" class="snap-card" id="card1">Contact Me</a>
+    <a href="about.html" class="snap-card" id="card2">About Me</a>
+    <a href="experience.html" class="snap-card" id="card3">Experience</a>
+    <a href="projects.html" class="snap-card" id="card4">Projects</a>
+    <a href="wip.html" class="snap-card" id="card5">WIP</a>
   </div>
   
   <script>
-    // Get the carousel container and all snap cards
     const carousel = document.getElementById('carousel');
     const cards = document.querySelectorAll('.snap-card');
-
-    function updateCards() {
-      // Get the container's bounding rectangle
+    
+    function updateRotation() {
+      // Get container's bounding rectangle relative to viewport
       const containerRect = carousel.getBoundingClientRect();
-      // Calculate the container's vertical center
+      // The vertical center of the container:
       const containerCenter = containerRect.top + containerRect.height / 2;
       
       cards.forEach(card => {
         const rect = card.getBoundingClientRect();
-        // Calculate the card's center
+        // The vertical center of the card:
         const cardCenter = rect.top + rect.height / 2;
-        // Calculate the offset from the container center
+        // Compute offset from container center:
         const offset = cardCenter - containerCenter;
-        // Map the offset to a rotation angle (rotateX effect)
-        // When offset is 0, rotation is 0. Adjust the intensity by modifying the multiplier.
-        const maxRotation = 30; // degrees
-        const rotation = Math.max(-maxRotation, Math.min(maxRotation, (offset / (containerRect.height / 2)) * maxRotation));
-        // Apply rotation along the X axis to the snap card
+        // Map offset to a rotation angle (rotateX effect):
+        // When the card is at center, offset is 0 => rotation is 0.
+        const maxRotation = 30; // maximum rotation angle in degrees
+        const rotation = (offset / (containerRect.height / 2)) * maxRotation;
+        // Apply the rotation. We use only rotateX since the card is already centered.
         card.style.transform = `rotateX(${rotation}deg)`;
       });
     }
     
-    // Update rotation on scroll, load, and resize
-    carousel.addEventListener('scroll', updateCards);
-    window.addEventListener('resize', updateCards);
-    window.addEventListener('load', updateCards);
+    // Update rotation on scroll, load, and resize.
+    carousel.addEventListener('scroll', updateRotation);
+    window.addEventListener('resize', updateRotation);
+    window.addEventListener('load', updateRotation);
   </script>
 </body>
 </html>
