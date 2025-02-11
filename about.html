@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>About Me - Josh's Corner</title>
-  <!-- Google Font (Montserrat for a modern look) -->
+  <!-- Google Font (Montserrat for a modern, cool vibe) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
   <style>
     /* Global Styles */
@@ -19,7 +19,7 @@
     .container {
       max-width: 900px;
       margin: 0 auto;
-      padding-top: 80px; /* Moved up a little */
+      padding-top: 80px;
     }
     /* Home Icon at Top Center */
     .home-icon {
@@ -49,7 +49,7 @@
       color: #666;
       margin-bottom: 40px;
     }
-    /* Section Styles with Animation and Explicit IDs */
+    /* Section Styles */
     .section {
       padding: 30px;
       border-radius: 12px;
@@ -59,7 +59,7 @@
       transform: translateY(30px);
       animation: fadeInUp 1s forwards;
     }
-    /* Section background colors and animation delays using IDs */
+    /* Explicit Section IDs for Colors and Animation Delays */
     #who {
       background-color: #8FAF8F; /* Soft Olive */
       animation-delay: 0.2s;
@@ -92,6 +92,29 @@
       margin-bottom: 10px;
       color: #fff;
     }
+    /* Who I Am Section Layout: Place text to the left, image to the right */
+    .who-content {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .who-text {
+      flex: 1;
+      color: #fff;
+      font-size: 1.1rem;
+      line-height: 1.5;
+    }
+    .who-image {
+      flex-shrink: 0;
+    }
+    .who-image img {
+      max-width: 200px;
+      width: 100%;
+      border-radius: 10px;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -110,25 +133,40 @@
     <!-- Section 1: Who I Am -->
     <div class="section" id="who">
       <h2>Who I Am</h2>
-      <p>Hello! I am Josh Hicks, a creative and curious individual with a passion for technology and innovation. I love exploring how modern tech can enhance our experience of the natural world and I strive to bring my technical skills and my love for the outdoors into every project I undertake. I am also an Eagle Scout which has taught me valuable lessons in leadership and teamwork as I enjoy spending time in nature.</p>
+      <div class="who-content">
+        <div class="who-text">
+          <p>
+            I thrive on mastering new technologies while ensuring theyre sustainable. I focus on implementing innovative solutions that drive efficiency and sustainability in tech. When Im not working on tech projects, youll find me outdoors, exploring new places or experimenting with DIY projects. I am proud to be an Eagle Scout and believe that my experiences in nature and in leadership have shaped my creative approach to technology.
+          </p>
+        </div>
+        <div class="who-image">
+          <img src="profile.jpg" alt="Josh Hicks">
+        </div>
+      </div>
     </div>
     
     <!-- Section 2: My Academic Journey -->
     <div class="section" id="academic">
       <h2>My Academic Journey</h2>
-      <p>I am currently pursuing an Information Systems degree at the University of Arkansas, Fayettville. My academic journey is focused on solving real world problems with innovative technology while always finding inspiration in the beauty of nature.</p>
+      <p>
+        I am currently pursuing an Information Systems degree at the University of Arkansas. My academic journey is focused on solving real world problems with innovative technology while drawing inspiration from the beauty of nature.
+      </p>
     </div>
     
     <!-- Section 3: Interests and Hobbies -->
     <div class="section" id="interests">
       <h2>Interests and Hobbies</h2>
-      <p>When I am not studying, I enjoy working on personal technology projects, exploring robotics, and experimenting with new software and hardware. I also have a deep love for the outdoors, and I take every opportunity to hike, camp, and enjoy the wonders of nature. This passion for nature inspires my creative approach to technology.</p>
+      <p>
+        Outside of my studies, I enjoy working on personal technology projects, exploring robotics, and experimenting with new software and hardware. My love for the outdoors fuels my creativity and inspires me to blend tech with the natural environment.
+      </p>
     </div>
     
     <!-- Section 4: What Drives Me -->
     <div class="section" id="drives">
       <h2>What Drives Me</h2>
-      <p>I am driven by a desire to merge technology with creativity and nature. I continually seek opportunities to learn, grow, and push the boundaries of what is possible while staying true to my love for innovative tech and the great outdoors.</p>
+      <p>
+        I am driven by the desire to merge technology with creativity and nature to create solutions that positively impact society. I continually seek opportunities to learn, grow, and push the boundaries of what is possible, all while nurturing my passion for innovative technology and the great outdoors.
+      </p>
     </div>
   </div>
 </body>
