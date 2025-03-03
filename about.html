@@ -54,7 +54,7 @@
       padding: 30px;
       border-radius: 12px;
       margin-bottom: 40px;
-      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
       opacity: 0;
       transform: translateY(30px);
       animation: fadeInUp 1s forwards;
@@ -119,6 +119,17 @@
       border-radius: 10px;
       display: block;
       object-fit: cover;
+    }
+    /* Mobile: Stack Who I Am text and image vertically */
+    @media (max-width: 600px) {
+      .who-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .who-text {
+        margin-bottom: 20px;
+      }
     }
   </style>
 </head>
