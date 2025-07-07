@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Projects – Josh’s Corner</title>
+  <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet"/>
   <style>
     body {
@@ -16,12 +17,22 @@
       align-items: center;
       padding: 20px;
       min-height: 100vh;
+      position: relative;
     }
     .home-icon {
-      position: fixed; top: 20px; left: 50%;
+      position: fixed;
+      top: 20px;
+      left: 50%;
       transform: translateX(-50%);
-      width: 32px; height: 32px;
-      color: #333; z-index: 100;
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.1);
     }
 
     /* ——— FEATURED PROJECT ——— */
@@ -60,22 +71,11 @@
       color: #666;
       font-size: .9rem;
     }
-    .featured-info .btn {
-      display: inline-block;
-      margin-top: 1rem;
-      padding: .6rem 1.2rem;
-      background: #6BA56B;
-      color: #fff;
-      text-decoration: none;
-      border-radius: .3rem;
-      font-weight: bold;
-      width: fit-content;
-    }
 
-    /* ——— PROJECTS GRID ——— */
+    /* ——— OTHER PROJECTS GRID ——— */
     .projects-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit,minmax(250px,1fr));
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 1.5rem;
       max-width: 900px;
       width: 100%;
@@ -86,66 +86,63 @@
       border-radius: .5rem;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
       padding: 1.5rem;
-      text-align: center;
       display: flex;
       flex-direction: column;
       height: 100%;
-    }
-    .project-card img {
-      max-width: 100%;
-      border-radius: .25rem;
-      margin-bottom: 1rem;
     }
     .project-card h3 {
       margin: 0 0 .5rem;
       font-size: 1.4rem;
     }
+    .project-card p {
+      margin: .5rem 0;
+      line-height: 1.4;
+    }
     .project-card p.tech {
-      margin: .5rem 0 1rem;
+      margin-top: auto;
       font-size: .9rem;
       color: #666;
-    }
-    .project-card a {
-      margin-top: auto;
-      text-decoration: none;
-      color: #4C90F9;
-      font-weight: bold;
     }
   </style>
 </head>
 <body>
+  <!-- Home icon -->
   <a href="index.html" class="home-icon" title="Home">
-    <!-- your SVG home icon -->
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
   </a>
 
   <!-- Featured project -->
   <section class="featured-project">
-    <img src="path/to/featured-thumb.jpg" alt="Screenshot of Featured Project">
+    <img src="path/to/tunes-thumb.jpg" alt="TunesInYourCity screenshot">
     <div class="featured-info">
-      <h2>Featured Project Title</h2>
-      <p>A one-or-two sentence elevator pitch explaining what this project does and why it matters.</p>
-      <p class="tech">Tech: React • Node.js • PostgreSQL</p>
-      <a href="featured-details.html" class="btn">Learn More →</a>
+      <h2>TunesInYourCity</h2>
+      <p>Automates scraping of ~15 venue websites to build and update curated Spotify playlists and weekly Instagram posts.</p>
+      <p class="tech">
+        Skills: Selenium • Python • Spotify API • Web Scraping • Data Filtering • Instagram Integration
+      </p>
     </div>
   </section>
 
   <!-- Other main projects -->
   <section class="projects-grid">
     <article class="project-card">
-      <img src="thumb1.png" alt="Project One">
-      <h3>Project One</h3>
-      <p class="tech">Vue • Firebase</p>
-      <a href="#">View Details →</a>
+      <h3>3D Printing + Fabrication Projects</h3>
+      <p>Created beginner-friendly 3D printing guides, visual PDFs, and nature-themed accessories with custom support-wall designs in Fusion 360 & Inkscape.</p>
+      <p class="tech">
+        Skills: Flowchart Design • PDF & Guide Creation • Fusion 360 • Inkscape • 3D Printing
+      </p>
     </article>
 
     <article class="project-card">
-      <img src="thumb2.png" alt="Project Two">
-      <h3>Project Two</h3>
-      <p class="tech">Python • Django</p>
-      <a href="#">View Details →</a>
+      <h3>Scouting / STEM Education Projects</h3>
+      <p>Developed interactive merit-badge programs and taught hands-on STEM lessons at scout camps—no Wi-Fi or A/V gear needed.</p>
+      <p class="tech">
+        Skills: Curriculum Development • STEM Instruction • 3D Printing • Digital Tech Education • Lesson Design
+      </p>
     </article>
-
-    <!-- repeat .project-card for each project -->
   </section>
 </body>
 </html>
