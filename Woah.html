@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Manipulatable Box</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #settings {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 250px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid #ccc;
+            z-index: 1;
+        }
+        #settings label { display: block; margin: 5px 0; }
+        #toolButtons button {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #toolButtons button.selected {
+            background: grey;
+            cursor: default;
+        }
+        #controlButtons button {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #animationSlider {
+            width: 100%;
+            margin: 5px 0;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
+                "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="settings">
+        <label>
+            Tool:
+        </label>
+        <div id="toolButtons">
+            <button id="pullTool">Pull</button>
+            <button id="waterTool">Water</button>
+        </div>
+        <label>
+            Brush Radius (inches): <span id="brushRadiusValue">1.0</span>
+            <input type="range" id="brushRadiusSlider" min="0.1" max="5.0" value="1.0" step="0.1">
+        </label>
+        <label>
+            Pull Height (inches): <span id="pullHeightValue">0.3</span>
+            <input type="number" id="pullHeightInput" min="0.1" value="0.3" step="0.1">
+        </label>
+        <label>
+            Width (inches):
+            <input type="number" id="widthInput" value="20" min="1" step="0.1">
+        </label>
+        <label>
+            Length (inches):
+            <input type="number" id="lengthInput" value="10" min="1" step="0.1">
+        </label>
+        <label>
+            Thickness (inches):
+            <input type="number" id="thicknessInput" value="2" min="0.1" step="0.1">
+        </label>
+        <div id="controlButtons">
+            <button id="pauseButton">Pause</button>
+            <button id="stepButton">Step</button>
+            <input type="range" id="animationSlider" min="0" max="100" value="0" step="1">
+        </div>
+    </div>
+
+    <script type="module">
+        console.log('Module script started loading at 02:05 PM CDT, July 18, 2025.');
+
+        import * as THREE from 'three';
+        console.log('THREE imported successfully:', THREE);
+
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+        console.log('OrbitControls imported successfully.');
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 5);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        scene.add(directionalLight);
+
+        // Grid density (points per inch)
+        const density = 10; // 10 points per inch
+
+        // Grid parameters
+        let width = 20;
+        let length = 10;
+        let nx = Math.round(width * density); // points in x (width)
+        let ny = Math.round(length * density); // points in z (length)
+        let thickness = 2;
+        let selectedTool = 'pull'; // Default tool: pull (raise without ripples)
+        let brushRadius = 1.0; // Initial brush radius in inches
+        let pullHeight = 0.3; // Maximum pull height in inches
+        let isPaused = false;
+        let frameStep = false;
+        let animationProgress = 0; // Track animation progress for slider
+
+        // Wave simulation parameters (for water tool)
+        const c = 0.6; // Increased wave speed
+        const damp = 0.995; // Adjusted for longer ripples
+        const dt = 0.02; // Increased time step
+        const raiseAmount = 0.3; // Base amount to raise for water
+        const impulseMultiplier = 2; // Impulse for ripple
+
+        // Height and velocity arrays for top face deformation
+        function initializeArrays() {
+            return {
+                heights: Array.from({ length: nx }, () => Array(ny).fill(0)),
+                velocities: Array.from({ length: nx }, () => Array(ny).fill(0))
+            };
+        }
+        let { heights, velocities } = initializeArrays();
+
+        // Last mouse position for holding
+        let lastIx = -1;
+        let lastIy = -1;
+
+        // Mesh
+        let mesh;
+        function createMesh() {
+            try {
+                if (mesh) scene.remove(mesh);
+                if (nx <= 1 || ny <= 1) {
+                    console.error('Invalid grid size: nx=', nx, 'ny=', ny, 'Setting to minimum 20x20');
+                    nx = Math.max(20, nx);
+                    ny = Math.max(20, ny);
+                }
+                const geometry = new THREE.BoxGeometry(width, thickness, length, nx - 1, 1, ny - 1);
+                const material = new THREE.MeshPhongMaterial({
+                    color: 0x8B4513,
+                    shininess: 30,
+                    specular: 0x444444
+                });
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                updateVertices();
+                console.log('Mesh created successfully with nx:', nx, 'ny:', ny);
+            } catch (error) {
+                console.error('Error creating mesh:', error);
+                // Fallback to default size if creation fails
+                nx = 200;
+                ny = 100;
+                createMesh();
+            }
+        }
+
+        function updateVertices() {
+            try {
+                if (!mesh || !mesh.geometry || !mesh.geometry.attributes.position) {
+                    console.error('Mesh or geometry not properly initialized');
+                    return;
+                }
+                const positions = mesh.geometry.attributes.position;
+                const halfW = width / 2;
+                const halfL = length / 2;
+                const halfT = thickness / 2;
+                for (let k = 0; k < positions.count; k++) {
+                    const y = positions.getY(k);
+                    if (y > 0) { // Top face vertices
+                        const x = positions.getX(k);
+                        const z = positions.getZ(k);
+                        const i = Math.round((x + halfW) / width * (nx - 1));
+                        const j = Math.round((z + halfL) / length * (ny - 1));
+                        if (i >= 0 && i < nx && j >= 0 && j < ny && i < heights.length && j < heights[0].length) {
+                            let newHeight = halfT + heights[i][j];
+                            if (newHeight < -halfT) {
+                                newHeight = -halfT;
+                                heights[i][j] = -thickness;
+                            }
+                            positions.setY(k, newHeight);
+                        } else {
+                            console.warn('Index out of bounds: i=', i, 'j=', j, 'nx=', nx, 'ny=', ny);
+                        }
+                    }
+                }
+                positions.needsUpdate = true;
+                mesh.geometry.computeVertexNormals();
+            } catch (error) {
+                console.error('Error updating vertices:', error);
+            }
+        }
+
+        createMesh();
+
+        camera.position.set(0, thickness * 2, length / 2 + width / 2);
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        // Raycaster for mouse interaction (draw on top face)
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let isShiftDown = false;
+        let isDrawing = false;
+
+        // Key listeners for Shift key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Shift') {
+                isShiftDown = true;
+            }
+        });
+
+        document.addEventListener('keyup', (event) => {
+            if (event.key === 'Shift') {
+                isShiftDown = false;
+            }
+        });
+
+        renderer.domElement.addEventListener('mousedown', (event) => {
+            if (isShiftDown && event.button === 0) {
+                isDrawing = true;
+                controls.enabled = false;
+                updateLastPosition(event);
+                if (lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
+                    applyRaise(lastIx, lastIy);
+                }
+            }
+        });
+
+        renderer.domElement.addEventListener('mouseup', (event) => {
+            if (event.button === 0) {
+                isDrawing = false;
+                controls.enabled = true;
+            }
+        });
+
+        renderer.domElement.addEventListener('mousemove', (event) => {
+            updateLastPosition(event);
+            if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
+                applyRaise(lastIx, lastIy);
+            }
+        });
+
+        function updateLastPosition(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(mesh);
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                point.y = 0; // Project to top face for straight up growth
+                const localPoint = point.clone().applyMatrix4(mesh.matrixWorld.invert());
+                lastIx = Math.round((localPoint.x + width / 2) / width * (nx - 1));
+                lastIy = Math.round((localPoint.z + length / 2) / length * (ny - 1));
+            }
+        }
+
+        function applyRaise(ix, iy) {
+            if (ix >= 0 && ix < nx && iy >= 0 && iy < ny) {
+                const maxDimension = Math.max(width, length);
+                const normalizedRadius = (brushRadius / maxDimension) * (nx - 1) / 2;
+                const maxAllowedHeight = thickness / 2 + pullHeight * (maxDimension / 20); // Proportional to box size
+
+                for (let di = -Math.round(normalizedRadius); di <= Math.round(normalizedRadius); di++) {
+                    for (let dj = -Math.round(normalizedRadius); dj <= Math.round(normalizedRadius); dj++) {
+                        const dist = Math.sqrt(di * di + dj * dj);
+                        if (dist <= normalizedRadius) {
+                            const ii = clamp(ix + di, 0, nx - 1);
+                            const jj = clamp(iy + dj, 0, ny - 1);
+                            let delta = (selectedTool === 'pull' ? pullHeight : raiseAmount) * (1 - dist / normalizedRadius);
+                            let currentHeight = thickness / 2 + heights[ii][jj]; // Height relative to base
+                            if (currentHeight + delta > maxAllowedHeight) {
+                                delta = Math.max(0, maxAllowedHeight - currentHeight); // Limit to max height
+                            }
+                            if (delta > 0) {
+                                heights[ii][jj] += delta; // Allow raising at all points, overriding boundary static state
+                                if (heights[ii][jj] < -thickness) heights[ii][jj] = -thickness;
+                                if (selectedTool === 'water') {
+                                    velocities[ii][jj] += delta * impulseMultiplier;
+                                }
+                            }
+                        }
+                    }
+                }
+                updateVertices();
+            } else {
+                console.warn('applyRaise called with out-of-bounds indices: ix=', ix, 'iy=', iy, 'nx=', nx, 'ny=', ny);
+            }
+        }
+
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(max, value));
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isDrawing && lastIx >= 0 && lastIy >= 0 && lastIx < nx && lastIy < ny && !isPaused) {
+                applyRaise(lastIx, lastIy);
+            }
+
+            if (selectedTool === 'water' && !isPaused) {
+                for (let step = 0; step < 5; step++) {
+                    let newVelocities = velocities.map(row => [...row]);
+                    // Update inner points only for wave propagation
+                    for (let i = 1; i < nx - 1; i++) {
+                        for (let j = 1; j < ny - 1; j++) {
+                            const lap = (heights[i-1][j] + heights[i+1][j] + heights[i][j-1] + heights[i][j+1] - 4 * heights[i][j]);
+                            newVelocities[i][j] += lap * c * c;
+                        }
+                    }
+                    // Apply boundary conditions to stop propagation
+                    for (let i = 0; i < nx; i++) {
+                        for (let j = 0; j < ny; j++) {
+                            if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
+                                newVelocities[i][j] = 0; // Stop wave at wall
+                            }
+                            newVelocities[i][j] *= damp;
+                        }
+                    }
+                    velocities = newVelocities;
+                    // Update heights only for inner points (propagation), drawing handled by applyRaise
+                    for (let i = 1; i < nx - 1; i++) {
+                        for (let j = 1; j < ny - 1; j++) {
+                            let currentHeight = thickness / 2 + heights[i][j];
+                            const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                            let heightChange = velocities[i][j] * dt;
+                            if (currentHeight + heightChange > maxAllowedHeight) {
+                                heightChange = Math.max(0, maxAllowedHeight - currentHeight);
+                                velocities[i][j] = 0; // Stop upward movement if at max
+                            }
+                            heights[i][j] += heightChange;
+                            if (heights[i][j] < -thickness) {
+                                heights[i][j] = -thickness;
+                                if (velocities[i][j] < 0) velocities[i][j] = 0;
+                            }
+                        }
+                    }
+                }
+                updateVertices();
+            } else if (frameStep && isPaused) {
+                let newVelocities = velocities.map(row => [...row]);
+                // Update inner points only for wave propagation
+                for (let i = 1; i < nx - 1; i++) {
+                    for (let j = 1; j < ny - 1; j++) {
+                        const lap = (heights[i-1][j] + heights[i+1][j] + heights[i][j-1] + heights[i][j+1] - 4 * heights[i][j]);
+                        newVelocities[i][j] += lap * c * c;
+                    }
+                }
+                // Apply boundary conditions to stop propagation
+                for (let i = 0; i < nx; i++) {
+                    for (let j = 0; j < ny; j++) {
+                        if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
+                            newVelocities[i][j] = 0; // Stop wave at wall
+                        }
+                        newVelocities[i][j] *= damp;
+                    }
+                }
+                velocities = newVelocities;
+                // Update heights only for inner points (propagation), drawing handled by applyRaise
+                for (let i = 1; i < nx - 1; i++) {
+                    for (let j = 1; j < ny - 1; j++) {
+                        let currentHeight = thickness / 2 + heights[i][j];
+                        const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                        let heightChange = velocities[i][j] * dt;
+                        if (currentHeight + heightChange > maxAllowedHeight) {
+                            heightChange = Math.max(0, maxAllowedHeight - currentHeight);
+                            velocities[i][j] = 0; // Stop upward movement if at max
+                        }
+                        heights[i][j] += heightChange;
+                        if (heights[i][j] < -thickness) {
+                            heights[i][j] = -thickness;
+                            if (velocities[i][j] < 0) velocities[i][j] = 0;
+                        }
+                    }
+                }
+                updateVertices();
+                frameStep = false;
+            }
+
+            // Update animation progress when not paused and water tool is active
+            if (!isPaused && selectedTool === 'water' && isDrawing) {
+                animationProgress = (animationProgress + 1) % 101;
+                animationSlider.value = animationProgress;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Settings listeners
+        const pullTool = document.getElementById('pullTool');
+        const waterTool = document.getElementById('waterTool');
+        const widthInput = document.getElementById('widthInput');
+        const lengthInput = document.getElementById('lengthInput');
+        const thicknessInput = document.getElementById('thicknessInput');
+        const brushRadiusSlider = document.getElementById('brushRadiusSlider');
+        const brushRadiusValue = document.getElementById('brushRadiusValue');
+        const pullHeightInput = document.getElementById('pullHeightInput');
+        const pullHeightValue = document.getElementById('pullHeightValue');
+        const pauseButton = document.getElementById('pauseButton');
+        const stepButton = document.getElementById('stepButton');
+        const animationSlider = document.getElementById('animationSlider');
+
+        function selectTool(tool) {
+            pullTool.classList.remove('selected');
+            waterTool.classList.remove('selected');
+            tool.classList.add('selected');
+            selectedTool = tool.id.replace('Tool', '');
+        }
+
+        pullTool.addEventListener('click', () => selectTool(pullTool));
+        waterTool.addEventListener('click', () => selectTool(waterTool));
+
+        // Initial selection
+        selectTool(pullTool);
+
+        brushRadiusSlider.addEventListener('input', () => {
+            brushRadius = parseFloat(brushRadiusSlider.value);
+            brushRadiusValue.textContent = brushRadius.toFixed(1);
+        });
+
+        pullHeightInput.addEventListener('input', (event) => {
+            let value = parseFloat(event.target.value) || 0.3; // Default to 0.3 if invalid
+            value = Math.max(0.1, value); // Minimum 0.1, no upper limit
+            pullHeight = value;
+            pullHeightValue.textContent = pullHeight.toFixed(1);
+            event.target.value = pullHeight; // Ensure input reflects clamped value
+        });
+
+        pauseButton.addEventListener('click', () => {
+            isPaused = !isPaused;
+            pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
+            if (isPaused) {
+                animationProgress = 0;
+                animationSlider.value = animationProgress;
+            }
+        });
+
+        stepButton.addEventListener('click', () => {
+            if (isPaused) {
+                frameStep = true;
+            }
+        });
+
+        animationSlider.addEventListener('input', (event) => {
+            if (isPaused) {
+                const progress = parseInt(event.target.value);
+                if (progress > animationProgress) {
+                    for (let i = 0; i < (progress - animationProgress); i++) {
+                        let newVelocities = velocities.map(row => [...row]);
+                        for (let i = 1; i < nx - 1; i++) {
+                            for (let j = 1; j < ny - 1; j++) {
+                                const lap = (heights[i-1][j] + heights[i+1][j] + heights[i][j-1] + heights[i][j+1] - 4 * heights[i][j]);
+                                newVelocities[i][j] += lap * c * c;
+                            }
+                        }
+                        for (let i = 0; i < nx; i++) {
+                            for (let j = 0; j < ny; j++) {
+                                if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
+                                    newVelocities[i][j] = 0; // Stop wave at wall
+                                }
+                                newVelocities[i][j] *= damp;
+                            }
+                        }
+                        velocities = newVelocities;
+                        for (let i = 1; i < nx - 1; i++) {
+                            for (let j = 1; j < ny - 1; j++) {
+                                let currentHeight = thickness / 2 + heights[i][j];
+                                const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                                let heightChange = velocities[i][j] * dt;
+                                if (currentHeight + heightChange > maxAllowedHeight) {
+                                    heightChange = Math.max(0, maxAllowedHeight - currentHeight);
+                                    velocities[i][j] = 0; // Stop upward movement if at max
+                                }
+                                heights[i][j] += heightChange; // Update only inner points for propagation
+                            }
+                        }
+                        updateVertices();
+                    }
+                } else if (progress < animationProgress) {
+                    for (let i = 0; i < (animationProgress - progress); i++) {
+                        let newVelocities = velocities.map(row => [...row]);
+                        for (let i = 0; i < nx; i++) {
+                            for (let j = 0; j < ny; j++) {
+                                velocities[i][j] *= 0.9; // Approximate reverse
+                                heights[i][j] -= velocities[i][j] * dt;
+                                if (heights[i][j] < -thickness) {
+                                    heights[i][j] = -thickness;
+                                    if (velocities[i][j] < 0) velocities[i][j] = 0;
+                                }
+                            }
+                        }
+                        updateVertices();
+                    }
+                }
+                animationProgress = progress;
+            }
+        });
+
+        function updateDimensions(resetHeights = true) {
+            const newWidth = parseFloat(widthInput.value) || 20;
+            const newLength = parseFloat(lengthInput.value) || 10;
+            const newThickness = parseFloat(thicknessInput.value) || 2;
+
+            if (newWidth !== width || newLength !== length || newThickness !== thickness) {
+                width = newWidth;
+                length = newLength;
+                thickness = newThickness;
+                const newNx = Math.max(20, Math.round(width * density));
+                const newNy = Math.max(20, Math.round(length * density));
+
+                if (newNx !== nx || newNy !== ny) {
+                    nx = newNx;
+                    ny = newNy;
+                    if (resetHeights) {
+                        heights = Array.from({ length: nx }, () => Array(ny).fill(0));
+                        velocities = Array.from({ length: nx }, () => Array(ny).fill(0));
+                    }
+                    createMesh();
+                    console.log(Dimensions updated: width=${width}, length=${length}, nx=${nx}, ny=${ny});
+                }
+                camera.position.set(0, thickness * 2, length / 2 + width / 2);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            }
+        }
+
+        widthInput.addEventListener('input', () => updateDimensions(true));
+        lengthInput.addEventListener('input', () => updateDimensions(true));
+        thicknessInput.addEventListener('input', () => updateDimensions(true));
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Update animation progress when not paused and water tool is active
+        if (!isPaused && selectedTool === 'water' && isDrawing) {
+            animationProgress = (animationProgress + 1) % 101;
+            animationSlider.value = animationProgress;
+        }
+
+        console.log('Scene setup complete - box should be visible.');
+    </script>
+</body>
+</html>
