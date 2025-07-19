@@ -82,7 +82,7 @@
     </div>
 
     <script type="module">
-        console.log('Module script started loading at 02:05 PM CDT, July 18, 2025.');
+        console.log('Module script started loading at 2:40 PM CDT, July 19, 2025.');
 
         import * as THREE from 'three';
         console.log('THREE imported successfully:', THREE);
@@ -128,11 +128,15 @@
         let animationProgress = 0; // Track animation progress for slider
 
         // Wave simulation parameters (for water tool)
-        const c = 0.6; // Increased wave speed
-        const damp = 0.995; // Adjusted for longer ripples
-        const dt = 0.02; // Increased time step
+        const c = 0.8; // Wave speed for visible ripples
+        const damp = 0.99; // Damping factor for longer-lasting ripples
+        const dt = 0.02; // Time step
         const raiseAmount = 0.3; // Base amount to raise for water
-        const impulseMultiplier = 2; // Impulse for ripple
+        const impulseMultiplier = 3; // Stronger impulse for ripples
+
+        // Drawing throttle
+        let lastDrawTime = 0;
+        const drawThrottleMs = 30; // ~33fps to reduce lag
 
         // Height and velocity arrays for top face deformation
         function initializeArrays() {
@@ -153,9 +157,9 @@
             try {
                 if (mesh) scene.remove(mesh);
                 if (nx <= 1 || ny <= 1) {
-                    console.error('Invalid grid size: nx=', nx, 'ny=', ny, 'Setting to minimum 20x20');
-                    nx = Math.max(20, nx);
-                    ny = Math.max(20, ny);
+                    console.error('Invalid grid size: nx=', nx, 'ny=', ny, 'Setting to minimum 50x50');
+                    nx = Math.max(50, nx);
+                    ny = Math.max(50, ny);
                 }
                 const geometry = new THREE.BoxGeometry(width, thickness, length, nx - 1, 1, ny - 1);
                 const material = new THREE.MeshPhongMaterial({
@@ -171,7 +175,6 @@
                 console.log('Mesh created successfully with nx:', nx, 'ny:', ny);
             } catch (error) {
                 console.error('Error creating mesh:', error);
-                // Fallback to default size if creation fails
                 nx = 200;
                 ny = 100;
                 createMesh();
@@ -260,7 +263,11 @@
         renderer.domElement.addEventListener('mousemove', (event) => {
             updateLastPosition(event);
             if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
-                applyRaise(lastIx, lastIy);
+                const now = performance.now();
+                if (now - lastDrawTime >= drawThrottleMs) {
+                    applyRaise(lastIx, lastIy);
+                    lastDrawTime = now;
+                }
             }
         });
 
@@ -281,8 +288,8 @@
 
         function applyRaise(ix, iy) {
             if (ix >= 0 && ix < nx && iy >= 0 && iy < ny) {
-                const maxDimension = Math.max(width, length);
-                const normalizedRadius = (brushRadius / maxDimension) * (nx - 1) / 2;
+                const maxDimension = Math.max(width, length, 10); // Use minimum dimension of 10 inches for scaling
+                const normalizedRadius = Math.max(4, (brushRadius / maxDimension) * (nx - 1) / 2); // Ensure minimum radius of 4
                 const maxAllowedHeight = thickness / 2 + pullHeight * (maxDimension / 20); // Proportional to box size
 
                 for (let di = -Math.round(normalizedRadius); di <= Math.round(normalizedRadius); di++) {
@@ -291,13 +298,17 @@
                         if (dist <= normalizedRadius) {
                             const ii = clamp(ix + di, 0, nx - 1);
                             const jj = clamp(iy + dj, 0, ny - 1);
+                            // Skip boundary points for water tool to prevent sticking
+                            if (selectedTool === 'water' && (ii === 0 || ii === nx - 1 || jj === 0 || jj === ny - 1)) {
+                                continue; // Do not modify boundary heights for water tool
+                            }
                             let delta = (selectedTool === 'pull' ? pullHeight : raiseAmount) * (1 - dist / normalizedRadius);
                             let currentHeight = thickness / 2 + heights[ii][jj]; // Height relative to base
                             if (currentHeight + delta > maxAllowedHeight) {
                                 delta = Math.max(0, maxAllowedHeight - currentHeight); // Limit to max height
                             }
                             if (delta > 0) {
-                                heights[ii][jj] += delta; // Allow raising at all points, overriding boundary static state
+                                heights[ii][jj] += delta; // Update height for non-boundary points
                                 if (heights[ii][jj] < -thickness) heights[ii][jj] = -thickness;
                                 if (selectedTool === 'water') {
                                     velocities[ii][jj] += delta * impulseMultiplier;
@@ -320,21 +331,23 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            if (isDrawing && lastIx >= 0 && lastIy >= 0 && lastIx < nx && lastIy < ny && !isPaused) {
-                applyRaise(lastIx, lastIy);
+            if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny && !isPaused) {
+                const now = performance.now();
+                if (now - lastDrawTime >= drawThrottleMs) {
+                    applyRaise(lastIx, lastIy);
+                    lastDrawTime = now;
+                }
             }
 
             if (selectedTool === 'water' && !isPaused) {
-                for (let step = 0; step < 5; step++) {
+                for (let step = 0; step < 3; step++) { // 3 steps for performance
                     let newVelocities = velocities.map(row => [...row]);
-                    // Update inner points only for wave propagation
                     for (let i = 1; i < nx - 1; i++) {
                         for (let j = 1; j < ny - 1; j++) {
                             const lap = (heights[i-1][j] + heights[i+1][j] + heights[i][j-1] + heights[i][j+1] - 4 * heights[i][j]);
                             newVelocities[i][j] += lap * c * c;
                         }
                     }
-                    // Apply boundary conditions to stop propagation
                     for (let i = 0; i < nx; i++) {
                         for (let j = 0; j < ny; j++) {
                             if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
@@ -344,11 +357,10 @@
                         }
                     }
                     velocities = newVelocities;
-                    // Update heights only for inner points (propagation), drawing handled by applyRaise
                     for (let i = 1; i < nx - 1; i++) {
                         for (let j = 1; j < ny - 1; j++) {
                             let currentHeight = thickness / 2 + heights[i][j];
-                            const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                            const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
                             let heightChange = velocities[i][j] * dt;
                             if (currentHeight + heightChange > maxAllowedHeight) {
                                 heightChange = Math.max(0, maxAllowedHeight - currentHeight);
@@ -361,18 +373,16 @@
                             }
                         }
                     }
+                    updateVertices();
                 }
-                updateVertices();
             } else if (frameStep && isPaused) {
                 let newVelocities = velocities.map(row => [...row]);
-                // Update inner points only for wave propagation
                 for (let i = 1; i < nx - 1; i++) {
                     for (let j = 1; j < ny - 1; j++) {
                         const lap = (heights[i-1][j] + heights[i+1][j] + heights[i][j-1] + heights[i][j+1] - 4 * heights[i][j]);
                         newVelocities[i][j] += lap * c * c;
                     }
                 }
-                // Apply boundary conditions to stop propagation
                 for (let i = 0; i < nx; i++) {
                     for (let j = 0; j < ny; j++) {
                         if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
@@ -382,11 +392,10 @@
                     }
                 }
                 velocities = newVelocities;
-                // Update heights only for inner points (propagation), drawing handled by applyRaise
                 for (let i = 1; i < nx - 1; i++) {
                     for (let j = 1; j < ny - 1; j++) {
                         let currentHeight = thickness / 2 + heights[i][j];
-                        const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                        const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
                         let heightChange = velocities[i][j] * dt;
                         if (currentHeight + heightChange > maxAllowedHeight) {
                             heightChange = Math.max(0, maxAllowedHeight - currentHeight);
@@ -403,7 +412,6 @@
                 frameStep = false;
             }
 
-            // Update animation progress when not paused and water tool is active
             if (!isPaused && selectedTool === 'water' && isDrawing) {
                 animationProgress = (animationProgress + 1) % 101;
                 animationSlider.value = animationProgress;
@@ -438,7 +446,6 @@
         pullTool.addEventListener('click', () => selectTool(pullTool));
         waterTool.addEventListener('click', () => selectTool(waterTool));
 
-        // Initial selection
         selectTool(pullTool);
 
         brushRadiusSlider.addEventListener('input', () => {
@@ -447,11 +454,11 @@
         });
 
         pullHeightInput.addEventListener('input', (event) => {
-            let value = parseFloat(event.target.value) || 0.3; // Default to 0.3 if invalid
-            value = Math.max(0.1, value); // Minimum 0.1, no upper limit
+            let value = parseFloat(event.target.value) || 0.3;
+            value = Math.max(0.1, value);
             pullHeight = value;
             pullHeightValue.textContent = pullHeight.toFixed(1);
-            event.target.value = pullHeight; // Ensure input reflects clamped value
+            event.target.value = pullHeight;
         });
 
         pauseButton.addEventListener('click', () => {
@@ -484,7 +491,7 @@
                         for (let i = 0; i < nx; i++) {
                             for (let j = 0; j < ny; j++) {
                                 if (i === 0 || i === nx-1 || j === 0 || j === ny-1) {
-                                    newVelocities[i][j] = 0; // Stop wave at wall
+                                    newVelocities[i][j] = 0;
                                 }
                                 newVelocities[i][j] *= damp;
                             }
@@ -493,23 +500,27 @@
                         for (let i = 1; i < nx - 1; i++) {
                             for (let j = 1; j < ny - 1; j++) {
                                 let currentHeight = thickness / 2 + heights[i][j];
-                                const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length) / 20);
+                                const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
                                 let heightChange = velocities[i][j] * dt;
                                 if (currentHeight + heightChange > maxAllowedHeight) {
                                     heightChange = Math.max(0, maxAllowedHeight - currentHeight);
-                                    velocities[i][j] = 0; // Stop upward movement if at max
+                                    velocities[i][j] = 0;
                                 }
-                                heights[i][j] += heightChange; // Update only inner points for propagation
+                                heights[i][j] += heightChange;
+                                if (heights[i][j] < -thickness) {
+                                    heights[i][j] = -thickness;
+                                    if (velocities[i][j] < 0) velocities[i][j] = 0;
+                                }
                             }
                         }
                         updateVertices();
                     }
                 } else if (progress < animationProgress) {
-                    for (let i = 0; i < (animationProgress - progress); i++) {
+                    for (let i = 0; i < (progress - animationProgress); i++) {
                         let newVelocities = velocities.map(row => [...row]);
                         for (let i = 0; i < nx; i++) {
                             for (let j = 0; j < ny; j++) {
-                                velocities[i][j] *= 0.9; // Approximate reverse
+                                velocities[i][j] *= 0.9;
                                 heights[i][j] -= velocities[i][j] * dt;
                                 if (heights[i][j] < -thickness) {
                                     heights[i][j] = -thickness;
@@ -533,8 +544,9 @@
                 width = newWidth;
                 length = newLength;
                 thickness = newThickness;
-                const newNx = Math.max(20, Math.round(width * density));
-                const newNy = Math.max(20, Math.round(length * density));
+                // Ensure minimum grid resolution
+                const newNx = Math.max(50, Math.round(width * density));
+                const newNy = Math.max(50, Math.round(length * density));
 
                 if (newNx !== nx || newNy !== ny) {
                     nx = newNx;
@@ -544,7 +556,7 @@
                         velocities = Array.from({ length: nx }, () => Array(ny).fill(0));
                     }
                     createMesh();
-                    console.log(Dimensions updated: width=${width}, length=${length}, nx=${nx}, ny=${ny});
+                    console.log(`Dimensions updated: width=${width}, length=${length}, nx=${nx}, ny=${ny}`);
                 }
                 camera.position.set(0, thickness * 2, length / 2 + width / 2);
                 controls.target.set(0, 0, 0);
@@ -556,18 +568,11 @@
         lengthInput.addEventListener('input', () => updateDimensions(true));
         thicknessInput.addEventListener('input', () => updateDimensions(true));
 
-        // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // Update animation progress when not paused and water tool is active
-        if (!isPaused && selectedTool === 'water' && isDrawing) {
-            animationProgress = (animationProgress + 1) % 101;
-            animationSlider.value = animationProgress;
-        }
 
         console.log('Scene setup complete - box should be visible.');
     </script>
