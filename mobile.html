@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Josh's Corner - Mobile</title>
+  <!-- Google Font (Montserrat for a modern look) -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      background-color: #F5E7DE;
+      font-family: 'Montserrat', sans-serif;
+      color: #333;
+      padding: 20px;
+      min-height: 100vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Header with Name and Major */
+    .header {
+      text-align: center;
+      margin-top: 40px;
+      margin-bottom: 40px;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      margin: 0;
+    }
+
+    .header span {
+      display: block;
+      font-size: 1.2rem;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    /* Floating animation for buttons */
+    @keyframes float {
+      0% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-8px);
+      }
+
+      100% {
+        transform: translateY(0);
+      }
+    }
+
+    /* Contact Me Button (Single, centered) */
+    .contact-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .nav-button {
+      width: 180px;
+      height: 70px;
+      background-color: #8FAF8F;
+      /* Soft Olive (for Contact Me) */
+      border-radius: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .nav-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Grid Container for the Other 4 Buttons */
+    .grid-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .grid-button {
+      width: 100%;
+      height: 70px;
+      border-radius: 35px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+      animation: float 4s ease-in-out infinite;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .grid-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Colors for Grid Buttons (matching desktop) */
+    #btn-about {
+      background-color: #6699CC;
+    }
+
+    /* Soft Sky Blue */
+    #btn-experience {
+      background-color: #FFB07C;
+    }
+
+    /* Soft Peach */
+    #btn-projects {
+      background-color: #66B2B2;
+    }
+
+    /* Soft Teal */
+    #btn-wip {
+      background-color: #E57373;
+    }
+
+    /* Soft Salmon */
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <h1>Josh Hicks</h1>
+    <span>Information Systems</span>
+  </div>
+
+  <!-- Contact Me Button at the Top -->
+  <div class="contact-container">
+    <a href="contact.html" class="nav-button">Contact Me</a>
+  </div>
+
+  <!-- 2x2 Grid for the Other Buttons -->
+  <div class="grid-container">
+    <a href="about.html" class="grid-button" id="btn-about">About Me</a>
+    <a href="experience.html" class="grid-button" id="btn-experience">Experience</a>
+    <a href="projects.html" class="grid-button" id="btn-projects">Projects</a>
+    <a href="lazar.html" class="grid-button" id="btn-wip">Lazar Stuff</a>
+  </div>
+</body>
+
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About Me - Josh's Corner</title>
+  <!-- Google Font (Montserrat for a modern, cool vibe) -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      background-color: #F5E7DE;
+      font-family: 'Montserrat', sans-serif;
+      color: #333;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding-top: 80px;
+    }
+    /* Home Icon at Top Center */
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.1);
+    }
+    /* Main Heading and Subtitle */
+    h1 {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 1.2rem;
+      color: #666;
+      margin-bottom: 40px;
+    }
+    /* Section Styles with Animation */
+    .section {
+      padding: 30px;
+      border-radius: 12px;
+      margin-bottom: 40px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+      opacity: 0;
+      transform: translateY(30px);
+      animation: fadeInUp 1s forwards;
+    }
+    /* Explicit Section IDs for Background Colors and Animation Delays */
+    #who {
+      background-color: #8FAF8F; /* Soft Olive */
+      animation-delay: 0.2s;
+    }
+    #academic {
+      background-color: #6699CC; /* Soft Sky Blue */
+      animation-delay: 0.4s;
+    }
+    #interests {
+      background-color: #FFB07C; /* Soft Peach */
+      animation-delay: 0.6s;
+    }
+    #drives {
+      background-color: #66B2B2; /* Soft Teal */
+      animation-delay: 0.8s;
+    }
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .section h2 {
+      font-size: 2rem;
+      margin-bottom: 15px;
+      color: #fff;
+    }
+    .section p {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    /* Who I Am Section: Flex Layout for Text and Image */
+    .who-content {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .who-text {
+      flex: 1;
+      font-size: 1.1rem;
+      line-height: 1.5;
+      color: #fff;
+    }
+    .who-image {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .who-image img {
+      max-width: 200px;
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+      display: block;
+      object-fit: cover;
+    }
+    /* Mobile: Stack Who I Am text and image vertically */
+    @media (max-width: 600px) {
+      .who-content {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .who-text {
+        margin-bottom: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Home Icon at Top Center -->
+  <a href="index.html" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+  
+  <div class="container">
+    <h1>About Me</h1>
+    <div class="subtitle">Get to know who I am and what inspires my passion for innovation and nature</div>
+    
+    <!-- Section 1: Who I Am -->
+    <div class="section" id="who">
+      <h2>Who I Am</h2>
+      <div class="who-content">
+        <div class="who-text">
+          <p>
+            I thrive on mastering new technologies while ensuring they're sustainable. I focus on implementing innovative solutions that drive efficiency and sustainability in tech. When I'm not working on tech projects, you'll find me outdoors, exploring new places or experimenting with DIY projects.
+          </p>
+        </div>
+        <div class="who-image">
+          <img src="docs/assets/pic.jpg" alt="Josh Hicks">
+        </div>
+      </div>
+    </div>
+    
+    <!-- Section 2: My Academic Journey -->
+    <div class="section" id="academic">
+      <h2>My Academic Journey</h2>
+      <p>
+        I am currently pursuing an Information Systems degree at the University of Arkansas. My academic journey is focused on solving real world problems with innovative technology while drawing inspiration from the beauty of nature.
+      </p>
+    </div>
+    
+    <!-- Section 3: Interests and Hobbies -->
+    <div class="section" id="interests">
+      <h2>Interests and Hobbies</h2>
+      <p>
+        Outside of my studies, I enjoy working on personal technology projects, exploring robotics, and experimenting with new software and hardware. My love for the outdoors fuels my creativity and inspires me to blend tech with the natural environment.
+      </p>
+    </div>
+    
+    <!-- Section 4: What Drives Me -->
+    <div class="section" id="drives">
+      <h2>What Drives Me</h2>
+      <p>
+        I am driven by the desire to merge technology with creativity and nature to create solutions that positively impact society. I continually seek opportunities to learn, grow, and push the boundaries of what is possible while nurturing my passion for innovative technology and the great outdoors.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
