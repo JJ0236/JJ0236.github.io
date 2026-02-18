@@ -151,6 +151,29 @@
       top: calc(50% - 80px);
       background-color: #E57373;
       /* Soft Salmon */
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
+
+    .nav-box:nth-of-type(5) .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-box:nth-of-type(5) .lazar-logo {
+      color: #ffffff;
+      /* White for LAZ */
+    }
+
+    .nav-box:nth-of-type(5) .lazar-logo .ar {
+      color: #E57373;
+      /* Salmon red for AR */
+      background: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 2px;
     }
 
     /* Inner content for scaling on hover and perfect centering using flexbox */
@@ -230,7 +253,9 @@
       <div class="nav-inner">Projects</div>
     </a>
     <a href="imagrclone/index.html" class="nav-box">
-      <div class="nav-inner">Lazar Stuff</div>
+      <div class="nav-inner">
+        <span class="lazar-logo">LAZ<span class="ar">AR</span></span>
+      </div>
     </a>
 
     <!-- Optional SVG Overlay -->
