@@ -233,8 +233,8 @@
       tabScale = 0.22,
       jitter = 0.5,
       seed = 42,
-      strokeColor = '#e94560',
-      strokeWidth = 0.5,
+      strokeColor = '#ff0000',
+      strokeWidth = 0.035,
       cornerRadius = 0,
       edgeStyle = 'mixed',  // 'classic'|'mushroom'|'arrow'|'curvy'|'keyhole'|'wavy'|'diamond'|'heart'|'mixed'
       wobble = 0.35         // grid vertex wobble 0-1
@@ -927,27 +927,6 @@ ${paths}  </g>
               <input type="range" id="puzzleJitter" min="0" max="100" value="50" />
             </div>
 
-            <!-- Stroke width -->
-            <div class="puzzle-control-group">
-              <label>Stroke Width <span id="strokeVal">0.5</span></label>
-              <input type="range" id="puzzleStroke" min="1" max="30" value="5" step="1" />
-            </div>
-
-            <!-- Stroke color -->
-            <div class="puzzle-control-group">
-              <label>Cut Color</label>
-              <div class="input-row">
-                <select id="puzzleColor">
-                  <option value="#e94560">Red (default)</option>
-                  <option value="#ff0000">Pure Red</option>
-                  <option value="#0000ff">Blue</option>
-                  <option value="#000000">Black</option>
-                  <option value="#00ff00">Green</option>
-                  <option value="custom">Custom…</option>
-                </select>
-              </div>
-            </div>
-
             <!-- Seed -->
             <div class="puzzle-control-group">
               <label>Random Seed <span id="seedVal">42</span></label>
@@ -1025,8 +1004,7 @@ ${paths}  </g>
     const tabVal    = $('tabVal');
     const jitter    = $('puzzleJitter');
     const jitterVal = $('jitterVal');
-    const stroke    = $('puzzleStroke');
-    const strokeVal = $('strokeVal');
+
     const seedSlider = $('puzzleSeed');
     const seedVal   = $('seedVal');
     const corner    = $('puzzleCorner');
@@ -1036,7 +1014,7 @@ ${paths}  </g>
     const edgeStyleSel = $('puzzleEdgeStyle');
     const widthIn   = $('puzzleWidth');
     const heightIn  = $('puzzleHeight');
-    const colorSel  = $('puzzleColor');
+
     const container = $('puzzleSvgContainer');
     const pieceCount = $('pieceCount');
     const pathInfo  = $('puzzlePathInfo');
@@ -1069,8 +1047,6 @@ ${paths}  </g>
         tabScale: parseInt(tabSlider.value) / 100,
         jitter: parseInt(jitter.value) / 100,
         seed: parseInt(seedSlider.value),
-        strokeColor: colorSel.value === 'custom' ? '#e94560' : colorSel.value,
-        strokeWidth: parseInt(stroke.value) / 10,
         cornerRadius: parseInt(corner.value),
         edgeStyle: edgeStyleSel.value,
         wobble: parseInt(wobbleSlider.value) / 100
@@ -1079,13 +1055,17 @@ ${paths}  </g>
 
     function render() {
       const opts = getOpts();
-      const svg = generatePuzzleSVG(opts);
+      // Generate with export settings (thin red lines)
+      const exportSvg = generatePuzzleSVG(opts);
+      // Generate preview with thick visible lines
+      const previewOpts = Object.assign({}, opts, { strokeColor: '#e94560', strokeWidth: Math.max(opts.width, opts.height) * 0.004 });
+      const previewSvg = generatePuzzleSVG(previewOpts);
 
-      // If we have a background image, inject it into the SVG
-      let displaySvg = svg;
+      // If we have a background image, inject it into the preview SVG
+      let displaySvg = previewSvg;
       if (bgImageDataURL) {
         const imgTag = `<image href="${bgImageDataURL}" x="0" y="0" width="${opts.width}" height="${opts.height}" preserveAspectRatio="xMidYMid slice" opacity="0.5"/>`;
-        displaySvg = svg.replace('<g ', imgTag + '\n  <g ');
+        displaySvg = previewSvg.replace('<g ', imgTag + '\n  <g ');
       }
 
       container.innerHTML = displaySvg;
@@ -1093,15 +1073,14 @@ ${paths}  </g>
       rowsVal.textContent = opts.rows;
       tabVal.textContent = opts.tabScale * 100 + '%';
       jitterVal.textContent = Math.round(opts.jitter * 100) + '%';
-      strokeVal.textContent = opts.strokeWidth.toFixed(1);
       seedVal.textContent = opts.seed;
       cornerVal.textContent = opts.cornerRadius;
       wobbleVal.textContent = Math.round(opts.wobble * 100) + '%';
       pieceCount.textContent = opts.cols * opts.rows;
 
       // Count paths
-      const pathCount = (svg.match(/<path/g) || []).length + (svg.match(/<rect/g) || []).length;
-      pathInfo.textContent = `${pathCount} paths • ${opts.cols}×${opts.rows} • ${opts.edgeStyle}`;
+      const pathCount = (exportSvg.match(/<path/g) || []).length + (exportSvg.match(/<rect/g) || []).length;
+      pathInfo.textContent = `${pathCount} paths • ${opts.cols}×${opts.rows} • ${opts.edgeStyle} • export: red 0.1pt`;
     }
 
     // Debounced render for range sliders
@@ -1112,13 +1091,12 @@ ${paths}  </g>
     }
 
     // Bind controls
-    [cols, rows, tabSlider, jitter, stroke, seedSlider, corner, wobbleSlider].forEach(el => {
+    [cols, rows, tabSlider, jitter, seedSlider, corner, wobbleSlider].forEach(el => {
       el.addEventListener('input', debouncedRender);
     });
     [widthIn, heightIn].forEach(el => {
       el.addEventListener('change', render);
     });
-    colorSel.addEventListener('change', render);
     edgeStyleSel.addEventListener('change', render);
 
     // Presets
@@ -1138,10 +1116,10 @@ ${paths}  </g>
       render();
     });
 
-    // Download SVG
+    // Download SVG — always exports with red #ff0000 at 0.1pt (0.035mm)
     $('puzzleDownload').addEventListener('click', () => {
       const opts = getOpts();
-      let svg = generatePuzzleSVG(opts);
+      let svg = generatePuzzleSVG(opts); // already uses hardcoded red 0.1pt
 
       // Add unit to SVG dimensions
       const unit = $('puzzleUnit').value;
@@ -1161,7 +1139,7 @@ ${paths}  </g>
       URL.revokeObjectURL(url);
     });
 
-    // Apply to canvas — try to overlay on LAZAR's existing canvas
+    // Apply to canvas — uses export settings (red 0.1pt)
     $('puzzleApply').addEventListener('click', () => {
       const opts = getOpts();
       const svg = generatePuzzleSVG(opts);
