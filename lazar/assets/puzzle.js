@@ -139,22 +139,22 @@
       const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
       const nx = (-dy/len)*dir, ny = (dx/len)*dir;
       const f = n => n.toFixed(2);
-      const waves = 2 + Math.floor(rng() * 3); // 2-4 waves
-      const amp = ts * (0.6 + rng()*j*0.4);
+      const waves = 3 + Math.floor(rng() * 3); // 3-5 half-waves
+      const amp = ts * (0.7 + rng()*j*0.3);
       let d = '';
-      const steps = waves * 2;
-      for (let k = 1; k <= steps; k++) {
-        const t = k / steps;
-        const nOff = Math.sin(k * Math.PI) * amp * ((k%2===0) ? 1 : -1);
-        const jx = (rng()-.5)*j*len*0.02;
-        const jy = (rng()-.5)*j*len*0.02;
+      const segments = waves * 4; // 4 segments per half-wave for smooth curves
+      for (let k = 1; k <= segments; k++) {
+        const t = k / segments;
+        const midT = (k - 0.5) / segments;
+        // Proper sine wave: sin(t * π * waves) oscillates and returns to 0 at t=1
+        const nOff = Math.sin(t * Math.PI * waves) * amp;
+        const cOff = Math.sin(midT * Math.PI * waves) * amp;
+        const jx = (rng()-.5)*j*len*0.01;
+        const jy = (rng()-.5)*j*len*0.01;
         const px = x0 + dx*t + nx*nOff + jx;
         const py = y0 + dy*t + ny*nOff + jy;
-        // control point at midpoint
-        const ct = (k-0.5)/steps;
-        const cn = Math.sin((k-0.5)*Math.PI) * amp * ((k%2===0) ? -1 : 1) * 1.5;
-        const cx = x0 + dx*ct + nx*cn;
-        const cy = y0 + dy*ct + ny*cn;
+        const cx = x0 + dx*midT + nx*cOff;
+        const cy = y0 + dy*midT + ny*cOff;
         d += `Q ${f(cx)} ${f(cy)}, ${f(px)} ${f(py)} `;
       }
       d += `L ${f(x1)} ${f(y1)} `;
@@ -185,23 +185,33 @@
     heart(x0, y0, x1, y1, dir, ts, j, rng) {
       const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
       const nx = (-dy/len)*dir, ny = (dx/len)*dir;
-      const jm = j * len * 0.03;
+      const jm = j * len * 0.025;
       const p = (t, n) => {
         const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
         return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
       };
       const f = n => n.toFixed(2);
-      const center = 0.5 + (rng()-.5)*j*0.06;
-      const w = 0.10 + rng()*j*0.04;
-      const h = ts * (0.85 + rng()*j*0.2);
-      const pA = p(center-w*0.5, 0), pB = p(center+w*0.5, 0);
-      const tip = p(center, h*0.3);
-      const lBump = p(center-w*1.2, h*0.9);
-      const lTop = p(center-w*0.5, h*1.05);
-      const notch = p(center, h*0.8);
-      const rTop = p(center+w*0.5, h*1.05);
-      const rBump = p(center+w*1.2, h*0.9);
-      return `L ${f(pA[0])} ${f(pA[1])} L ${f(tip[0])} ${f(tip[1])} C ${f(lBump[0])} ${f(lBump[1])}, ${f(lTop[0])} ${f(lTop[1])}, ${f(notch[0])} ${f(notch[1])} C ${f(rTop[0])} ${f(rTop[1])}, ${f(rBump[0])} ${f(rBump[1])}, ${f(tip[0])} ${f(tip[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+      const center = 0.5 + (rng()-.5)*j*0.05;
+      const w = 0.14 + rng()*j*0.04;
+      const h = ts * (0.9 + rng()*j*0.2);
+      // Entry & exit points on the edge
+      const pA = p(center - w*0.25, 0);
+      const pB = p(center + w*0.25, 0);
+      // Left lobe: cubic bézier from pA curving out-left and up
+      const cL1 = p(center - w*1.5, h*0.05);
+      const cL2 = p(center - w*1.3, h*1.05);
+      const topL = p(center - w*0.35, h*0.98);
+      // Center notch (dip between the two lobes)
+      const notch = p(center, h*0.65);
+      // Right lobe: symmetric
+      const topR = p(center + w*0.35, h*0.98);
+      const cR1 = p(center + w*1.3, h*1.05);
+      const cR2 = p(center + w*1.5, h*0.05);
+      return `L ${f(pA[0])} ${f(pA[1])} ` +
+        `C ${f(cL1[0])} ${f(cL1[1])}, ${f(cL2[0])} ${f(cL2[1])}, ${f(topL[0])} ${f(topL[1])} ` +
+        `Q ${f(notch[0])} ${f(notch[1])}, ${f(topR[0])} ${f(topR[1])} ` +
+        `C ${f(cR1[0])} ${f(cR1[1])}, ${f(cR2[0])} ${f(cR2[1])}, ${f(pB[0])} ${f(pB[1])} ` +
+        `L ${f(x1)} ${f(y1)} `;
     }
   };
 
@@ -1116,13 +1126,25 @@ ${paths}  </g>
       render();
     });
 
-    // Download SVG — always exports with red #ff0000 at 0.1pt (0.035mm)
+    // Download SVG — exports with red #ff0000 lines, background image embedded
     $('puzzleDownload').addEventListener('click', () => {
       const opts = getOpts();
-      let svg = generatePuzzleSVG(opts); // already uses hardcoded red 0.1pt
+      const unit = $('puzzleUnit').value;
+
+      // Adjust stroke width for the coordinate system's units
+      if (unit === 'in') opts.strokeWidth = 0.035 / 25.4; // 0.1pt in inches
+      else if (unit === 'px') opts.strokeWidth = 0.75;     // hairline in pixels
+      // else mm: default 0.035mm (0.1pt)
+
+      let svg = generatePuzzleSVG(opts);
+
+      // Embed background image behind the cut lines
+      if (bgImageDataURL) {
+        const imgTag = `  <image href="${bgImageDataURL}" x="0" y="0" width="${opts.width}" height="${opts.height}" preserveAspectRatio="xMidYMid slice"/>\n`;
+        svg = svg.replace('  <g ', imgTag + '  <g ');
+      }
 
       // Add unit to SVG dimensions
-      const unit = $('puzzleUnit').value;
       if (unit !== 'px') {
         svg = svg.replace(
           `width="${opts.width}" height="${opts.height}"`,
