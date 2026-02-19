@@ -616,6 +616,202 @@ ${paths}  </g>
         color: #fff;
         border-color: var(--accent, #e94560);
       }
+
+      /* ── Collapsible controls toggle (hidden on desktop) ── */
+      .puzzle-toggle-controls {
+        display: none;
+        width: 100%;
+        padding: 10px 16px;
+        background: var(--bg-secondary, #16213e);
+        border: none;
+        border-bottom: 1px solid var(--border, #2a2a4a);
+        color: var(--text-primary, #e0e0e0);
+        font-size: 13px; font-weight: 600;
+        cursor: pointer;
+        align-items: center; justify-content: center; gap: 6px;
+        transition: background .15s ease;
+      }
+      .puzzle-toggle-controls:hover {
+        background: var(--bg-tertiary, #0f3460);
+      }
+      .puzzle-toggle-controls svg {
+        transition: transform .2s ease;
+      }
+      .puzzle-toggle-controls.open svg {
+        transform: rotate(180deg);
+      }
+
+      /* ── Medium screens (tablets / narrow windows) ── */
+      @media (max-width: 860px) {
+        .puzzle-modal {
+          width: 98vw; max-width: 98vw;
+          max-height: 96vh;
+          border-radius: 8px;
+        }
+        .puzzle-controls {
+          width: 220px; min-width: 220px;
+          padding: 12px;
+          gap: 10px;
+        }
+        .puzzle-header { padding: 12px 16px; }
+        .puzzle-header h2 { font-size: 14px; }
+        .puzzle-footer { padding: 8px 16px; font-size: 11px; }
+      }
+
+      /* ── Small screens (phones / very narrow) ── */
+      @media (max-width: 640px) {
+        .puzzle-overlay {
+          align-items: flex-end;
+        }
+        .puzzle-modal {
+          width: 100vw; max-width: 100vw;
+          max-height: 100vh; height: 100vh;
+          border-radius: 12px 12px 0 0;
+        }
+        .puzzle-header {
+          padding: 10px 14px;
+          position: sticky; top: 0; z-index: 3;
+        }
+        .puzzle-header h2 { font-size: 14px; gap: 6px; }
+        .puzzle-header h2 svg { width: 16px; height: 16px; }
+
+        /* Stack body vertically */
+        .puzzle-body {
+          flex-direction: column;
+          overflow-y: auto;
+          overflow-x: hidden;
+        }
+
+        /* Show the toggle button */
+        .puzzle-toggle-controls {
+          display: flex;
+        }
+
+        /* Controls become collapsible full-width panel */
+        .puzzle-controls {
+          width: 100% !important; min-width: 0 !important;
+          max-height: 0;
+          overflow: hidden;
+          border-right: none;
+          border-bottom: 1px solid var(--border, #2a2a4a);
+          padding: 0 14px;
+          gap: 10px;
+          transition: max-height .3s ease, padding .3s ease;
+        }
+        .puzzle-controls.expanded {
+          max-height: 2000px;
+          padding: 14px;
+          overflow-y: auto;
+        }
+
+        /* Controls use 2-column grid on small screens */
+        .puzzle-controls-inner {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .puzzle-controls-inner .puzzle-control-group.full-width,
+        .puzzle-controls-inner .puzzle-sep,
+        .puzzle-controls-inner .puzzle-piece-count,
+        .puzzle-controls-inner .puzzle-btn-group {
+          grid-column: 1 / -1;
+        }
+
+        /* Preview takes remaining space */
+        .puzzle-preview {
+          min-height: 250px;
+          flex: 1;
+        }
+
+        /* Bigger touch targets */
+        .puzzle-btn {
+          padding: 12px 16px;
+          font-size: 14px;
+          min-height: 44px;
+        }
+        .puzzle-close {
+          width: 36px; height: 36px;
+          font-size: 20px;
+        }
+        .puzzle-preset-chip {
+          padding: 6px 12px;
+          font-size: 12px;
+          min-height: 32px;
+        }
+        .puzzle-control-group input[type=range] {
+          height: 8px;
+        }
+        .puzzle-control-group input[type=range]::-webkit-slider-thumb {
+          width: 22px; height: 22px;
+        }
+        .puzzle-control-group select,
+        .puzzle-control-group input[type=number] {
+          padding: 10px 12px;
+          font-size: 14px;
+          min-height: 40px;
+        }
+        .puzzle-zoom-btn {
+          width: 36px; height: 36px;
+          font-size: 18px;
+        }
+        .puzzle-zoom-level {
+          line-height: 36px;
+          font-size: 12px;
+        }
+        .puzzle-footer {
+          padding: 8px 14px;
+          font-size: 11px;
+          flex-wrap: wrap; gap: 4px;
+        }
+        .puzzle-dim-row {
+          flex-wrap: wrap;
+        }
+        .puzzle-dim-row input {
+          width: 60px !important;
+        }
+        .puzzle-upload-zone {
+          padding: 14px;
+          font-size: 13px;
+        }
+      }
+
+      /* ── Very small screens ── */
+      @media (max-width: 380px) {
+        .puzzle-controls.expanded {
+          padding: 10px;
+        }
+        .puzzle-controls-inner {
+          grid-template-columns: 1fr;
+        }
+        .puzzle-header h2 { font-size: 13px; }
+        .puzzle-btn { font-size: 13px; }
+      }
+
+      /* ── Short screens (landscape phone) ── */
+      @media (max-height: 500px) {
+        .puzzle-overlay { align-items: stretch; }
+        .puzzle-modal {
+          max-height: 100vh; height: 100vh;
+          border-radius: 0;
+        }
+        .puzzle-body { flex-direction: row; }
+        .puzzle-controls {
+          width: 200px !important; min-width: 200px !important;
+          max-height: none !important;
+          overflow-y: auto;
+          padding: 10px !important;
+          gap: 8px;
+        }
+        .puzzle-toggle-controls { display: none !important; }
+        .puzzle-header { padding: 6px 14px; }
+        .puzzle-footer { padding: 6px 14px; }
+        .puzzle-btn { padding: 6px 12px; font-size: 12px; min-height: 32px; }
+        .puzzle-control-group label { font-size: 11px; }
+        .puzzle-control-group select,
+        .puzzle-control-group input[type=number] {
+          padding: 5px 8px; font-size: 12px; min-height: 30px;
+        }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -642,10 +838,14 @@ ${paths}  </g>
           <button class="puzzle-close" id="puzzleClose">&times;</button>
         </div>
         <div class="puzzle-body">
-          <div class="puzzle-controls">
+          <button class="puzzle-toggle-controls" id="puzzleToggleControls">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+            Controls
+          </button>
+          <div class="puzzle-controls" id="puzzleControlsPanel">
 
             <!-- Image upload -->
-            <div class="puzzle-control-group">
+            <div class="puzzle-control-group full-width">
               <label>Background Image (optional)</label>
               <div class="puzzle-upload-zone" id="puzzleUploadZone">
                 Click or drop image here
@@ -1029,6 +1229,15 @@ ${paths}  </g>
         closeModal(overlay);
         document.removeEventListener('keydown', escHandler);
       }
+    });
+
+    // ── Controls toggle (mobile) ──────────────────────────────────
+    const toggleBtn = $('puzzleToggleControls');
+    const controlsPanel = $('puzzleControlsPanel');
+    toggleBtn.addEventListener('click', () => {
+      controlsPanel.classList.toggle('expanded');
+      toggleBtn.classList.toggle('open');
+      toggleBtn.querySelector('svg');
     });
 
     // Initial render
