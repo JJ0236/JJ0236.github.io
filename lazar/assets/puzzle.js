@@ -16,54 +16,211 @@
     };
   }
 
-  // ─── Jigsaw Edge Builder ───────────────────────────────────────────
-  // Builds an SVG sub-path for one cell edge with a tab (or straight if border).
-  // (x0,y0) → (x1,y1).  dir = +1 tab pokes "left" of travel, -1 "right".
-  // jitter ∈ [0,1] adds organic feel.
-  function jigsawEdge(x0, y0, x1, y1, dir, tabScale, jitter, rng) {
+  // ─── Edge Shape Catalog ─────────────────────────────────────────────
+  // Each shape function returns an SVG sub-path string from (x0,y0)→(x1,y1).
+  // dir: +1/-1 (which side the tab pokes), rng: seeded random, j: jitter scale
+
+  const EDGE_STYLES = {
+
+    // ── 0. Classic rounded tab ──────────────────────────────────────
+    classic(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.04;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const a = 0.34 + (rng()-.5)*j*0.06;
+      const b = 0.66 + (rng()-.5)*j*0.06;
+      const neck = ts*(0.08+rng()*j*0.04), bulge = ts*(0.90+rng()*j*0.15);
+      const pA=p(a,0), pB=p(b,0);
+      const c1=p(a-.02,neck), c2=p(a-.02,bulge), c3=p(a+.06,bulge+ts*.12);
+      const pk=p(.5,bulge+ts*.14);
+      const c4=p(b-.06,bulge+ts*.12), c5=p(b+.02,bulge), c6=p(b+.02,neck);
+      const f = n => n.toFixed(2);
+      return `L ${f(pA[0])} ${f(pA[1])} C ${f(c1[0])} ${f(c1[1])}, ${f(c2[0])} ${f(c2[1])}, ${f(c3[0])} ${f(c3[1])} Q ${f(pk[0])} ${f(pk[1])}, ${f(c4[0])} ${f(c4[1])} C ${f(c5[0])} ${f(c5[1])}, ${f(c6[0])} ${f(c6[1])}, ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 1. Mushroom / wide head tab ─────────────────────────────────
+    mushroom(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.035;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const center = 0.5 + (rng()-.5)*j*0.08; // off-center tab!
+      const neckW = 0.06 + rng()*j*0.03;  // narrow neck
+      const headW = 0.16 + rng()*j*0.06;  // wide head
+      const stemH = ts * (0.55 + rng()*j*0.2);
+      const headH = ts * (0.35 + rng()*j*0.15);
+      const pA = p(center-neckW, 0), pB = p(center+neckW, 0);
+      // go up the narrow stem
+      const s1 = p(center-neckW, stemH), s2 = p(center+neckW, stemH);
+      // flare out to the mushroom cap
+      const h1 = p(center-headW, stemH+headH*0.3);
+      const h2 = p(center-headW*0.8, stemH+headH);
+      const hTop = p(center, stemH+headH*1.1);
+      const h3 = p(center+headW*0.8, stemH+headH);
+      const h4 = p(center+headW, stemH+headH*0.3);
+      return `L ${f(pA[0])} ${f(pA[1])} L ${f(s1[0])} ${f(s1[1])} C ${f(h1[0])} ${f(h1[1])}, ${f(h2[0])} ${f(h2[1])}, ${f(hTop[0])} ${f(hTop[1])} C ${f(h3[0])} ${f(h3[1])}, ${f(h4[0])} ${f(h4[1])}, ${f(s2[0])} ${f(s2[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 2. Pointed / arrow tab ──────────────────────────────────────
+    arrow(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.03;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const center = 0.5 + (rng()-.5)*j*0.1;
+      const baseW = 0.12 + rng()*j*0.05;
+      const tipH  = ts * (1.0 + rng()*j*0.3);
+      const shoulder = ts * (0.4 + rng()*j*0.15);
+      const pA = p(center-baseW, 0), pB = p(center+baseW, 0);
+      const sA = p(center-baseW*1.3, shoulder);
+      const tip = p(center, tipH);
+      const sB = p(center+baseW*1.3, shoulder);
+      return `L ${f(pA[0])} ${f(pA[1])} L ${f(sA[0])} ${f(sA[1])} L ${f(tip[0])} ${f(tip[1])} L ${f(sB[0])} ${f(sB[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 3. Curvy / s-curve double-bulge ─────────────────────────────
+    curvy(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.04;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const asym = (rng()-.5)*j*0.08; // asymmetry shift
+      const h = ts * (0.85 + rng()*j*0.2);
+      const c1 = p(0.2+asym, h*0.3);
+      const c2 = p(0.3+asym, h*1.1);
+      const mid = p(0.5+asym, h*0.95);
+      const c3 = p(0.7+asym, h*1.1);
+      const c4 = p(0.8+asym, h*0.3);
+      return `C ${f(c1[0])} ${f(c1[1])}, ${f(c2[0])} ${f(c2[1])}, ${f(mid[0])} ${f(mid[1])} C ${f(c3[0])} ${f(c3[1])}, ${f(c4[0])} ${f(c4[1])}, ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 4. Keyhole tab ──────────────────────────────────────────────
+    keyhole(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.03;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const center = 0.5 + (rng()-.5)*j*0.06;
+      const slotW = 0.04 + rng()*j*0.02; // very narrow slot
+      const circR = 0.10 + rng()*j*0.04; // round head
+      const stemH = ts * (0.5 + rng()*j*0.15);
+      const circH = ts * (0.4 + rng()*j*0.1);
+      const pA = p(center-slotW, 0), pB = p(center+slotW, 0);
+      const s1 = p(center-slotW, stemH), s2 = p(center+slotW, stemH);
+      // draw circle via two arcs
+      const cTop = p(center, stemH+circH);
+      const cLeft = p(center-circR, stemH+circH*0.5);
+      const cRight = p(center+circR, stemH+circH*0.5);
+      return `L ${f(pA[0])} ${f(pA[1])} L ${f(s1[0])} ${f(s1[1])} C ${f(s1[0])} ${f(s1[1])}, ${f(cLeft[0])} ${f(cLeft[1])}, ${f(cTop[0])} ${f(cTop[1])} C ${f(cRight[0])} ${f(cRight[1])}, ${f(s2[0])} ${f(s2[1])}, ${f(s2[0])} ${f(s2[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 5. Wavy / sine edge ─────────────────────────────────────────
+    wavy(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const f = n => n.toFixed(2);
+      const waves = 2 + Math.floor(rng() * 3); // 2-4 waves
+      const amp = ts * (0.6 + rng()*j*0.4);
+      let d = '';
+      const steps = waves * 2;
+      for (let k = 1; k <= steps; k++) {
+        const t = k / steps;
+        const nOff = Math.sin(k * Math.PI) * amp * ((k%2===0) ? 1 : -1);
+        const jx = (rng()-.5)*j*len*0.02;
+        const jy = (rng()-.5)*j*len*0.02;
+        const px = x0 + dx*t + nx*nOff + jx;
+        const py = y0 + dy*t + ny*nOff + jy;
+        // control point at midpoint
+        const ct = (k-0.5)/steps;
+        const cn = Math.sin((k-0.5)*Math.PI) * amp * ((k%2===0) ? -1 : 1) * 1.5;
+        const cx = x0 + dx*ct + nx*cn;
+        const cy = y0 + dy*ct + ny*cn;
+        d += `Q ${f(cx)} ${f(cy)}, ${f(px)} ${f(py)} `;
+      }
+      d += `L ${f(x1)} ${f(y1)} `;
+      return d;
+    },
+
+    // ── 6. Puzzle diamond tab ───────────────────────────────────────
+    diamond(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.03;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const center = 0.5 + (rng()-.5)*j*0.08;
+      const w = 0.12 + rng()*j*0.05;
+      const h = ts * (0.9 + rng()*j*0.25);
+      const pA = p(center-w*0.3, 0), pB = p(center+w*0.3, 0);
+      const left  = p(center-w, h*0.5);
+      const top   = p(center, h);
+      const right = p(center+w, h*0.5);
+      return `L ${f(pA[0])} ${f(pA[1])} L ${f(left[0])} ${f(left[1])} L ${f(top[0])} ${f(top[1])} L ${f(right[0])} ${f(right[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    },
+
+    // ── 7. Heart-shaped tab ─────────────────────────────────────────
+    heart(x0, y0, x1, y1, dir, ts, j, rng) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx*dx+dy*dy);
+      const nx = (-dy/len)*dir, ny = (dx/len)*dir;
+      const jm = j * len * 0.03;
+      const p = (t, n) => {
+        const jx = (rng()-.5)*jm, jy = (rng()-.5)*jm;
+        return [x0+dx*t+nx*n+jx, y0+dy*t+ny*n+jy];
+      };
+      const f = n => n.toFixed(2);
+      const center = 0.5 + (rng()-.5)*j*0.06;
+      const w = 0.10 + rng()*j*0.04;
+      const h = ts * (0.85 + rng()*j*0.2);
+      const pA = p(center-w*0.5, 0), pB = p(center+w*0.5, 0);
+      const tip = p(center, h*0.3);
+      const lBump = p(center-w*1.2, h*0.9);
+      const lTop = p(center-w*0.5, h*1.05);
+      const notch = p(center, h*0.8);
+      const rTop = p(center+w*0.5, h*1.05);
+      const rBump = p(center+w*1.2, h*0.9);
+      return `L ${f(pA[0])} ${f(pA[1])} L ${f(tip[0])} ${f(tip[1])} C ${f(lBump[0])} ${f(lBump[1])}, ${f(lTop[0])} ${f(lTop[1])}, ${f(notch[0])} ${f(notch[1])} C ${f(rTop[0])} ${f(rTop[1])}, ${f(rBump[0])} ${f(rBump[1])}, ${f(tip[0])} ${f(tip[1])} L ${f(pB[0])} ${f(pB[1])} L ${f(x1)} ${f(y1)} `;
+    }
+  };
+
+  const STYLE_NAMES = Object.keys(EDGE_STYLES);
+
+  // ─── Unified edge dispatcher ──────────────────────────────────────
+  // edgeStyle: 'classic' | 'mushroom' | ... | 'mixed' (random per edge)
+  function jigsawEdge(x0, y0, x1, y1, dir, tabScale, jitter, rng, edgeStyle) {
     const dx = x1 - x0, dy = y1 - y0;
     const len = Math.sqrt(dx * dx + dy * dy);
-    // unit tangent & normal
-    const tx = dx / len, ty = dy / len;
-    const nx = -ty * dir, ny = tx * dir;
+    const ts = tabScale * len;
 
-    const ts = tabScale * len;            // absolute tab size
-    const j = jitter * len * 0.04;        // jitter magnitude
-
-    // key fractions along the edge
-    const a = 0.34 + (rng() - 0.5) * jitter * 0.06;
-    const b = 0.66 + (rng() - 0.5) * jitter * 0.06;
-    const neck = ts * (0.08 + rng() * jitter * 0.04);
-    const bulge = ts * (0.90 + rng() * jitter * 0.15);
-
-    // helper: point along edge + normal offset
-    const p = (t, nOff) => {
-      const jx = (rng() - 0.5) * j, jy = (rng() - 0.5) * j;
-      return [
-        x0 + dx * t + nx * nOff + jx,
-        y0 + dy * t + ny * nOff + jy
-      ];
-    };
-
-    const pA = p(a, 0);
-    const pB = p(b, 0);
-
-    // control points for the tab
-    const c1 = p(a - 0.02, neck);
-    const c2 = p(a - 0.02, bulge);
-    const c3 = p(a + 0.06, bulge + ts * 0.12);
-    const peak1 = p(0.5, bulge + ts * 0.14);
-    const c4 = p(b - 0.06, bulge + ts * 0.12);
-    const c5 = p(b + 0.02, bulge);
-    const c6 = p(b + 0.02, neck);
-
-    let d = '';
-    d += `L ${pA[0].toFixed(2)} ${pA[1].toFixed(2)} `;
-    d += `C ${c1[0].toFixed(2)} ${c1[1].toFixed(2)}, ${c2[0].toFixed(2)} ${c2[1].toFixed(2)}, ${c3[0].toFixed(2)} ${c3[1].toFixed(2)} `;
-    d += `Q ${peak1[0].toFixed(2)} ${peak1[1].toFixed(2)}, ${c4[0].toFixed(2)} ${c4[1].toFixed(2)} `;
-    d += `C ${c5[0].toFixed(2)} ${c5[1].toFixed(2)}, ${c6[0].toFixed(2)} ${c6[1].toFixed(2)}, ${pB[0].toFixed(2)} ${pB[1].toFixed(2)} `;
-    d += `L ${x1.toFixed(2)} ${y1.toFixed(2)} `;
-    return d;
+    let style = edgeStyle;
+    if (style === 'mixed') {
+      // pick a random style for this edge
+      style = STYLE_NAMES[Math.floor(rng() * STYLE_NAMES.length)];
+    }
+    const fn = EDGE_STYLES[style] || EDGE_STYLES.classic;
+    return fn(x0, y0, x1, y1, dir, ts, jitter, rng);
   }
 
   // ─── Generate Puzzle Paths ──────────────────────────────────────────
@@ -78,16 +235,35 @@
       seed = 42,
       strokeColor = '#e94560',
       strokeWidth = 0.5,
-      cornerRadius = 0
+      cornerRadius = 0,
+      edgeStyle = 'mixed',  // 'classic'|'mushroom'|'arrow'|'curvy'|'keyhole'|'wavy'|'diamond'|'heart'|'mixed'
+      wobble = 0.35         // grid vertex wobble 0-1
     } = opts;
 
     const rng = mulberry32(seed);
     const cw = width / cols;
     const ch = height / rows;
 
+    // ── Build wobbled grid vertices ──────────────────────────────────
+    // vertices[i][j] = { x, y } — border vertices stay fixed
+    const vertices = [];
+    const wobbleX = wobble * cw * 0.18;
+    const wobbleY = wobble * ch * 0.18;
+    for (let i = 0; i <= rows; i++) {
+      vertices[i] = [];
+      for (let j = 0; j <= cols; j++) {
+        let x = j * cw;
+        let y = i * ch;
+        // only wobble interior vertices (not borders)
+        if (i > 0 && i < rows && j > 0 && j < cols) {
+          x += (rng() - 0.5) * 2 * wobbleX;
+          y += (rng() - 0.5) * 2 * wobbleY;
+        }
+        vertices[i][j] = { x, y };
+      }
+    }
+
     // Pre-compute random tab directions
-    // Horizonal edges: (rows-1) × cols   — between row i and i+1
-    // Vertical edges:  rows × (cols-1)   — between col j and j+1
     const hDirs = [];
     for (let i = 0; i < rows - 1; i++) {
       hDirs[i] = [];
@@ -108,10 +284,11 @@
     // ── Horizontal internal edges ────────────────────────────────────
     for (let i = 1; i < rows; i++) {
       for (let j = 0; j < cols; j++) {
-        const x0 = j * cw, y0 = i * ch;
-        const x1 = (j + 1) * cw, y1 = i * ch;
+        const v0 = vertices[i][j];
+        const v1 = vertices[i][j + 1];
         const dir = hDirs[i - 1][j];
-        const d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} ` + jigsawEdge(x0, y0, x1, y1, dir, tabScale, jitter, rng);
+        const d = `M ${v0.x.toFixed(2)} ${v0.y.toFixed(2)} ` +
+          jigsawEdge(v0.x, v0.y, v1.x, v1.y, dir, tabScale, jitter, rng, edgeStyle);
         paths += `<path d="${d}" />\n`;
       }
     }
@@ -119,10 +296,11 @@
     // ── Vertical internal edges ──────────────────────────────────────
     for (let i = 0; i < rows; i++) {
       for (let j = 1; j < cols; j++) {
-        const x0 = j * cw, y0 = i * ch;
-        const x1 = j * cw, y1 = (i + 1) * ch;
+        const v0 = vertices[i][j];
+        const v1 = vertices[i + 1][j];
         const dir = vDirs[i][j - 1];
-        const d = `M ${x0.toFixed(2)} ${y0.toFixed(2)} ` + jigsawEdge(x0, y0, x1, y1, dir, tabScale, jitter, rng);
+        const d = `M ${v0.x.toFixed(2)} ${v0.y.toFixed(2)} ` +
+          jigsawEdge(v0.x, v0.y, v1.x, v1.y, dir, tabScale, jitter, rng, edgeStyle);
         paths += `<path d="${d}" />\n`;
       }
     }
@@ -472,6 +650,22 @@ ${paths}  </g>
 
             <div class="puzzle-sep"></div>
 
+            <!-- Edge Style -->
+            <div class="puzzle-control-group">
+              <label>Edge Style</label>
+              <select id="puzzleEdgeStyle">
+                <option value="mixed" selected>Mixed (funky!)</option>
+                <option value="classic">Classic</option>
+                <option value="mushroom">Mushroom</option>
+                <option value="arrow">Arrow / Pointed</option>
+                <option value="curvy">Curvy S-Bend</option>
+                <option value="keyhole">Keyhole</option>
+                <option value="wavy">Wavy</option>
+                <option value="diamond">Diamond</option>
+                <option value="heart">Heart</option>
+              </select>
+            </div>
+
             <!-- Tab size -->
             <div class="puzzle-control-group">
               <label>Tab Size <span id="tabVal">22%</span></label>
@@ -515,6 +709,12 @@ ${paths}  </g>
             <div class="puzzle-control-group">
               <label>Corner Radius <span id="cornerVal">0</span></label>
               <input type="range" id="puzzleCorner" min="0" max="20" value="0" />
+            </div>
+
+            <!-- Grid wobble -->
+            <div class="puzzle-control-group">
+              <label>Grid Wobble <span id="wobbleVal">35%</span></label>
+              <input type="range" id="puzzleWobble" min="0" max="100" value="35" />
             </div>
 
             <div class="puzzle-btn-group">
@@ -574,6 +774,9 @@ ${paths}  </g>
     const seedVal   = $('seedVal');
     const corner    = $('puzzleCorner');
     const cornerVal = $('cornerVal');
+    const wobbleSlider = $('puzzleWobble');
+    const wobbleVal = $('wobbleVal');
+    const edgeStyleSel = $('puzzleEdgeStyle');
     const widthIn   = $('puzzleWidth');
     const heightIn  = $('puzzleHeight');
     const colorSel  = $('puzzleColor');
@@ -611,7 +814,9 @@ ${paths}  </g>
         seed: parseInt(seedSlider.value),
         strokeColor: colorSel.value === 'custom' ? '#e94560' : colorSel.value,
         strokeWidth: parseInt(stroke.value) / 10,
-        cornerRadius: parseInt(corner.value)
+        cornerRadius: parseInt(corner.value),
+        edgeStyle: edgeStyleSel.value,
+        wobble: parseInt(wobbleSlider.value) / 100
       };
     }
 
@@ -634,11 +839,12 @@ ${paths}  </g>
       strokeVal.textContent = opts.strokeWidth.toFixed(1);
       seedVal.textContent = opts.seed;
       cornerVal.textContent = opts.cornerRadius;
+      wobbleVal.textContent = Math.round(opts.wobble * 100) + '%';
       pieceCount.textContent = opts.cols * opts.rows;
 
       // Count paths
       const pathCount = (svg.match(/<path/g) || []).length + (svg.match(/<rect/g) || []).length;
-      pathInfo.textContent = `${pathCount} paths • ${opts.cols}×${opts.rows} grid`;
+      pathInfo.textContent = `${pathCount} paths • ${opts.cols}×${opts.rows} • ${opts.edgeStyle}`;
     }
 
     // Debounced render for range sliders
@@ -649,13 +855,14 @@ ${paths}  </g>
     }
 
     // Bind controls
-    [cols, rows, tabSlider, jitter, stroke, seedSlider, corner].forEach(el => {
+    [cols, rows, tabSlider, jitter, stroke, seedSlider, corner, wobbleSlider].forEach(el => {
       el.addEventListener('input', debouncedRender);
     });
     [widthIn, heightIn].forEach(el => {
       el.addEventListener('change', render);
     });
     colorSel.addEventListener('change', render);
+    edgeStyleSel.addEventListener('change', render);
 
     // Presets
     overlay.querySelectorAll('.puzzle-preset-chip').forEach(chip => {
