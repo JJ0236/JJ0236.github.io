@@ -1024,6 +1024,8 @@ ${paths}  </g>
     const edgeStyleSel = $('puzzleEdgeStyle');
     const widthIn   = $('puzzleWidth');
     const heightIn  = $('puzzleHeight');
+    const unitSel   = $('puzzleUnit');
+    let currentUnit = unitSel.value; // track for conversion
 
     const container = $('puzzleSvgContainer');
     const pieceCount = $('pieceCount');
@@ -1042,25 +1044,28 @@ ${paths}  </g>
     updateLockUI();
     lockIcon.addEventListener('click', () => {
       aspectLocked = !aspectLocked;
-      if (aspectLocked) aspectRatio = parseInt(widthIn.value) / parseInt(heightIn.value) || 1;
+      if (aspectLocked) aspectRatio = parseFloat(widthIn.value) / parseFloat(heightIn.value) || 1;
       updateLockUI();
     });
 
     // Keep dimensions proportional
     let dimChanging = false;
+    function roundForUnit(v) {
+      return currentUnit === 'in' ? parseFloat(v.toFixed(2)) : Math.round(v);
+    }
     widthIn.addEventListener('input', () => {
       if (!aspectLocked || dimChanging) return;
       dimChanging = true;
-      const w = parseInt(widthIn.value) || 1;
-      heightIn.value = Math.round(w / aspectRatio);
+      const w = parseFloat(widthIn.value) || 1;
+      heightIn.value = roundForUnit(w / aspectRatio);
       dimChanging = false;
       debouncedRender();
     });
     heightIn.addEventListener('input', () => {
       if (!aspectLocked || dimChanging) return;
       dimChanging = true;
-      const h = parseInt(heightIn.value) || 1;
-      widthIn.value = Math.round(h * aspectRatio);
+      const h = parseFloat(heightIn.value) || 1;
+      widthIn.value = roundForUnit(h * aspectRatio);
       dimChanging = false;
       debouncedRender();
     });
@@ -1080,8 +1085,8 @@ ${paths}  </g>
     } catch (e) { /* cross-origin or no canvas */ }
 
     function getOpts() {
-      const w = parseInt(widthIn.value) || 200;
-      const h = parseInt(heightIn.value) || 150;
+      const w = parseFloat(widthIn.value) || 200;
+      const h = parseFloat(heightIn.value) || 150;
       return {
         width: w,
         height: h,
@@ -1140,6 +1145,33 @@ ${paths}  </g>
     widthIn.addEventListener('change', render);
     heightIn.addEventListener('change', render);
     edgeStyleSel.addEventListener('change', render);
+
+    // Unit conversion: when user switches mm ↔ in ↔ px, convert the numbers
+    unitSel.addEventListener('change', () => {
+      const newUnit = unitSel.value;
+      const toMM = { mm: 1, in: 25.4, px: 25.4/96 };
+      const w = parseFloat(widthIn.value) || 200;
+      const h = parseFloat(heightIn.value) || 150;
+      // Convert old-unit → mm → new-unit
+      const wMM = w * toMM[currentUnit];
+      const hMM = h * toMM[currentUnit];
+      const fromMM = 1 / toMM[newUnit];
+      // Round sensibly: mm/px to integers, inches to 2 decimals
+      if (newUnit === 'in') {
+        widthIn.value = (wMM * fromMM).toFixed(2);
+        heightIn.value = (hMM * fromMM).toFixed(2);
+        widthIn.step = '0.01';
+        heightIn.step = '0.01';
+      } else {
+        widthIn.value = Math.round(wMM * fromMM);
+        heightIn.value = Math.round(hMM * fromMM);
+        widthIn.step = '1';
+        heightIn.step = '1';
+      }
+      currentUnit = newUnit;
+      aspectRatio = parseFloat(widthIn.value) / parseFloat(heightIn.value) || 1;
+      render();
+    });
 
     // Presets
     overlay.querySelectorAll('.puzzle-preset-chip').forEach(chip => {
@@ -1293,7 +1325,7 @@ ${paths}  </g>
       zoomLabel.textContent = Math.round(zoom * 100) + '%';
     }
 
-    function clampZoom(z) { return Math.max(0.1, Math.min(10, z)); }
+    function clampZoom(z) { return Math.max(0.05, Math.min(50, z)); }
 
     // Scroll to zoom (centered on cursor)
     preview.addEventListener('wheel', (e) => {
