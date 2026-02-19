@@ -518,7 +518,7 @@ ${paths}  </g>
         pointer-events: none;
       }
       .puzzle-preview-pan svg {
-        max-width: 80%; max-height: 80%;
+        width: 80%; height: 80%;
         filter: drop-shadow(0 0 8px rgba(233,69,96,0.15));
         pointer-events: none;
       }
@@ -1075,10 +1075,13 @@ ${paths}  </g>
       const lazarCanvas = document.querySelector('.canvas-area canvas, .preview-canvas canvas, canvas');
       if (lazarCanvas && lazarCanvas.width > 0 && lazarCanvas.height > 0) {
         bgImageDataURL = lazarCanvas.toDataURL('image/png');
-        // Auto-set dimensions from canvas
+        // Auto-set dimensions from canvas (these are pixels)
         widthIn.value = lazarCanvas.width;
         heightIn.value = lazarCanvas.height;
         aspectRatio = lazarCanvas.width / lazarCanvas.height;
+        // Set unit to px since canvas dimensions are pixels
+        unitSel.value = 'px';
+        currentUnit = 'px';
         uploadZone.textContent = 'Using current canvas image';
         uploadZone.classList.add('has-image');
       }
@@ -1116,7 +1119,13 @@ ${paths}  </g>
         displaySvg = previewSvg.replace('<g ', imgTag + '\n  <g ');
       }
 
-      container.innerHTML = displaySvg;
+      // Strip width/height from SVG so it scales to fill the preview
+      // via viewBox alone. Keep viewBox for correct aspect ratio.
+      const previewDisplay = displaySvg.replace(
+        /(<svg[^>]*?)\s+width="[^"]*"\s+height="[^"]*"/,
+        '$1'
+      );
+      container.innerHTML = previewDisplay;
       colsVal.textContent = opts.cols;
       rowsVal.textContent = opts.rows;
       tabVal.textContent = opts.tabScale * 100 + '%';
