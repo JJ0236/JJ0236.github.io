@@ -867,7 +867,7 @@ ${paths}  </g>
 
             <!-- Dimensions -->
             <div class="puzzle-control-group">
-              <label>Canvas Size</label>
+              <label>Canvas Size <span id="puzzleLockIcon" style="cursor:pointer;opacity:0.8" title="Toggle proportional lock">🔗</span></label>
               <div class="puzzle-dim-row">
                 <input type="number" id="puzzleWidth" value="200" min="20" max="2000" />
                 <span class="dim-x">×</span>
@@ -1032,6 +1032,38 @@ ${paths}  </g>
     const imageInput = $('puzzleImageInput');
 
     let bgImageDataURL = null;
+    let aspectRatio = parseInt(widthIn.value) / parseInt(heightIn.value) || (4/3);
+    let aspectLocked = true; // proportional by default
+    const lockIcon = $('puzzleLockIcon');
+    function updateLockUI() {
+      lockIcon.textContent = aspectLocked ? '🔗' : '🔓';
+      lockIcon.title = aspectLocked ? 'Proportions locked — click to unlock' : 'Proportions unlocked — click to lock';
+    }
+    updateLockUI();
+    lockIcon.addEventListener('click', () => {
+      aspectLocked = !aspectLocked;
+      if (aspectLocked) aspectRatio = parseInt(widthIn.value) / parseInt(heightIn.value) || 1;
+      updateLockUI();
+    });
+
+    // Keep dimensions proportional
+    let dimChanging = false;
+    widthIn.addEventListener('input', () => {
+      if (!aspectLocked || dimChanging) return;
+      dimChanging = true;
+      const w = parseInt(widthIn.value) || 1;
+      heightIn.value = Math.round(w / aspectRatio);
+      dimChanging = false;
+      debouncedRender();
+    });
+    heightIn.addEventListener('input', () => {
+      if (!aspectLocked || dimChanging) return;
+      dimChanging = true;
+      const h = parseInt(heightIn.value) || 1;
+      widthIn.value = Math.round(h * aspectRatio);
+      dimChanging = false;
+      debouncedRender();
+    });
 
     // Try to grab the current image from LAZAR's canvas
     try {
@@ -1041,6 +1073,7 @@ ${paths}  </g>
         // Auto-set dimensions from canvas
         widthIn.value = lazarCanvas.width;
         heightIn.value = lazarCanvas.height;
+        aspectRatio = lazarCanvas.width / lazarCanvas.height;
         uploadZone.textContent = 'Using current canvas image';
         uploadZone.classList.add('has-image');
       }
@@ -1104,9 +1137,8 @@ ${paths}  </g>
     [cols, rows, tabSlider, jitter, seedSlider, corner, wobbleSlider].forEach(el => {
       el.addEventListener('input', debouncedRender);
     });
-    [widthIn, heightIn].forEach(el => {
-      el.addEventListener('change', render);
-    });
+    widthIn.addEventListener('change', render);
+    heightIn.addEventListener('change', render);
     edgeStyleSel.addEventListener('change', render);
 
     // Presets
@@ -1131,10 +1163,16 @@ ${paths}  </g>
       const opts = getOpts();
       const unit = $('puzzleUnit').value;
 
-      // Adjust stroke width for the coordinate system's units
-      if (unit === 'in') opts.strokeWidth = 0.035 / 25.4; // 0.1pt in inches
-      else if (unit === 'px') opts.strokeWidth = 0.75;     // hairline in pixels
-      // else mm: default 0.035mm (0.1pt)
+      // Stroke width: always 0.1pt ≈ 0.035mm.
+      // Convert to whatever coordinate units the viewBox uses.
+      if (unit === 'in') {
+        opts.strokeWidth = 0.035 / 25.4;  // mm → in
+      } else if (unit === 'px') {
+        // 1px SVG user-unit at 96dpi ≈ 0.265mm, so 0.035mm ≈ 0.13px
+        opts.strokeWidth = 0.13;
+      } else {
+        opts.strokeWidth = 0.035;          // mm (0.1pt)
+      }
 
       let svg = generatePuzzleSVG(opts);
 
@@ -1144,13 +1182,12 @@ ${paths}  </g>
         svg = svg.replace('  <g ', imgTag + '  <g ');
       }
 
-      // Add unit to SVG dimensions
-      if (unit !== 'px') {
-        svg = svg.replace(
-          `width="${opts.width}" height="${opts.height}"`,
-          `width="${opts.width}${unit}" height="${opts.height}${unit}"`
-        );
-      }
+      // Always stamp real units onto width/height so the SVG
+      // opens at the correct physical size, not enormous px.
+      svg = svg.replace(
+        `width="${opts.width}" height="${opts.height}"`,
+        `width="${opts.width}${unit}" height="${opts.height}${unit}"`
+      );
 
       const blob = new Blob([svg], { type: 'image/svg+xml' });
       const url = URL.createObjectURL(blob);
@@ -1215,6 +1252,7 @@ ${paths}  </g>
         img.onload = () => {
           widthIn.value = img.naturalWidth;
           heightIn.value = img.naturalHeight;
+          aspectRatio = img.naturalWidth / img.naturalHeight;
           render();
         };
         img.src = bgImageDataURL;
