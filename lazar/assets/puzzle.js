@@ -341,7 +341,7 @@ ${paths}  </g>
         border: 1px solid var(--border, #2a2a4a);
         border-radius: var(--radius-lg, 10px);
         box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.4));
-        width: 820px; max-width: 95vw;
+        width: 920px; max-width: 95vw;
         max-height: 92vh;
         display: flex; flex-direction: column;
         overflow: hidden;
@@ -373,16 +373,24 @@ ${paths}  </g>
       .puzzle-close:hover { background: var(--danger, #f44336); color: #fff; }
       /* Body */
       .puzzle-body {
-        display: flex; flex: 1; overflow: hidden;
+        display: flex; flex: 1; overflow: hidden; min-height: 0;
       }
       /* Controls sidebar */
       .puzzle-controls {
-        width: 240px; min-width: 240px;
+        width: 260px; min-width: 260px;
         padding: 16px;
         border-right: 1px solid var(--border, #2a2a4a);
         background: var(--bg-secondary, #16213e);
-        overflow-y: auto;
+        overflow-y: auto; overflow-x: hidden;
         display: flex; flex-direction: column; gap: 14px;
+        flex-shrink: 0;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-light, #3a3a5a) transparent;
+      }
+      .puzzle-controls::-webkit-scrollbar { width: 6px; }
+      .puzzle-controls::-webkit-scrollbar-track { background: transparent; }
+      .puzzle-controls::-webkit-scrollbar-thumb {
+        background: var(--border-light, #3a3a5a); border-radius: 3px;
       }
       .puzzle-control-group { display: flex; flex-direction: column; gap: 4px; }
       .puzzle-control-group label {
@@ -488,10 +496,21 @@ ${paths}  </g>
         background: var(--bg-dark, #0a0a1a);
         position: relative; overflow: hidden;
         min-height: 300px;
+        cursor: grab;
       }
-      .puzzle-preview svg {
-        max-width: 90%; max-height: 90%;
+      .puzzle-preview.grabbing { cursor: grabbing; }
+      .puzzle-preview-pan {
+        position: absolute;
+        transform-origin: 0 0;
+        transition: none;
+        display: flex; align-items: center; justify-content: center;
+        width: 100%; height: 100%;
+        pointer-events: none;
+      }
+      .puzzle-preview-pan svg {
+        max-width: 80%; max-height: 80%;
         filter: drop-shadow(0 0 8px rgba(233,69,96,0.15));
+        pointer-events: none;
       }
       .puzzle-preview .checkerboard {
         position: absolute; inset: 0;
@@ -503,12 +522,42 @@ ${paths}  </g>
         background-size: 20px 20px;
         background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         opacity: 0.3;
+        pointer-events: none;
       }
       .puzzle-preview-hint {
         color: var(--text-muted, #6a6a80);
         font-size: 13px; text-align: center;
         position: absolute;
         bottom: 12px; left: 0; right: 0;
+        pointer-events: none;
+      }
+      /* Zoom controls */
+      .puzzle-zoom-controls {
+        position: absolute; top: 10px; right: 10px;
+        display: flex; gap: 4px; z-index: 2;
+      }
+      .puzzle-zoom-btn {
+        width: 30px; height: 30px;
+        border-radius: var(--radius, 6px);
+        background: var(--bg-tertiary, #0f3460);
+        border: 1px solid var(--border, #2a2a4a);
+        color: var(--text-secondary, #a0a0b0);
+        font-size: 16px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: all .15s ease;
+      }
+      .puzzle-zoom-btn:hover {
+        background: var(--accent, #e94560); color: #fff;
+        border-color: var(--accent, #e94560);
+      }
+      .puzzle-zoom-level {
+        padding: 0 8px; line-height: 30px;
+        font-size: 11px; font-weight: 600;
+        color: var(--text-muted, #6a6a80);
+        background: var(--bg-tertiary, #0f3460);
+        border: 1px solid var(--border, #2a2a4a);
+        border-radius: var(--radius, 6px);
+        pointer-events: none;
       }
 
       /* Image upload area */
@@ -733,8 +782,16 @@ ${paths}  </g>
           </div>
           <div class="puzzle-preview" id="puzzlePreview">
             <div class="checkerboard"></div>
-            <div id="puzzleSvgContainer"></div>
-            <div class="puzzle-preview-hint">Live preview — adjust controls to update</div>
+            <div class="puzzle-preview-pan" id="puzzlePanLayer">
+              <div id="puzzleSvgContainer"></div>
+            </div>
+            <div class="puzzle-zoom-controls">
+              <button class="puzzle-zoom-btn" id="puzzleZoomIn" title="Zoom in">+</button>
+              <span class="puzzle-zoom-level" id="puzzleZoomLevel">100%</span>
+              <button class="puzzle-zoom-btn" id="puzzleZoomOut" title="Zoom out">&minus;</button>
+              <button class="puzzle-zoom-btn" id="puzzleZoomFit" title="Fit to view">&#8596;</button>
+            </div>
+            <div class="puzzle-preview-hint">Scroll to zoom • drag to pan</div>
           </div>
         </div>
         <div class="puzzle-footer">
@@ -976,6 +1033,101 @@ ${paths}  </g>
 
     // Initial render
     render();
+
+    // ── Zoom & Pan ─────────────────────────────────────────────────
+    const preview   = $('puzzlePreview');
+    const panLayer  = $('puzzlePanLayer');
+    const zoomLabel = $('puzzleZoomLevel');
+    let zoom = 1, panX = 0, panY = 0;
+    let isPanning = false, startX = 0, startY = 0, startPanX = 0, startPanY = 0;
+
+    function applyTransform() {
+      panLayer.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      zoomLabel.textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function clampZoom(z) { return Math.max(0.1, Math.min(10, z)); }
+
+    // Scroll to zoom (centered on cursor)
+    preview.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = preview.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const oldZoom = zoom;
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      zoom = clampZoom(zoom * delta);
+
+      // Adjust pan so zoom is centered on cursor
+      panX = mx - (mx - panX) * (zoom / oldZoom);
+      panY = my - (my - panY) * (zoom / oldZoom);
+      applyTransform();
+    }, { passive: false });
+
+    // Mouse drag to pan
+    preview.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      isPanning = true;
+      startX = e.clientX; startY = e.clientY;
+      startPanX = panX; startPanY = panY;
+      preview.classList.add('grabbing');
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!isPanning) return;
+      panX = startPanX + (e.clientX - startX);
+      panY = startPanY + (e.clientY - startY);
+      applyTransform();
+    });
+    window.addEventListener('mouseup', () => {
+      isPanning = false;
+      preview.classList.remove('grabbing');
+    });
+
+    // Touch drag to pan + pinch to zoom
+    let lastTouchDist = 0;
+    preview.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        isPanning = true;
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+        startPanX = panX; startPanY = panY;
+      } else if (e.touches.length === 2) {
+        isPanning = false;
+        lastTouchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    }, { passive: true });
+    preview.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && isPanning) {
+        panX = startPanX + (e.touches[0].clientX - startX);
+        panY = startPanY + (e.touches[0].clientY - startY);
+        applyTransform();
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (lastTouchDist > 0) {
+          zoom = clampZoom(zoom * (dist / lastTouchDist));
+          applyTransform();
+        }
+        lastTouchDist = dist;
+      }
+    }, { passive: true });
+    preview.addEventListener('touchend', () => { isPanning = false; lastTouchDist = 0; });
+
+    // Zoom buttons
+    $('puzzleZoomIn').addEventListener('click', () => {
+      zoom = clampZoom(zoom * 1.25); applyTransform();
+    });
+    $('puzzleZoomOut').addEventListener('click', () => {
+      zoom = clampZoom(zoom * 0.8); applyTransform();
+    });
+    $('puzzleZoomFit').addEventListener('click', () => {
+      zoom = 1; panX = 0; panY = 0; applyTransform();
+    });
   }
 
   // ─── Hook into LAZAR's Puzzle button ───────────────────────────────
