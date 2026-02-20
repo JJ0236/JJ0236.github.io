@@ -81,33 +81,45 @@
   /**
    * Returns an array of { x, y, r, g, b, a } in mm coordinates.
    *
+   * Area-samples the pixels under each gem footprint so that
+   * gems trace lines faithfully – the line is "made of" gems.
+   *
    * @param {Object} opts
    *   imageData  – ImageData from canvas
    *   imgW, imgH – pixel dimensions of the sampled image
    *   widthMM, heightMM – physical size (mm)
    *   gemDiameter – in mm
+   *   gap        – 0-1 multiplier: 0 = gems touching, 1 = one-diameter gap
    *   gridType   – 'square' | 'hex'
    *   mode       – 'threshold' | 'edge' | 'fill'
-   *   threshold  – 0-255 brightness cutoff (threshold) or edge sensitivity
+   *   threshold  – 0-255 brightness cutoff or edge sensitivity
    *   edgeData   – Float32Array from sobelEdges() (only for 'edge' mode)
    */
   function computeGemPositions(opts) {
     const {
       imageData, imgW, imgH,
       widthMM, heightMM, gemDiameter,
-      gridType, mode, threshold, edgeData,
+      gap, gridType, mode, threshold, edgeData,
     } = opts;
 
     const src = imageData.data;
-    const spacing = gemDiameter;
     const radius = gemDiameter / 2;
+    // spacing = diameter + gap fraction of diameter
+    // gap 0  → gems touching (spacing = diameter)
+    // gap 1  → one full diameter between gems
+    const spacing = gemDiameter * (1 + (gap || 0));
     const rowSpacing = gridType === 'hex'
       ? spacing * Math.sqrt(3) / 2
       : spacing;
-    const cols = Math.floor(widthMM / spacing);
-    const rows = Math.floor(heightMM / rowSpacing);
+    const cols = Math.max(1, Math.floor(widthMM / spacing));
+    const rows = Math.max(1, Math.floor(heightMM / rowSpacing));
     const scaleX = imgW / widthMM;
     const scaleY = imgH / heightMM;
+
+    // Pixel radius of the gem footprint for area sampling
+    const gemPxR = Math.max(1, Math.round(radius * Math.min(scaleX, scaleY)));
+    // Sample step (skip pixels for speed when gem covers many px)
+    const step = Math.max(1, Math.floor(gemPxR / 4));
 
     const positions = [];
 
@@ -120,25 +132,53 @@
         const xMM = radius + hexOffset + col * spacing;
         if (xMM + radius > widthMM || yMM + radius > heightMM) continue;
 
-        // Map to image pixel
-        const ix = Math.min(Math.round(xMM * scaleX), imgW - 1);
-        const iy = Math.min(Math.round(yMM * scaleY), imgH - 1);
-        const idx = (iy * imgW + ix) * 4;
-        const r = src[idx], g = src[idx + 1], b = src[idx + 2], a = src[idx + 3];
+        // Centre pixel
+        const cx = Math.round(xMM * scaleX);
+        const cy = Math.round(yMM * scaleY);
 
-        if (a < 10) continue; // skip fully transparent
+        // Area-average over the circular gem footprint
+        let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
+        let brSum = 0, edgeSum = 0, count = 0;
+        const r2 = gemPxR * gemPxR;
+
+        for (let dy = -gemPxR; dy <= gemPxR; dy += step) {
+          for (let dx = -gemPxR; dx <= gemPxR; dx += step) {
+            if (dx * dx + dy * dy > r2) continue;   // circle mask
+            const px = cx + dx, py = cy + dy;
+            if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
+            const idx = (py * imgW + px) * 4;
+            rSum += src[idx];
+            gSum += src[idx + 1];
+            bSum += src[idx + 2];
+            aSum += src[idx + 3];
+            brSum += brightness(src[idx], src[idx + 1], src[idx + 2]);
+            if (edgeData) edgeSum += edgeData[py * imgW + px];
+            count++;
+          }
+        }
+        if (count === 0) continue;
+
+        const avgA = aSum / count;
+        if (avgA < 10) continue;  // fully transparent area
+
+        const avgR = Math.round(rSum / count);
+        const avgG = Math.round(gSum / count);
+        const avgB = Math.round(bSum / count);
+        const avgBr = brSum / count;
+        const avgEdge = edgeSum / count;
 
         let place = false;
         if (mode === 'fill') {
           place = true;
         } else if (mode === 'threshold') {
-          place = brightness(r, g, b) < threshold;
+          // Place gem if the area under it is dark enough
+          place = avgBr < threshold;
         } else if (mode === 'edge') {
-          const ev = edgeData ? edgeData[iy * imgW + ix] : 0;
-          place = (ev / 442) > (1 - threshold / 255);
+          // Place gem if the area under it has strong edges
+          place = (avgEdge / 442) > (1 - threshold / 255);
         }
 
-        if (place) positions.push({ x: xMM, y: yMM, r, g, b, a });
+        if (place) positions.push({ x: xMM, y: yMM, r: avgR, g: avgG, b: avgB, a: Math.round(avgA) });
       }
     }
     return positions;
@@ -603,6 +643,15 @@
         </div>
       </div>
 
+      <!-- Gap slider -->
+      <div class="bedazzle-control-group">
+        <label>Gap Between Gems</label>
+        <div class="bedazzle-control-row">
+          <input type="range" id="bdzGap" min="0" max="100" value="0">
+          <span class="bdz-val" id="bdzGapVal">0%</span>
+        </div>
+      </div>
+
       <hr class="bedazzle-sep">
 
       <!-- Preview options -->
@@ -696,6 +745,8 @@
     const thresholdGroup  = $('#bdzThresholdGroup');
     const thresholdInput  = $('#bdzThreshold');
     const thresholdVal    = $('#bdzThresholdVal');
+    const gapInput        = $('#bdzGap');
+    const gapVal          = $('#bdzGapVal');
     const showImageCB     = $('#bdzShowImage');
     const colorizeCB      = $('#bdzColorize');
     const statsEl         = $('#bdzStats');
@@ -755,6 +806,8 @@
         edgeMag = sobelEdges(pixelInfo.data, pixelInfo.w, pixelInfo.h);
       }
 
+      const gapFrac = parseInt(gapInput.value, 10) / 100;
+
       lastPositions = computeGemPositions({
         imageData: pixelInfo.data,
         imgW: pixelInfo.w,
@@ -762,6 +815,7 @@
         widthMM,
         heightMM,
         gemDiameter: gemD,
+        gap: gapFrac,
         gridType,
         mode,
         threshold: parseInt(thresholdInput.value, 10),
@@ -819,10 +873,11 @@
     }
 
     function computeTotalSlots(wMM, hMM, gemD, grid) {
-      const spacing = gemD;
+      const gapFrac = parseInt(gapInput.value, 10) / 100;
+      const spacing = gemD * (1 + gapFrac);
       const rowSp = grid === 'hex' ? spacing * Math.sqrt(3) / 2 : spacing;
-      const cols = Math.floor(wMM / spacing);
-      const rows = Math.floor(hMM / rowSp);
+      const cols = Math.max(1, Math.floor(wMM / spacing));
+      const rows = Math.max(1, Math.floor(hMM / rowSp));
       if (grid === 'hex') {
         const fullRows = Math.ceil(rows / 2);
         const oddRows = Math.floor(rows / 2);
@@ -894,7 +949,7 @@
         const img = new Image();
         img.onload = () => {
           srcImage = img;
-          pixelInfo = imageToPixels(img, 1024);
+          pixelInfo = imageToPixels(img, 2048);
           edgeMag = null; // invalidate
           fileNameEl.textContent = file.name;
 
@@ -915,7 +970,7 @@
       const img = new Image();
       img.onload = () => {
         srcImage = img;
-        pixelInfo = imageToPixels(img, 1024);
+        pixelInfo = imageToPixels(img, 2048);
         edgeMag = null;
         fileNameEl.textContent = name || 'LAZAR canvas';
 
@@ -969,6 +1024,11 @@
 
     thresholdInput.addEventListener('input', () => {
       thresholdVal.textContent = thresholdInput.value;
+      scheduleRender();
+    });
+
+    gapInput.addEventListener('input', () => {
+      gapVal.textContent = gapInput.value + '%';
       scheduleRender();
     });
 
