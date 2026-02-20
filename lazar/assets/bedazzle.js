@@ -46,71 +46,51 @@
     return { data: ctx.getImageData(0, 0, w, h), w, h };
   }
 
-  /** 1-D Gaussian kernel (normalised). */
-  function gaussKernel(sigma) {
-    const r = Math.ceil(sigma * 2.5);
-    const k = [];
-    let sum = 0;
-    for (let i = -r; i <= r; i++) {
-      const v = Math.exp(-(i * i) / (2 * sigma * sigma));
-      k.push(v);
-      sum += v;
-    }
-    for (let i = 0; i < k.length; i++) k[i] /= sum;
-    return { kernel: k, radius: r };
+  /**
+   * Downsample an image to exactly cols×rows using averaged box sampling.
+   * Returns an ImageData-like object with .data (Uint8ClampedArray), .w, .h
+   * where each pixel = one gem slot.
+   */
+  function downsampleToGrid(srcImg, cols, rows) {
+    const canvas = document.createElement('canvas');
+    canvas.width = cols;
+    canvas.height = rows;
+    const ctx = canvas.getContext('2d');
+    // Use high-quality downscaling (browser's built-in bilinear/bicubic)
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(srcImg, 0, 0, cols, rows);
+    const id = ctx.getImageData(0, 0, cols, rows);
+    return { data: id, w: cols, h: rows };
   }
 
-  /** Separable Gaussian blur on a Float32Array [w×h]. */
-  function gaussBlur(src, w, h, sigma) {
-    if (sigma < 0.5) return src.slice();
-    const { kernel, radius } = gaussKernel(sigma);
-    const tmp = new Float32Array(w * h);
+  /**
+   * Build a brightness map from downsampled ImageData.
+   * Returns Float32Array [0-255] of size w*h.
+   */
+  function brightnessMap(imageData, w, h) {
+    const src = imageData.data;
     const out = new Float32Array(w * h);
-    // horizontal
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let v = 0;
-        for (let k = -radius; k <= radius; k++) {
-          const sx = Math.min(w - 1, Math.max(0, x + k));
-          v += src[y * w + sx] * kernel[k + radius];
-        }
-        tmp[y * w + x] = v;
-      }
-    }
-    // vertical
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let v = 0;
-        for (let k = -radius; k <= radius; k++) {
-          const sy = Math.min(h - 1, Math.max(0, y + k));
-          v += tmp[sy * w + x] * kernel[k + radius];
-        }
-        out[y * w + x] = v;
-      }
+    for (let i = 0; i < w * h; i++) {
+      const j = i * 4;
+      out[i] = brightness(src[j], src[j + 1], src[j + 2]);
     }
     return out;
   }
 
-  /** Sobel edge-magnitude map → Float32Array [0 – ~442]. */
-  function sobelEdges(imageData, w, h) {
-    const src = imageData.data;
-    const gray = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) {
-      const j = i * 4;
-      gray[i] = brightness(src[j], src[j + 1], src[j + 2]);
-    }
-    // Pre-blur to reduce noise (sigma relative to image size)
-    const sigma = Math.max(1, Math.min(w, h) / 300);
-    const blurred = gaussBlur(gray, w, h, sigma);
+  /**
+   * Sobel edge-magnitude on a brightness map → Float32Array.
+   */
+  function sobelOnBrightness(gray, w, h) {
     const out = new Float32Array(w * h);
-    const gx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
-    const gy = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
+    const gx = [-1,0,1,-2,0,2,-1,0,1];
+    const gy = [-1,-2,-1,0,0,0,1,2,1];
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         let sx = 0, sy = 0;
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
-            const v = blurred[(y + ky) * w + (x + kx)];
+            const v = gray[(y + ky) * w + (x + kx)];
             const ki = (ky + 1) * 3 + (kx + 1);
             sx += v * gx[ki];
             sy += v * gy[ki];
@@ -122,51 +102,6 @@
     return out;
   }
 
-  /**
-   * Build a binary edge mask (Uint8Array, 0/1) from the Sobel magnitude map.
-   * `sensitivity` 0-255 controls the threshold: higher = more edges detected.
-   * `dilateR` is the dilation radius in pixels — expands edges so gems
-   * form continuous lines.
-   */
-  function buildEdgeMask(edgeMag, w, h, sensitivity, dilateR) {
-    // Normalise edge map to 0-255
-    let maxE = 0;
-    for (let i = 0; i < edgeMag.length; i++) if (edgeMag[i] > maxE) maxE = edgeMag[i];
-    if (maxE === 0) maxE = 1;
-    const scale = 255 / maxE;
-
-    // Threshold: lower sensitivity value = only strong edges; higher = more edges
-    const thresh = 255 - sensitivity;
-    const binary = new Uint8Array(w * h);
-    for (let i = 0; i < edgeMag.length; i++) {
-      binary[i] = (edgeMag[i] * scale) >= thresh ? 1 : 0;
-    }
-
-    if (dilateR <= 0) return binary;
-
-    // Dilate using a circular structuring element
-    const dilated = new Uint8Array(w * h);
-    const r2 = dilateR * dilateR;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (binary[y * w + x]) {
-          // Stamp circle
-          for (let dy = -dilateR; dy <= dilateR; dy++) {
-            const py = y + dy;
-            if (py < 0 || py >= h) continue;
-            for (let dx = -dilateR; dx <= dilateR; dx++) {
-              if (dx * dx + dy * dy > r2) continue;
-              const px = x + dx;
-              if (px < 0 || px >= w) continue;
-              dilated[py * w + px] = 1;
-            }
-          }
-        }
-      }
-    }
-    return dilated;
-  }
-
   /* ═══════════════════════════════════════════════════════════════════
      GEM POSITION COMPUTATION
      ═══════════════════════════════════════════════════════════════════ */
@@ -174,29 +109,19 @@
   /**
    * Returns an array of { x, y, r, g, b, a } in mm coordinates.
    *
-   * Area-samples the pixels under each gem footprint so that
-   * gems trace lines faithfully – the line is "made of" gems.
-   *
-   * @param {Object} opts
-   *   imageData  – ImageData from canvas
-   *   imgW, imgH – pixel dimensions of the sampled image
-   *   widthMM, heightMM – physical size (mm)
-   *   gemDiameter – in mm
-   *   gap        – 0-1 multiplier: 0 = gems touching, 1 = one-diameter gap
-   *   gridType   – 'square' | 'hex'
-   *   mode       – 'threshold' | 'edge' | 'fill'
-   *   threshold  – 0-255 brightness cutoff or edge sensitivity
-   *   edgeData   – Float32Array from sobelEdges() (only for 'edge' mode)
+   * The KEY IDEA: we downsample the source image to exactly the gem grid
+   * resolution (cols × rows pixels).  Each pixel in that tiny image maps
+   * 1-to-1 to a gem slot.  This means a line in the original image that
+   * is "one gem wide" in physical space will be exactly 1 px wide in the
+   * downsampled image — so gems trace lines faithfully.
    */
   function computeGemPositions(opts) {
     const {
-      imageData, imgW, imgH,
+      srcImg,              // HTMLImageElement (original)
       widthMM, heightMM, gemDiameter,
       gap, gridType, mode, threshold,
-      edgeMask,            // Uint8Array 0/1 (edge mode)
     } = opts;
 
-    const src = imageData.data;
     const radius = gemDiameter / 2;
     const spacing = gemDiameter * (1 + (gap || 0));
     const rowSpacing = gridType === 'hex'
@@ -204,12 +129,24 @@
       : spacing;
     const cols = Math.max(1, Math.floor(widthMM / spacing));
     const rows = Math.max(1, Math.floor(heightMM / rowSpacing));
-    const scaleX = imgW / widthMM;
-    const scaleY = imgH / heightMM;
 
-    // Pixel radius for area-sampling colour under each gem
-    const gemPxR = Math.max(1, Math.round(radius * Math.min(scaleX, scaleY)));
-    const step = Math.max(1, Math.floor(gemPxR / 4));
+    // Downsample source image to grid resolution
+    const ds = downsampleToGrid(srcImg, cols, rows);
+    const px = ds.data.data;  // Uint8ClampedArray [r,g,b,a,...]
+    const bMap = brightnessMap(ds.data, cols, rows);
+
+    // For edge mode, run sobel on the grid-res image
+    let edgeMap = null;
+    if (mode === 'edge') {
+      edgeMap = sobelOnBrightness(bMap, cols, rows);
+      // Normalise to 0-255
+      let maxE = 0;
+      for (let i = 0; i < edgeMap.length; i++) if (edgeMap[i] > maxE) maxE = edgeMap[i];
+      if (maxE > 0) {
+        const s = 255 / maxE;
+        for (let i = 0; i < edgeMap.length; i++) edgeMap[i] *= s;
+      }
+    }
 
     const positions = [];
 
@@ -222,66 +159,24 @@
         const xMM = radius + hexOffset + col * spacing;
         if (xMM + radius > widthMM || yMM + radius > heightMM) continue;
 
-        const cx = Math.round(xMM * scaleX);
-        const cy = Math.round(yMM * scaleY);
+        const pi = (row * cols + col) * 4;
+        const r = px[pi], g = px[pi + 1], b = px[pi + 2], a = px[pi + 3];
 
-        // ── Placement decision ──
+        if (a < 10) continue;
+
+        const br = bMap[row * cols + col];
+
         let place = false;
-
-        if (mode === 'edge') {
-          // Use the pre-computed dilated edge mask — just check centre pixel
-          if (edgeMask) {
-            const mx = Math.min(cx, imgW - 1);
-            const my = Math.min(cy, imgH - 1);
-            place = edgeMask[my * imgW + mx] === 1;
-          }
-        } else if (mode === 'fill') {
+        if (mode === 'fill') {
           place = true;
-        } else {
-          // threshold — area-average brightness
-          let brSum = 0, aSum = 0, cnt = 0;
-          const r2 = gemPxR * gemPxR;
-          for (let dy = -gemPxR; dy <= gemPxR; dy += step) {
-            for (let dx = -gemPxR; dx <= gemPxR; dx += step) {
-              if (dx * dx + dy * dy > r2) continue;
-              const px = cx + dx, py = cy + dy;
-              if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
-              const idx = (py * imgW + px) * 4;
-              brSum += brightness(src[idx], src[idx + 1], src[idx + 2]);
-              aSum += src[idx + 3];
-              cnt++;
-            }
-          }
-          if (cnt === 0) continue;
-          if (aSum / cnt < 10) continue;
-          place = (brSum / cnt) < threshold;
+        } else if (mode === 'threshold') {
+          place = br < threshold;
+        } else if (mode === 'edge') {
+          // Place gem if this grid cell has a strong edge
+          place = edgeMap[row * cols + col] >= (255 - threshold);
         }
 
-        if (!place) continue;
-
-        // ── Colour sampling ──
-        let rSum = 0, gSum = 0, bSum = 0, aSum2 = 0, cnt2 = 0;
-        const r2c = gemPxR * gemPxR;
-        for (let dy = -gemPxR; dy <= gemPxR; dy += step) {
-          for (let dx = -gemPxR; dx <= gemPxR; dx += step) {
-            if (dx * dx + dy * dy > r2c) continue;
-            const px = cx + dx, py = cy + dy;
-            if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
-            const idx = (py * imgW + px) * 4;
-            rSum += src[idx]; gSum += src[idx + 1]; bSum += src[idx + 2];
-            aSum2 += src[idx + 3]; cnt2++;
-          }
-        }
-        if (cnt2 === 0) continue;
-        if (aSum2 / cnt2 < 10) continue;
-
-        positions.push({
-          x: xMM, y: yMM,
-          r: Math.round(rSum / cnt2),
-          g: Math.round(gSum / cnt2),
-          b: Math.round(bSum / cnt2),
-          a: Math.round(aSum2 / cnt2),
-        });
+        if (place) positions.push({ x: xMM, y: yMM, r, g, b, a });
       }
     }
     return positions;
@@ -746,15 +641,6 @@
         </div>
       </div>
 
-      <!-- Edge Width slider (edge mode only) -->
-      <div class="bedazzle-control-group" id="bdzEdgeWidthGroup">
-        <label>Line Width (gem rows)</label>
-        <div class="bedazzle-control-row">
-          <input type="range" id="bdzEdgeWidth" min="1" max="8" value="2" step="0.5">
-          <span class="bdz-val" id="bdzEdgeWidthVal">2</span>
-        </div>
-      </div>
-
       <!-- Gap slider -->
       <div class="bedazzle-control-group">
         <label>Gap Between Gems</label>
@@ -858,9 +744,6 @@
     const thresholdInput  = $('#bdzThreshold');
     const thresholdVal    = $('#bdzThresholdVal');
     const thresholdLabel  = $('#bdzThresholdLabel');
-    const edgeWidthGroup  = $('#bdzEdgeWidthGroup');
-    const edgeWidthInput  = $('#bdzEdgeWidth');
-    const edgeWidthVal    = $('#bdzEdgeWidthVal');
     const gapInput        = $('#bdzGap');
     const gapVal          = $('#bdzGapVal');
     const showImageCB     = $('#bdzShowImage');
@@ -880,8 +763,6 @@
     // ── state ──
     let srcImage = null;          // HTMLImageElement
     let srcDataURL = null;        // data-url string
-    let pixelInfo = null;         // { data, w, h }
-    let edgeMag = null;           // Float32Array (cached)
     let lastPositions = [];
     let lastSVG = '';
 
@@ -911,35 +792,15 @@
 
     // ── RENDER ──
     function render() {
-      if (!pixelInfo) return;
+      if (!srcImage) return;
 
       const widthMM  = getWidthMM();
       const heightMM = getHeightMM();
       const gemD     = getGemDiameter();
-
-      // Compute edge map + dilated mask if in edge mode
-      if (mode === 'edge') {
-        if (!edgeMag) {
-          edgeMag = sobelEdges(pixelInfo.data, pixelInfo.w, pixelInfo.h);
-        }
-        // Dilation radius = edge-width (in gem rows) × gem pixel radius
-        const gemPxR = Math.max(1,
-          Math.round((gemD / 2) * Math.min(pixelInfo.w / widthMM, pixelInfo.h / heightMM)));
-        const edgeWidthRows = parseFloat(edgeWidthInput.value) || 2;
-        const dilateR = Math.round(gemPxR * edgeWidthRows);
-        var edgeMask = buildEdgeMask(
-          edgeMag, pixelInfo.w, pixelInfo.h,
-          parseInt(thresholdInput.value, 10),
-          dilateR
-        );
-      }
-
-      const gapFrac = parseInt(gapInput.value, 10) / 100;
+      const gapFrac  = parseInt(gapInput.value, 10) / 100;
 
       lastPositions = computeGemPositions({
-        imageData: pixelInfo.data,
-        imgW: pixelInfo.w,
-        imgH: pixelInfo.h,
+        srcImg: srcImage,
         widthMM,
         heightMM,
         gemDiameter: gemD,
@@ -947,7 +808,6 @@
         gridType,
         mode,
         threshold: parseInt(thresholdInput.value, 10),
-        edgeMask: edgeMask || null,
       });
 
       // Preview stroke: visible thickness
@@ -1077,8 +937,6 @@
         const img = new Image();
         img.onload = () => {
           srcImage = img;
-          pixelInfo = imageToPixels(img, 2048);
-          edgeMag = null; // invalidate
           fileNameEl.textContent = file.name;
 
           // Auto-set dimensions preserving aspect
@@ -1098,8 +956,6 @@
       const img = new Image();
       img.onload = () => {
         srcImage = img;
-        pixelInfo = imageToPixels(img, 2048);
-        edgeMag = null;
         fileNameEl.textContent = name || 'LAZAR canvas';
 
         const aspect = img.naturalWidth / img.naturalHeight;
@@ -1148,15 +1004,10 @@
     widthInput.addEventListener('input', scheduleRender);
     heightInput.addEventListener('input', scheduleRender);
     unitSelect.addEventListener('change', scheduleRender);
-    gemSelect.addEventListener('change', () => { edgeMag = null; scheduleRender(); });
+    gemSelect.addEventListener('change', () => { scheduleRender(); });
 
     thresholdInput.addEventListener('input', () => {
       thresholdVal.textContent = thresholdInput.value;
-      scheduleRender();
-    });
-
-    edgeWidthInput.addEventListener('input', () => {
-      edgeWidthVal.textContent = edgeWidthInput.value;
       scheduleRender();
     });
 
@@ -1187,14 +1038,13 @@
       mode = chip.dataset.mode;
       // Show/hide controls per mode
       thresholdGroup.style.display = (mode === 'fill') ? 'none' : '';
-      edgeWidthGroup.style.display = (mode === 'edge') ? '' : 'none';
       thresholdLabel.textContent = mode === 'edge' ? 'Edge Sensitivity' : 'Threshold';
       scheduleRender();
     });
 
     // ── Download SVG ──
     downloadBtn.addEventListener('click', () => {
-      if (!pixelInfo) return;
+      if (!srcImage) return;
 
       const widthMM  = getWidthMM();
       const heightMM = getHeightMM();
