@@ -102,6 +102,76 @@
     return out;
   }
 
+  /**
+   * Detect edges at HIGH resolution using Sobel.
+   * Returns { edges: Float32Array (normalised 0-255), w, h }.
+   */
+  function getHighResEdges(srcImg, maxDim) {
+    const canvas = document.createElement('canvas');
+    let w = srcImg.naturalWidth || srcImg.width;
+    let h = srcImg.naturalHeight || srcImg.height;
+    if (maxDim && Math.max(w, h) > maxDim) {
+      const s = maxDim / Math.max(w, h);
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(srcImg, 0, 0, w, h);
+    const id = ctx.getImageData(0, 0, w, h);
+    const src = id.data;
+
+    // Grayscale
+    const gray = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) {
+      const j = i * 4;
+      gray[i] = 0.299 * src[j] + 0.587 * src[j + 1] + 0.114 * src[j + 2];
+    }
+
+    // Sobel at full resolution
+    const edges = sobelOnBrightness(gray, w, h);
+
+    // Normalise to 0-255
+    let maxE = 0;
+    for (let i = 0; i < edges.length; i++) if (edges[i] > maxE) maxE = edges[i];
+    if (maxE > 0) {
+      const s = 255 / maxE;
+      for (let i = 0; i < edges.length; i++) edges[i] = Math.min(255, edges[i] * s);
+    }
+
+    return { edges, w, h };
+  }
+
+  /**
+   * Max-pool a value map from srcW×srcH down to gridCols×gridRows.
+   * Each grid cell gets the MAXIMUM value of all source pixels it covers,
+   * so even a single edge pixel in the block will register.
+   */
+  function maxPoolToGrid(values, srcW, srcH, gridCols, gridRows) {
+    const out = new Float32Array(gridCols * gridRows);
+    const blockW = srcW / gridCols;
+    const blockH = srcH / gridRows;
+
+    for (let gy = 0; gy < gridRows; gy++) {
+      const y0 = Math.floor(gy * blockH);
+      const y1 = Math.min(srcH, Math.ceil((gy + 1) * blockH));
+      for (let gx = 0; gx < gridCols; gx++) {
+        const x0 = Math.floor(gx * blockW);
+        const x1 = Math.min(srcW, Math.ceil((gx + 1) * blockW));
+        let maxVal = 0;
+        for (let py = y0; py < y1; py++) {
+          for (let px = x0; px < x1; px++) {
+            const v = values[py * srcW + px];
+            if (v > maxVal) maxVal = v;
+          }
+        }
+        out[gy * gridCols + gx] = maxVal;
+      }
+    }
+    return out;
+  }
+
   /* ═══════════════════════════════════════════════════════════════════
      GEM POSITION COMPUTATION
      ═══════════════════════════════════════════════════════════════════ */
@@ -130,22 +200,18 @@
     const cols = Math.max(1, Math.floor(widthMM / spacing));
     const rows = Math.max(1, Math.floor(heightMM / rowSpacing));
 
-    // Downsample source image to grid resolution
+    // Downsample source image to grid resolution for color sampling
     const ds = downsampleToGrid(srcImg, cols, rows);
     const px = ds.data.data;  // Uint8ClampedArray [r,g,b,a,...]
     const bMap = brightnessMap(ds.data, cols, rows);
 
-    // For edge mode, run sobel on the grid-res image
-    let edgeMap = null;
+    // For edge mode: detect edges at HIGH resolution, THEN max-pool to grid.
+    // This prevents the blurring that happens when you downsample first:
+    // solid dark interiors stay at Sobel=0, only real boundaries light up.
+    let edgeGrid = null;
     if (mode === 'edge') {
-      edgeMap = sobelOnBrightness(bMap, cols, rows);
-      // Normalise to 0-255
-      let maxE = 0;
-      for (let i = 0; i < edgeMap.length; i++) if (edgeMap[i] > maxE) maxE = edgeMap[i];
-      if (maxE > 0) {
-        const s = 255 / maxE;
-        for (let i = 0; i < edgeMap.length; i++) edgeMap[i] *= s;
-      }
+      const hiRes = getHighResEdges(srcImg, 1024);
+      edgeGrid = maxPoolToGrid(hiRes.edges, hiRes.w, hiRes.h, cols, rows);
     }
 
     const positions = [];
@@ -159,21 +225,20 @@
         const xMM = radius + hexOffset + col * spacing;
         if (xMM + radius > widthMM || yMM + radius > heightMM) continue;
 
-        const pi = (row * cols + col) * 4;
+        const idx = row * cols + col;
+        const pi = idx * 4;
         const r = px[pi], g = px[pi + 1], b = px[pi + 2], a = px[pi + 3];
 
         if (a < 10) continue;
-
-        const br = bMap[row * cols + col];
 
         let place = false;
         if (mode === 'fill') {
           place = true;
         } else if (mode === 'threshold') {
-          place = br < threshold;
+          place = bMap[idx] < threshold;
         } else if (mode === 'edge') {
-          // Place gem if this grid cell has a strong edge
-          place = edgeMap[row * cols + col] >= (255 - threshold);
+          // Place gem if this grid cell overlaps a real high-res edge
+          place = edgeGrid[idx] >= (255 - threshold);
         }
 
         if (place) positions.push({ x: xMM, y: yMM, r, g, b, a });
