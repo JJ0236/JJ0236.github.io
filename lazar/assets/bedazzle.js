@@ -46,7 +46,52 @@
     return { data: ctx.getImageData(0, 0, w, h), w, h };
   }
 
-  /** Sobel edge-magnitude map (0 – ~442). */
+  /** 1-D Gaussian kernel (normalised). */
+  function gaussKernel(sigma) {
+    const r = Math.ceil(sigma * 2.5);
+    const k = [];
+    let sum = 0;
+    for (let i = -r; i <= r; i++) {
+      const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+      k.push(v);
+      sum += v;
+    }
+    for (let i = 0; i < k.length; i++) k[i] /= sum;
+    return { kernel: k, radius: r };
+  }
+
+  /** Separable Gaussian blur on a Float32Array [w×h]. */
+  function gaussBlur(src, w, h, sigma) {
+    if (sigma < 0.5) return src.slice();
+    const { kernel, radius } = gaussKernel(sigma);
+    const tmp = new Float32Array(w * h);
+    const out = new Float32Array(w * h);
+    // horizontal
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = 0;
+        for (let k = -radius; k <= radius; k++) {
+          const sx = Math.min(w - 1, Math.max(0, x + k));
+          v += src[y * w + sx] * kernel[k + radius];
+        }
+        tmp[y * w + x] = v;
+      }
+    }
+    // vertical
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = 0;
+        for (let k = -radius; k <= radius; k++) {
+          const sy = Math.min(h - 1, Math.max(0, y + k));
+          v += tmp[sy * w + x] * kernel[k + radius];
+        }
+        out[y * w + x] = v;
+      }
+    }
+    return out;
+  }
+
+  /** Sobel edge-magnitude map → Float32Array [0 – ~442]. */
   function sobelEdges(imageData, w, h) {
     const src = imageData.data;
     const gray = new Float32Array(w * h);
@@ -54,6 +99,9 @@
       const j = i * 4;
       gray[i] = brightness(src[j], src[j + 1], src[j + 2]);
     }
+    // Pre-blur to reduce noise (sigma relative to image size)
+    const sigma = Math.max(1, Math.min(w, h) / 300);
+    const blurred = gaussBlur(gray, w, h, sigma);
     const out = new Float32Array(w * h);
     const gx = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
     const gy = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
@@ -62,7 +110,7 @@
         let sx = 0, sy = 0;
         for (let ky = -1; ky <= 1; ky++) {
           for (let kx = -1; kx <= 1; kx++) {
-            const v = gray[(y + ky) * w + (x + kx)];
+            const v = blurred[(y + ky) * w + (x + kx)];
             const ki = (ky + 1) * 3 + (kx + 1);
             sx += v * gx[ki];
             sy += v * gy[ki];
@@ -72,6 +120,51 @@
       }
     }
     return out;
+  }
+
+  /**
+   * Build a binary edge mask (Uint8Array, 0/1) from the Sobel magnitude map.
+   * `sensitivity` 0-255 controls the threshold: higher = more edges detected.
+   * `dilateR` is the dilation radius in pixels — expands edges so gems
+   * form continuous lines.
+   */
+  function buildEdgeMask(edgeMag, w, h, sensitivity, dilateR) {
+    // Normalise edge map to 0-255
+    let maxE = 0;
+    for (let i = 0; i < edgeMag.length; i++) if (edgeMag[i] > maxE) maxE = edgeMag[i];
+    if (maxE === 0) maxE = 1;
+    const scale = 255 / maxE;
+
+    // Threshold: lower sensitivity value = only strong edges; higher = more edges
+    const thresh = 255 - sensitivity;
+    const binary = new Uint8Array(w * h);
+    for (let i = 0; i < edgeMag.length; i++) {
+      binary[i] = (edgeMag[i] * scale) >= thresh ? 1 : 0;
+    }
+
+    if (dilateR <= 0) return binary;
+
+    // Dilate using a circular structuring element
+    const dilated = new Uint8Array(w * h);
+    const r2 = dilateR * dilateR;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (binary[y * w + x]) {
+          // Stamp circle
+          for (let dy = -dilateR; dy <= dilateR; dy++) {
+            const py = y + dy;
+            if (py < 0 || py >= h) continue;
+            for (let dx = -dilateR; dx <= dilateR; dx++) {
+              if (dx * dx + dy * dy > r2) continue;
+              const px = x + dx;
+              if (px < 0 || px >= w) continue;
+              dilated[py * w + px] = 1;
+            }
+          }
+        }
+      }
+    }
+    return dilated;
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -99,14 +192,12 @@
     const {
       imageData, imgW, imgH,
       widthMM, heightMM, gemDiameter,
-      gap, gridType, mode, threshold, edgeData,
+      gap, gridType, mode, threshold,
+      edgeMask,            // Uint8Array 0/1 (edge mode)
     } = opts;
 
     const src = imageData.data;
     const radius = gemDiameter / 2;
-    // spacing = diameter + gap fraction of diameter
-    // gap 0  → gems touching (spacing = diameter)
-    // gap 1  → one full diameter between gems
     const spacing = gemDiameter * (1 + (gap || 0));
     const rowSpacing = gridType === 'hex'
       ? spacing * Math.sqrt(3) / 2
@@ -116,9 +207,8 @@
     const scaleX = imgW / widthMM;
     const scaleY = imgH / heightMM;
 
-    // Pixel radius of the gem footprint for area sampling
+    // Pixel radius for area-sampling colour under each gem
     const gemPxR = Math.max(1, Math.round(radius * Math.min(scaleX, scaleY)));
-    // Sample step (skip pixels for speed when gem covers many px)
     const step = Math.max(1, Math.floor(gemPxR / 4));
 
     const positions = [];
@@ -132,53 +222,66 @@
         const xMM = radius + hexOffset + col * spacing;
         if (xMM + radius > widthMM || yMM + radius > heightMM) continue;
 
-        // Centre pixel
         const cx = Math.round(xMM * scaleX);
         const cy = Math.round(yMM * scaleY);
 
-        // Area-average over the circular gem footprint
-        let rSum = 0, gSum = 0, bSum = 0, aSum = 0;
-        let brSum = 0, edgeSum = 0, count = 0;
-        const r2 = gemPxR * gemPxR;
+        // ── Placement decision ──
+        let place = false;
 
+        if (mode === 'edge') {
+          // Use the pre-computed dilated edge mask — just check centre pixel
+          if (edgeMask) {
+            const mx = Math.min(cx, imgW - 1);
+            const my = Math.min(cy, imgH - 1);
+            place = edgeMask[my * imgW + mx] === 1;
+          }
+        } else if (mode === 'fill') {
+          place = true;
+        } else {
+          // threshold — area-average brightness
+          let brSum = 0, aSum = 0, cnt = 0;
+          const r2 = gemPxR * gemPxR;
+          for (let dy = -gemPxR; dy <= gemPxR; dy += step) {
+            for (let dx = -gemPxR; dx <= gemPxR; dx += step) {
+              if (dx * dx + dy * dy > r2) continue;
+              const px = cx + dx, py = cy + dy;
+              if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
+              const idx = (py * imgW + px) * 4;
+              brSum += brightness(src[idx], src[idx + 1], src[idx + 2]);
+              aSum += src[idx + 3];
+              cnt++;
+            }
+          }
+          if (cnt === 0) continue;
+          if (aSum / cnt < 10) continue;
+          place = (brSum / cnt) < threshold;
+        }
+
+        if (!place) continue;
+
+        // ── Colour sampling ──
+        let rSum = 0, gSum = 0, bSum = 0, aSum2 = 0, cnt2 = 0;
+        const r2c = gemPxR * gemPxR;
         for (let dy = -gemPxR; dy <= gemPxR; dy += step) {
           for (let dx = -gemPxR; dx <= gemPxR; dx += step) {
-            if (dx * dx + dy * dy > r2) continue;   // circle mask
+            if (dx * dx + dy * dy > r2c) continue;
             const px = cx + dx, py = cy + dy;
             if (px < 0 || px >= imgW || py < 0 || py >= imgH) continue;
             const idx = (py * imgW + px) * 4;
-            rSum += src[idx];
-            gSum += src[idx + 1];
-            bSum += src[idx + 2];
-            aSum += src[idx + 3];
-            brSum += brightness(src[idx], src[idx + 1], src[idx + 2]);
-            if (edgeData) edgeSum += edgeData[py * imgW + px];
-            count++;
+            rSum += src[idx]; gSum += src[idx + 1]; bSum += src[idx + 2];
+            aSum2 += src[idx + 3]; cnt2++;
           }
         }
-        if (count === 0) continue;
+        if (cnt2 === 0) continue;
+        if (aSum2 / cnt2 < 10) continue;
 
-        const avgA = aSum / count;
-        if (avgA < 10) continue;  // fully transparent area
-
-        const avgR = Math.round(rSum / count);
-        const avgG = Math.round(gSum / count);
-        const avgB = Math.round(bSum / count);
-        const avgBr = brSum / count;
-        const avgEdge = edgeSum / count;
-
-        let place = false;
-        if (mode === 'fill') {
-          place = true;
-        } else if (mode === 'threshold') {
-          // Place gem if the area under it is dark enough
-          place = avgBr < threshold;
-        } else if (mode === 'edge') {
-          // Place gem if the area under it has strong edges
-          place = (avgEdge / 442) > (1 - threshold / 255);
-        }
-
-        if (place) positions.push({ x: xMM, y: yMM, r: avgR, g: avgG, b: avgB, a: Math.round(avgA) });
+        positions.push({
+          x: xMM, y: yMM,
+          r: Math.round(rSum / cnt2),
+          g: Math.round(gSum / cnt2),
+          b: Math.round(bSum / cnt2),
+          a: Math.round(aSum2 / cnt2),
+        });
       }
     }
     return positions;
@@ -628,18 +731,27 @@
       <div class="bedazzle-control-group">
         <label>Placement Mode</label>
         <div class="bedazzle-chips" id="bdzModeChips">
-          <button class="bedazzle-chip active" data-mode="threshold">Threshold</button>
-          <button class="bedazzle-chip" data-mode="edge">Edge</button>
+          <button class="bedazzle-chip" data-mode="threshold">Threshold</button>
+          <button class="bedazzle-chip active" data-mode="edge">Edge</button>
           <button class="bedazzle-chip" data-mode="fill">Fill</button>
         </div>
       </div>
 
-      <!-- Threshold slider -->
+      <!-- Sensitivity slider (edge + threshold modes) -->
       <div class="bedazzle-control-group" id="bdzThresholdGroup">
-        <label>Threshold</label>
+        <label id="bdzThresholdLabel">Edge Sensitivity</label>
         <div class="bedazzle-control-row">
-          <input type="range" id="bdzThreshold" min="0" max="255" value="128">
-          <span class="bdz-val" id="bdzThresholdVal">128</span>
+          <input type="range" id="bdzThreshold" min="0" max="255" value="160">
+          <span class="bdz-val" id="bdzThresholdVal">160</span>
+        </div>
+      </div>
+
+      <!-- Edge Width slider (edge mode only) -->
+      <div class="bedazzle-control-group" id="bdzEdgeWidthGroup">
+        <label>Line Width (gem rows)</label>
+        <div class="bedazzle-control-row">
+          <input type="range" id="bdzEdgeWidth" min="1" max="8" value="2" step="0.5">
+          <span class="bdz-val" id="bdzEdgeWidthVal">2</span>
         </div>
       </div>
 
@@ -745,6 +857,10 @@
     const thresholdGroup  = $('#bdzThresholdGroup');
     const thresholdInput  = $('#bdzThreshold');
     const thresholdVal    = $('#bdzThresholdVal');
+    const thresholdLabel  = $('#bdzThresholdLabel');
+    const edgeWidthGroup  = $('#bdzEdgeWidthGroup');
+    const edgeWidthInput  = $('#bdzEdgeWidth');
+    const edgeWidthVal    = $('#bdzEdgeWidthVal');
     const gapInput        = $('#bdzGap');
     const gapVal          = $('#bdzGapVal');
     const showImageCB     = $('#bdzShowImage');
@@ -770,7 +886,7 @@
     let lastSVG = '';
 
     let gridType = 'hex';
-    let mode = 'threshold';
+    let mode = 'edge';
     let zoom = 1;
     let panX = 0, panY = 0;
     let isPanning = false, panStartX = 0, panStartY = 0;
@@ -801,9 +917,21 @@
       const heightMM = getHeightMM();
       const gemD     = getGemDiameter();
 
-      // Compute edge data if needed
-      if (mode === 'edge' && !edgeMag) {
-        edgeMag = sobelEdges(pixelInfo.data, pixelInfo.w, pixelInfo.h);
+      // Compute edge map + dilated mask if in edge mode
+      if (mode === 'edge') {
+        if (!edgeMag) {
+          edgeMag = sobelEdges(pixelInfo.data, pixelInfo.w, pixelInfo.h);
+        }
+        // Dilation radius = edge-width (in gem rows) × gem pixel radius
+        const gemPxR = Math.max(1,
+          Math.round((gemD / 2) * Math.min(pixelInfo.w / widthMM, pixelInfo.h / heightMM)));
+        const edgeWidthRows = parseFloat(edgeWidthInput.value) || 2;
+        const dilateR = Math.round(gemPxR * edgeWidthRows);
+        var edgeMask = buildEdgeMask(
+          edgeMag, pixelInfo.w, pixelInfo.h,
+          parseInt(thresholdInput.value, 10),
+          dilateR
+        );
       }
 
       const gapFrac = parseInt(gapInput.value, 10) / 100;
@@ -819,7 +947,7 @@
         gridType,
         mode,
         threshold: parseInt(thresholdInput.value, 10),
-        edgeData: edgeMag,
+        edgeMask: edgeMask || null,
       });
 
       // Preview stroke: visible thickness
@@ -1027,6 +1155,11 @@
       scheduleRender();
     });
 
+    edgeWidthInput.addEventListener('input', () => {
+      edgeWidthVal.textContent = edgeWidthInput.value;
+      scheduleRender();
+    });
+
     gapInput.addEventListener('input', () => {
       gapVal.textContent = gapInput.value + '%';
       scheduleRender();
@@ -1052,10 +1185,10 @@
       modeChips.querySelectorAll('.bedazzle-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       mode = chip.dataset.mode;
-      // Show/hide threshold slider
+      // Show/hide controls per mode
       thresholdGroup.style.display = (mode === 'fill') ? 'none' : '';
-      thresholdGroup.querySelector('label').textContent =
-        mode === 'edge' ? 'Edge Sensitivity' : 'Threshold';
+      edgeWidthGroup.style.display = (mode === 'edge') ? '' : 'none';
+      thresholdLabel.textContent = mode === 'edge' ? 'Edge Sensitivity' : 'Threshold';
       scheduleRender();
     });
 
