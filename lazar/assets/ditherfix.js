@@ -1,209 +1,186 @@
 /**
- * LAZAR Dithering Stack Fix v3
+ * LAZAR Dithering Stack Fix v4
+ *
  * Prevents dithering from stacking when re-applied.
  *
- * Problem: Resize/crop/text operations bake the dithered display canvas (ye)
- *          back into the backup canvas (Ne). When "Apply Dithering" re-runs,
- *          it reads already-dithered data from Ne → stacking.
+ * Problem: Resize/crop/text operations read from the display canvas (ye,
+ *          which may contain dithered output) and write the result to the
+ *          backup canvas (Ne). When "Apply Dithering" re-runs, it reads
+ *          already-dithered data from Ne → stacking artefacts.
  *
- * Fix: Maintain a pristine copy of Ne (the backup canvas). Before each
- *      "Apply Dithering" click, restore Ne from the pristine copy so
- *      dithering always starts from undithered image data.
+ * Strategy (v4 — complete rewrite):
+ *   Instead of polling with rAF + fragile hasContent checks, we monkey-patch
+ *   CanvasRenderingContext2D.drawImage and .putImageData to detect writes
+ *   to the backup canvas (Ne, identified by style.display === "none").
  *
- * v3 changes:
- *   - Use getImageData/putImageData instead of drawImage for snapshot/restore
- *     to avoid premultiplied-alpha compositing bugs that caused black images
- *   - Added diagnostic logging (enable with: window.__DITHERFIX_DEBUG = true)
+ *   We track an `isDithered` flag ourselves. Whenever a CLEAN write lands
+ *   on the backup canvas (isDithered === false), we capture a pristine
+ *   snapshot via getImageData. Before each "Apply/Re-Apply Dithering"
+ *   click, we restore the snapshot to Ne so dithering always starts from
+ *   undithered pixel data.
+ *
+ * Advantages over v3:
+ *   - No rAF polling (zero per-frame overhead)
+ *   - No hasContent heuristic (dark images work)
+ *   - No 300ms timing delays / race conditions
+ *   - No MutationObserver
+ *   - Exact capture at the moment of write
+ *
+ * Debug: set  window.__DITHERFIX_DEBUG = true  in the console.
  */
 (function () {
   'use strict';
 
   /* ═══════════════════════════════════════════════════════════════════
-     CONFIG
+     DEBUG HELPERS
      ═══════════════════════════════════════════════════════════════════ */
   const DEBUG = () => window.__DITHERFIX_DEBUG === true;
-
-  function log(...args) {
-    if (DEBUG()) console.log('[ditherfix]', ...args);
-  }
-  function warn(...args) {
-    console.warn('[ditherfix]', ...args);
-  }
+  function log(...a) { if (DEBUG()) console.log('[ditherfix]', ...a); }
+  function warn(...a) { console.warn('[ditherfix]', ...a); }
 
   /* ═══════════════════════════════════════════════════════════════════
      STATE
      ═══════════════════════════════════════════════════════════════════ */
-  let pristineData = null;     // ImageData — raw pixel copy (no drawImage!)
-  let pristineW = 0;
-  let pristineH = 0;
-  let backupCanvas = null;     // Reference to Ne (the app's hidden backup canvas)
-  let prevW = 0;
-  let prevH = 0;
-  let snapshotReady = false;
-  let modalWasOpen = false;
+  let pristineData = null;   // ImageData — raw pixel snapshot
+  let pristineW    = 0;
+  let pristineH    = 0;
+  let isDithered   = false;  // has dithering been applied since last clean state?
+  let captureQueued = false; // prevents redundant captures in same microtask
+
+  /* ═══════════════════════════════════════════════════════════════════
+     ORIGINAL (UNPATCHED) CANVAS METHODS
+     ═══════════════════════════════════════════════════════════════════ */
+  const _drawImage    = CanvasRenderingContext2D.prototype.drawImage;
+  const _putImageData = CanvasRenderingContext2D.prototype.putImageData;
+  const _getImageData = CanvasRenderingContext2D.prototype.getImageData;
+  const _clearRect    = CanvasRenderingContext2D.prototype.clearRect;
 
   /* ═══════════════════════════════════════════════════════════════════
      HELPERS
      ═══════════════════════════════════════════════════════════════════ */
 
-  /** Find the app's hidden backup canvas (Ne) — it has style="display: none" */
+  /** Is this the hidden backup canvas (Ne)? */
+  function isBackup(canvas) {
+    return canvas &&
+           canvas.style.display === 'none' &&
+           canvas.width  > 0 &&
+           canvas.height > 0;
+  }
+
+  /** Find the backup canvas by iterating all <canvas> elements */
   function findBackupCanvas() {
-    const all = document.querySelectorAll('canvas');
-    for (const c of all) {
-      if (c.style.display === 'none' && c.width > 0 && c.height > 0) return c;
+    for (const c of document.querySelectorAll('canvas')) {
+      if (isBackup(c)) return c;
     }
     return null;
   }
 
-  /** Find the dithering button */
-  function findDitherButton() {
-    const buttons = document.querySelectorAll('.sidebar button.btn-primary');
-    for (const b of buttons) {
-      const t = b.textContent?.trim();
-      if (t === 'Apply Dithering' || t === 'Re-Apply Dithering') return b;
-    }
-    return null;
+  /** Capture a pristine snapshot of the backup canvas (raw bytes) */
+  function capture(canvas) {
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return;
+    const ctx = canvas.getContext('2d');
+    pristineData = _getImageData.call(ctx, 0, 0, canvas.width, canvas.height);
+    pristineW = canvas.width;
+    pristineH = canvas.height;
+    log('captured pristine', pristineW + 'x' + pristineH);
   }
 
-  /** Check if a canvas has real (non-transparent, non-black) pixel data */
-  function hasContent(canvas) {
-    if (!canvas || canvas.width === 0 || canvas.height === 0) return false;
-    try {
-      const ctx = canvas.getContext('2d');
-      const w = canvas.width, h = canvas.height;
-      const spots = [
-        [Math.floor(w / 2), Math.floor(h / 2)],
-        [Math.floor(w / 4), Math.floor(h / 4)],
-        [Math.floor(3 * w / 4), Math.floor(3 * h / 4)],
-        [Math.floor(w / 3), Math.floor(h / 3)],
-        [Math.floor(2 * w / 3), Math.floor(2 * h / 3)],
-      ];
-      for (const [x, y] of spots) {
-        const d = ctx.getImageData(x, y, 1, 1).data;
-        // Check for non-transparent AND non-black pixel
-        if (d[3] > 0 && (d[0] > 0 || d[1] > 0 || d[2] > 0)) return true;
+  /** Schedule a capture at end of current microtask (coalesces multiple writes) */
+  function scheduleCapture(canvas) {
+    if (captureQueued) return;
+    captureQueued = true;
+    Promise.resolve().then(() => {
+      captureQueued = false;
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        capture(canvas);
       }
-      return false;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /** Check if ImageData has real (non-zero) pixel data */
-  function imageDataHasContent(imgData) {
-    if (!imgData || imgData.width === 0 || imgData.height === 0) return false;
-    const d = imgData.data;
-    const w = imgData.width, h = imgData.height;
-    const spots = [
-      [Math.floor(w / 2), Math.floor(h / 2)],
-      [Math.floor(w / 4), Math.floor(h / 4)],
-      [Math.floor(3 * w / 4), Math.floor(3 * h / 4)],
-    ];
-    for (const [x, y] of spots) {
-      const idx = (y * w + x) * 4;
-      if (d[idx + 3] > 0 && (d[idx] > 0 || d[idx + 1] > 0 || d[idx + 2] > 0)) return true;
-    }
-    return false;
-  }
-
-  /** Check if any destructive modal (crop, resize, text) is currently open */
-  function isModalOpen() {
-    return !!(
-      document.querySelector('.crop-modal') ||
-      document.querySelector('.resize-modal') ||
-      document.querySelector('.text-modal')
-    );
-  }
-
-  /** Compute a simple hash of pixel data for logging */
-  function pixelHash(imgData) {
-    if (!imgData) return 'null';
-    const d = imgData.data;
-    let sum = 0;
-    const step = Math.max(4, Math.floor(d.length / 400)) & ~3; // align to 4
-    for (let i = 0; i < d.length; i += step) sum += d[i];
-    return imgData.width + 'x' + imgData.height + ':' + Math.round(sum);
+    });
   }
 
   /**
-   * Snapshot: Use getImageData to capture raw bytes.
-   * This avoids premultiplied-alpha issues that drawImage introduces.
+   * Restore the backup canvas from our pristine snapshot.
+   * Uses putImageData for byte-exact restore when dimensions match;
+   * falls back to drawImage scaling when they differ (post-crop/resize).
    */
-  function snapshotPristine() {
-    if (!backupCanvas || backupCanvas.width === 0 || backupCanvas.height === 0) {
-      log('snapshotPristine: skipped — canvas missing or 0-size');
-      return;
+  function restore(canvas) {
+    if (!pristineData || !canvas) {
+      warn('restore: no pristine data or canvas');
+      return false;
     }
-    if (!hasContent(backupCanvas)) {
-      log('snapshotPristine: skipped — canvas has no visible content');
-      return;
-    }
+    const ctx = canvas.getContext('2d');
 
-    const ctx = backupCanvas.getContext('2d');
-    pristineData = ctx.getImageData(0, 0, backupCanvas.width, backupCanvas.height);
-    pristineW = backupCanvas.width;
-    pristineH = backupCanvas.height;
-    prevW = backupCanvas.width;
-    prevH = backupCanvas.height;
-    snapshotReady = true;
-
-    log('snapshotPristine: captured', pristineW, 'x', pristineH,
-      'hash:', pixelHash(pristineData));
-  }
-
-  /**
-   * Restore: Use putImageData to write raw bytes directly.
-   * This is the critical fix — the old version used drawImage which goes
-   * through premultiplied-alpha compositing and can corrupt pixel data,
-   * producing all-black output. putImageData writes raw RGBA bytes with
-   * no compositing, matching exactly how the app's At() function writes
-   * to Ne via putImageData.
-   */
-  function restoreBackup() {
-    if (!pristineData || !backupCanvas || !snapshotReady) {
-      warn('restoreBackup: skipped — state not ready',
-        'hasPristine:', !!pristineData, 'hasBackup:', !!backupCanvas,
-        'snapshotReady:', snapshotReady);
-      return;
-    }
-    if (pristineW === 0 || pristineH === 0) {
-      warn('restoreBackup: skipped — pristine dimensions are 0');
-      return;
-    }
-    if (!imageDataHasContent(pristineData)) {
-      warn('restoreBackup: skipped — pristine has no visible content');
-      return;
-    }
-
-    const ctx = backupCanvas.getContext('2d');
-
-    if (backupCanvas.width === pristineW && backupCanvas.height === pristineH) {
-      // Dimensions match — use putImageData directly (byte-exact, no compositing)
-      ctx.putImageData(pristineData, 0, 0);
-      log('restoreBackup: restored via putImageData (exact match)',
-        pristineW, 'x', pristineH);
+    if (canvas.width === pristineW && canvas.height === pristineH) {
+      // Byte-exact restore — no compositing, no quality loss
+      _putImageData.call(ctx, pristineData, 0, 0);
+      log('restored via putImageData (exact)', pristineW + 'x' + pristineH);
     } else {
-      // Dimensions differ (crop/resize happened) — need to scale
-      // Create temp canvas with pristine data, then drawImage to scale
-      log('restoreBackup: dimensions differ — pristine:', pristineW, 'x', pristineH,
-        'backup:', backupCanvas.width, 'x', backupCanvas.height);
+      // Dimensions differ — need to scale through a temp canvas
+      log('restored via drawImage (scaled)',
+        pristineW + 'x' + pristineH, '→', canvas.width + 'x' + canvas.height);
       const tmp = document.createElement('canvas');
-      tmp.width = pristineW;
+      tmp.width  = pristineW;
       tmp.height = pristineH;
-      tmp.getContext('2d').putImageData(pristineData, 0, 0);
+      _putImageData.call(tmp.getContext('2d'), pristineData, 0, 0);
 
-      ctx.clearRect(0, 0, backupCanvas.width, backupCanvas.height);
+      _clearRect.call(ctx, 0, 0, canvas.width, canvas.height);
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(tmp, 0, 0, backupCanvas.width, backupCanvas.height);
+      _drawImage.call(ctx, tmp, 0, 0, canvas.width, canvas.height);
+    }
+    return true;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     CANVAS WRITE INTERCEPTORS
+     Detect every write to the backup canvas. If we're in a "clean"
+     state (isDithered === false), capture a pristine snapshot.
+     Uses the unpatched _getImageData so our own reads don't recurse.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  CanvasRenderingContext2D.prototype.drawImage = function (source) {
+    // Call the real drawImage with all original arguments
+    const result = _drawImage.apply(this, arguments);
+
+    const canvas = this.canvas;
+    if (isBackup(canvas)) {
+      // Detect when an HTMLImageElement is drawn → new image load via At()
+      if (source instanceof HTMLImageElement) {
+        log('HTMLImageElement drawn to backup → new image load, resetting');
+        isDithered = false;
+        scheduleCapture(canvas);
+      } else if (!isDithered) {
+        // Clean (pre-dithering) write from crop/resize/text
+        scheduleCapture(canvas);
+      }
+      // If isDithered && not an Image element → contaminated write from
+      // ds/Ir reading dithered ye → skip capture (keep old pristine)
     }
 
-    // Verify the restore worked
-    if (DEBUG()) {
-      const verifyData = ctx.getImageData(0, 0, backupCanvas.width, backupCanvas.height);
-      log('restoreBackup: verification hash:', pixelHash(verifyData));
+    return result;
+  };
+
+  CanvasRenderingContext2D.prototype.putImageData = function (imageData, dx, dy) {
+    const result = _putImageData.apply(this, arguments);
+
+    const canvas = this.canvas;
+    if (isBackup(canvas)) {
+      // Full-canvas putImageData on a hidden canvas usually means
+      // At() writing the freshly loaded image
+      if (imageData &&
+          imageData.width === canvas.width &&
+          imageData.height === canvas.height) {
+        if (isDithered) {
+          log('full-canvas putImageData on backup → resetting isDithered');
+          isDithered = false;
+        }
+        scheduleCapture(canvas);
+      } else if (!isDithered) {
+        scheduleCapture(canvas);
+      }
     }
-  }
+
+    return result;
+  };
 
   /* ═══════════════════════════════════════════════════════════════════
      CLICK INTERCEPTOR — capture phase, fires BEFORE React handlers
@@ -214,90 +191,62 @@
     const text = btn.textContent?.trim();
     if (text !== 'Apply Dithering' && text !== 'Re-Apply Dithering') return;
 
-    log('Dithering button clicked:', text);
+    log('dither button clicked:', text,
+        '| isDithered:', isDithered,
+        '| hasPristine:', !!pristineData,
+        '| pristineDims:', pristineW + 'x' + pristineH);
 
-    // Re-find backup canvas in case React recreated it
-    backupCanvas = findBackupCanvas();
-    if (!backupCanvas) {
-      warn('click handler: backup canvas not found!');
+    const canvas = findBackupCanvas();
+    if (!canvas) {
+      warn('backup canvas not found!');
       return;
     }
 
-    log('click handler: backup canvas', backupCanvas.width, 'x', backupCanvas.height);
-
-    if (!snapshotReady) {
-      // First dithering ever — take snapshot now
-      log('click handler: first dither — snapshotting');
-      snapshotPristine();
-      return; // No need to restore on first apply
+    if (!pristineData) {
+      // First ever dithering and interceptors didn't fire yet — capture now
+      log('first apply — capturing pristine now');
+      capture(canvas);
+      isDithered = true;
+      return;
     }
 
-    // Restore backup from pristine before React's handler runs
-    log('click handler: restoring from pristine before Sn runs');
-    restoreBackup();
+    // Restore backup from pristine before React's Sn handler reads it
+    log('restoring pristine before dithering');
+    const ok = restore(canvas);
+    if (ok) log('restore successful');
+    isDithered = true;
   }, true); // ← CAPTURE phase
 
   /* ═══════════════════════════════════════════════════════════════════
-     POLLING — detect when backup canvas first gets content (image load)
+     FILE INPUT / DRAG-DROP / PASTE — reset state on new image
      ═══════════════════════════════════════════════════════════════════ */
-  let rafId = null;
 
-  function poll() {
-    const bc = findBackupCanvas();
-    if (bc && bc.width > 0 && bc.height > 0) {
-      const dimsChanged = bc.width !== prevW || bc.height !== prevH;
-      if (bc !== backupCanvas || dimsChanged) {
-        // New canvas appeared, or dimensions changed (image load / resize / crop)
-        backupCanvas = bc;
-        log('poll: detected canvas change',
-          bc.width + 'x' + bc.height, 'prev:', prevW + 'x' + prevH);
-        // Delay snapshot to let the drawing operation finish
-        setTimeout(() => {
-          if (hasContent(backupCanvas)) {
-            log('poll: canvas has content after delay, snapshotting');
-            snapshotPristine();
-          } else {
-            log('poll: canvas still empty after delay, skipping');
-          }
-        }, 300);
-      }
+  document.addEventListener('change', function (e) {
+    const input = e.target;
+    if (input.type === 'file' && input.files && input.files.length > 0) {
+      log('file input change → resetting state');
+      isDithered = false;
+      pristineData = null;
     }
-    rafId = requestAnimationFrame(poll);
-  }
+  }, true);
 
-  /* ═══════════════════════════════════════════════════════════════════
-     MUTATION OBSERVER — re-snapshot after crop/text modal closes
-     ═══════════════════════════════════════════════════════════════════ */
-  const domObserver = new MutationObserver(() => {
-    const open = isModalOpen();
-
-    if (modalWasOpen && !open) {
-      // A modal just closed — re-snapshot Ne
-      log('observer: modal closed, scheduling re-snapshot');
-      setTimeout(() => {
-        backupCanvas = findBackupCanvas();
-        if (backupCanvas && hasContent(backupCanvas)) {
-          snapshotPristine();
-        }
-      }, 300);
+  document.addEventListener('drop', function (e) {
+    if (e.dataTransfer?.files?.length > 0) {
+      log('drop event → resetting state');
+      isDithered = false;
+      pristineData = null;
     }
+  }, true);
 
-    modalWasOpen = open;
-  });
+  document.addEventListener('paste', function () {
+    log('paste event → resetting state');
+    isDithered = false;
+    pristineData = null;
+  }, true);
 
   /* ═══════════════════════════════════════════════════════════════════
      INIT
      ═══════════════════════════════════════════════════════════════════ */
-  function init() {
-    log('initialized');
-    poll();
-    domObserver.observe(document.body, { childList: true, subtree: true });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  log('v4 initialized — intercepting canvas writes');
 
 })();
