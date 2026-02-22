@@ -348,11 +348,15 @@
 
   function tryAttach() {
     const area = document.querySelector('.canvas-area');
-    if (!area) return;
+    if (!area) { detach(); return; }
+
+    // Don't attach when the upload dropzone is showing
+    if (area.querySelector('.upload-zone')) { detach(); return; }
+
     const container = area.querySelector('.canvas-container');
     if (!container) { detach(); return; }
     const canvas = container.querySelector('canvas');
-    if (!canvas) { detach(); return; }
+    if (!canvas || !canvas.width || !canvas.height) { detach(); return; }
 
     // Already attached to this canvas
     if (attached && canvasEl === canvas) return;
