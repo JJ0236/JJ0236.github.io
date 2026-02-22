@@ -349,8 +349,19 @@
         };
         input.addEventListener('input', updateDpi);
         input.addEventListener('change', updateDpi);
-        // Read current value
-        updateDpi();
+        // Inject our persisted DPI into the input so the user sees it
+        // instead of the hardcoded 300 default. Uses React's native
+        // input value setter to trigger React's onChange handler.
+        const currentDpi = window.__lazarDpi || 300;
+        if (parseInt(input.value, 10) !== currentDpi) {
+          const nativeSet = Object.getOwnPropertyDescriptor(
+            HTMLInputElement.prototype, 'value'
+          ).set;
+          nativeSet.call(input, String(currentDpi));
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        // Do NOT call updateDpi() here — that would read the modal's
+        // default (300) and overwrite our persisted value.
       }
     }
   }
@@ -372,7 +383,15 @@
           };
           input.addEventListener('input', updateDpi);
           input.addEventListener('change', updateDpi);
-          updateDpi();
+          // Inject persisted DPI into Easy Mode input too
+          const currentDpi = window.__lazarDpi || 300;
+          if (parseInt(input.value, 10) !== currentDpi) {
+            const nativeSet = Object.getOwnPropertyDescriptor(
+              HTMLInputElement.prototype, 'value'
+            ).set;
+            nativeSet.call(input, String(currentDpi));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          }
         }
       }
     }
