@@ -5,10 +5,8 @@
  *
  * Controls:
  *   Scroll wheel        → zoom in / out (centered on cursor)
- *   Middle-click drag   → pan
- *   Right-click drag    → pan  (context menu suppressed in canvas area)
- *   Space + left-drag   → pan
- *   Double-click        → reset to fit
+ *   Left-click drag     → pan
+ *   Double-click        → reset to fit (centered)
  *   Ctrl+0 / Cmd+0      → reset to fit
  *   Ctrl+= / Cmd+=      → zoom in
  *   Ctrl+- / Cmd+-      → zoom out
@@ -74,14 +72,7 @@
   }
 
   function resetView() {
-    zoom = 1;
-    panX = 0;
-    panY = 0;
-    if (canvasEl) {
-      canvasEl.style.transform = '';
-      canvasEl.style.transformOrigin = '';
-    }
-    showIndicator();
+    fitCanvas();
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -110,11 +101,8 @@
   }
 
   function onPointerDown(e) {
-    // Pan on: middle button, right button, or space+left
-    const shouldPan = e.button === 1 ||
-                      e.button === 2 ||
-                      (e.button === 0 && spaceHeld);
-    if (!shouldPan) return;
+    // Pan on any mouse button (left, middle, right)
+    if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
 
     e.preventDefault();
     isPanning = true;
@@ -139,7 +127,7 @@
   function onPointerUp(e) {
     if (!isPanning) return;
     isPanning = false;
-    areaEl.style.cursor = spaceHeld ? 'grab' : '';
+    areaEl.style.cursor = 'grab';
     areaEl.releasePointerCapture(e.pointerId);
   }
 
@@ -156,11 +144,6 @@
   }
 
   function onKeyDown(e) {
-    if (e.code === 'Space' && !e.repeat) {
-      spaceHeld = true;
-      if (areaEl) areaEl.style.cursor = isPanning ? 'grabbing' : 'grab';
-    }
-
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
@@ -177,10 +160,7 @@
   }
 
   function onKeyUp(e) {
-    if (e.code === 'Space') {
-      spaceHeld = false;
-      if (areaEl && !isPanning) areaEl.style.cursor = '';
-    }
+    // reserved for future shortcuts
   }
 
   function zoomBy(factor) {
@@ -228,6 +208,9 @@
     area.addEventListener('contextmenu', onContextMenu);
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
+
+    // Default cursor — indicates draggable
+    area.style.cursor = 'grab';
 
     createIndicator(area);
     showIndicator();
