@@ -46,6 +46,28 @@
     return null;
   }
 
+  /** Check if a canvas has real (non-transparent) pixel data */
+  function hasContent(canvas) {
+    if (!canvas || canvas.width === 0 || canvas.height === 0) return false;
+    try {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      // Sample a few pixels from center and edges
+      const spots = [
+        [Math.floor(w / 2), Math.floor(h / 2)],
+        [Math.floor(w / 4), Math.floor(h / 4)],
+        [Math.floor(3 * w / 4), Math.floor(3 * h / 4)],
+      ];
+      for (const [x, y] of spots) {
+        const d = ctx.getImageData(x, y, 1, 1).data;
+        if (d[3] > 0) return true; // non-transparent pixel found
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /** Check if any destructive modal (crop, resize) is currently open */
   function isModalOpen() {
     return !!(
@@ -58,6 +80,7 @@
   /** Snapshot the backup canvas into our pristine copy */
   function snapshotPristine() {
     if (!backupCanvas || backupCanvas.width === 0 || backupCanvas.height === 0) return;
+    if (!hasContent(backupCanvas)) return; // Don't snapshot an empty canvas
     if (!pristineCanvas) pristineCanvas = document.createElement('canvas');
     pristineCanvas.width = backupCanvas.width;
     pristineCanvas.height = backupCanvas.height;
@@ -72,6 +95,7 @@
   function restoreBackup() {
     if (!pristineCanvas || !backupCanvas || !snapshotReady) return;
     if (pristineCanvas.width === 0 || pristineCanvas.height === 0) return;
+    if (!hasContent(pristineCanvas)) return; // Don't restore an empty pristine canvas
 
     const ctx = backupCanvas.getContext('2d');
     ctx.clearRect(0, 0, backupCanvas.width, backupCanvas.height);
@@ -113,13 +137,16 @@
   function poll() {
     const bc = findBackupCanvas();
     if (bc && bc.width > 0 && bc.height > 0) {
-      if (bc !== backupCanvas) {
-        // New backup canvas appeared (image loaded or React re-render)
+      const dimsChanged = bc.width !== prevW || bc.height !== prevH;
+      if (bc !== backupCanvas || dimsChanged) {
+        // New canvas appeared, or dimensions changed (image load / resize / crop)
         backupCanvas = bc;
-        // Delay snapshot slightly to let At() finish writing
+        // Delay snapshot to let the drawing operation finish
         setTimeout(() => {
-          snapshotPristine();
-        }, 150);
+          if (hasContent(backupCanvas)) {
+            snapshotPristine();
+          }
+        }, 300);
       }
     }
     rafId = requestAnimationFrame(poll);
@@ -138,11 +165,13 @@
       // (not "Re-Apply"), meaning no dithering has been done yet
       setTimeout(() => {
         const btn = findDitherButton();
-        if (btn && !btn.textContent?.includes('Re-Apply')) {
-          backupCanvas = findBackupCanvas();
-          if (backupCanvas) snapshotPristine();
+        backupCanvas = findBackupCanvas();
+        if (backupCanvas && hasContent(backupCanvas)) {
+          // Always re-snapshot after modal close — the crop/resize/text
+          // operation baked the current state into Ne, which is fresh
+          snapshotPristine();
         }
-      }, 250);
+      }, 300);
     }
 
     modalWasOpen = open;
