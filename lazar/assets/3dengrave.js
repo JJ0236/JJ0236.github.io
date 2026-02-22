@@ -908,6 +908,11 @@
   function downloadResult() {
     if (!state.resultData) return;
 
+    // Update global DPI so dpifix.js embeds the correct value
+    if (window.__lazarDpi !== undefined) {
+      window.__lazarDpi = state.resultDpi;
+    }
+
     const canvas = document.createElement('canvas');
     canvas.width = state.resultWidth;
     canvas.height = state.resultHeight;
