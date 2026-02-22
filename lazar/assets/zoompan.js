@@ -193,21 +193,10 @@
     canvas.style.objectFit = '';
 
     // Neutralize ALL flexbox centering — we position via transform
-    area.style.alignItems = 'flex-start';
-    area.style.justifyContent = 'flex-start';
+    area.classList.add('lazar-zoompan-active');
     container.style.overflow = 'visible';
-    container.style.alignItems = 'flex-start';
-    container.style.justifyContent = 'flex-start';
-    container.style.position = 'absolute';
-    container.style.top = '0';
-    container.style.left = '0';
     container.style.width = '100%';
     container.style.height = '100%';
-
-    // Canvas at container origin (0,0) — transform handles position
-    canvas.style.position = 'absolute';
-    canvas.style.top = '0';
-    canvas.style.left = '0';
 
     // Let the canvas be its natural pixel size scaled down to fit initially
     fitCanvas();
@@ -253,6 +242,7 @@
   function detach() {
     if (!attached) return;
     if (areaEl) {
+      areaEl.classList.remove('lazar-zoompan-active');
       areaEl.removeEventListener('wheel', onWheel);
       areaEl.removeEventListener('pointerdown', onPointerDown);
       areaEl.removeEventListener('pointermove', onPointerMove);
@@ -281,19 +271,19 @@
      CSS
      ═══════════════════════════════════════════════════════════════════ */
   const CSS = `
-    .canvas-area {
+    .canvas-area.lazar-zoompan-active {
       overflow: hidden !important;
       position: relative !important;
       align-items: flex-start !important;
       justify-content: flex-start !important;
     }
-    .canvas-container {
+    .lazar-zoompan-active .canvas-container {
       pointer-events: none;
       position: absolute !important;
       top: 0 !important;
       left: 0 !important;
     }
-    .canvas-container canvas {
+    .lazar-zoompan-active .canvas-container canvas {
       will-change: transform;
       image-rendering: auto;
       pointer-events: auto;
