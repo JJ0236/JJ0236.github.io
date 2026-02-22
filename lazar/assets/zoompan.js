@@ -192,15 +192,19 @@
     canvas.style.maxHeight = 'none';
     canvas.style.objectFit = '';
 
-    // Neutralize flexbox centering — we position via transform instead
+    // Neutralize ALL flexbox centering — we position via transform
+    area.style.alignItems = 'flex-start';
+    area.style.justifyContent = 'flex-start';
     container.style.overflow = 'visible';
     container.style.alignItems = 'flex-start';
     container.style.justifyContent = 'flex-start';
+    container.style.position = 'absolute';
+    container.style.top = '0';
+    container.style.left = '0';
     container.style.width = '100%';
     container.style.height = '100%';
-    container.style.position = 'relative';
 
-    // Canvas must sit at container origin (0,0) for transform math
+    // Canvas at container origin (0,0) — transform handles position
     canvas.style.position = 'absolute';
     canvas.style.top = '0';
     canvas.style.left = '0';
@@ -280,14 +284,22 @@
     .canvas-area {
       overflow: hidden !important;
       position: relative !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
     }
     .canvas-container {
       pointer-events: none;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
     }
     .canvas-container canvas {
       will-change: transform;
       image-rendering: auto;
       pointer-events: auto;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
     }
     /* Crisp pixels when zoomed in past 100% */
     .canvas-container canvas[data-zoom-crisp] {
