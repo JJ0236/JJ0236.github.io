@@ -192,8 +192,18 @@
     canvas.style.maxHeight = 'none';
     canvas.style.objectFit = '';
 
-    // Container should not constrain overflow (the area clips it)
+    // Neutralize flexbox centering — we position via transform instead
     container.style.overflow = 'visible';
+    container.style.alignItems = 'flex-start';
+    container.style.justifyContent = 'flex-start';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.position = 'relative';
+
+    // Canvas must sit at container origin (0,0) for transform math
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
 
     // Let the canvas be its natural pixel size scaled down to fit initially
     fitCanvas();
@@ -269,10 +279,15 @@
   const CSS = `
     .canvas-area {
       overflow: hidden !important;
+      position: relative !important;
+    }
+    .canvas-container {
+      pointer-events: none;
     }
     .canvas-container canvas {
       will-change: transform;
       image-rendering: auto;
+      pointer-events: auto;
     }
     /* Crisp pixels when zoomed in past 100% */
     .canvas-container canvas[data-zoom-crisp] {
