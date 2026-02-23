@@ -354,27 +354,32 @@
   const CSS = `
     .engrave3d-container {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       height: 100%;
+      min-height: 0;
       background: var(--bg-dark, #1a1a2e);
       color: var(--text-primary, #e0e0e0);
-      overflow: auto;
-    }
-
-    .engrave3d-top {
-      display: flex;
-      gap: 16px;
-      padding: 20px 24px;
-      align-items: flex-start;
-      flex-wrap: wrap;
+      overflow: hidden;
     }
 
     .engrave3d-panel {
+      flex: 0 0 270px;
       background: var(--bg-panel, #16213e);
-      border: 1px solid var(--border, #2a2a4a);
-      border-radius: var(--radius-lg, 10px);
-      padding: 18px;
-      flex: 0 0 280px;
+      border-right: 1px solid var(--border, #2a2a4a);
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .engrave3d-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .engrave3d-panel h3 {
@@ -432,71 +437,72 @@
       flex: 1;
     }
 
-    .engrave3d-upload-zone {
-      flex: 1;
-      min-width: 300px;
-      min-height: 200px;
+    /* Upload strip — compact bar above previews */
+    .engrave3d-upload-strip {
       display: flex;
       align-items: center;
-      justify-content: center;
-      border: 2px dashed var(--border, #2a2a4a);
-      border-radius: var(--radius-lg, 10px);
+      gap: 10px;
+      padding: 8px 14px;
       background: var(--bg-panel, #16213e);
-      cursor: pointer;
-      transition: border-color .2s, background .2s;
-      position: relative;
-    }
-
-    .engrave3d-upload-zone:hover,
-    .engrave3d-upload-zone.drag-over {
-      border-color: var(--accent, #2196f3);
-      background: rgba(33, 150, 243, .06);
-    }
-
-    .engrave3d-upload-zone .upload-prompt {
-      text-align: center;
-      color: var(--text-secondary, #a0a0c0);
-    }
-
-    .engrave3d-upload-zone .upload-prompt svg {
-      display: block;
-      margin: 0 auto 10px;
-      opacity: .5;
-    }
-
-    .engrave3d-upload-zone .upload-prompt p {
-      margin: 0;
-      font-size: 14px;
-    }
-
-    .engrave3d-upload-zone .upload-prompt span {
+      border-bottom: 1px solid var(--border, #2a2a4a);
       font-size: 12px;
-      opacity: .6;
+      color: var(--text-secondary, #a0a0c0);
+      flex-shrink: 0;
+    }
+
+    .engrave3d-upload-strip.drag-over {
+      background: rgba(33,150,243,.12);
+      border-bottom-color: var(--accent, #2196f3);
+    }
+
+    .engrave3d-upload-strip .upload-filename {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .engrave3d-upload-strip .upload-btn {
+      flex-shrink: 0;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: var(--bg-input, #0f0f23);
+      border: 1px solid var(--border, #2a2a4a);
+      border-radius: var(--radius, 6px);
+      color: var(--text-primary, #e0e0e0);
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color .15s;
+    }
+
+    .engrave3d-upload-strip .upload-btn:hover {
+      border-color: var(--accent, #2196f3);
     }
 
     /* Side-by-side preview area */
     .engrave3d-preview-area {
       flex: 1;
       display: flex;
-      gap: 16px;
-      padding: 0 24px 20px;
+      gap: 0;
       min-height: 0;
+      overflow: hidden;
     }
 
     .engrave3d-preview-box {
       flex: 1;
-      background: var(--bg-panel, #16213e);
-      border: 1px solid var(--border, #2a2a4a);
-      border-radius: var(--radius-lg, 10px);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      min-height: 300px;
+      border-right: 1px solid var(--border, #2a2a4a);
+    }
+
+    .engrave3d-preview-box:last-child {
+      border-right: none;
     }
 
     .engrave3d-preview-box .preview-header {
-      padding: 10px 14px;
-      font-size: 12px;
+      padding: 8px 12px;
+      font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: .5px;
@@ -505,35 +511,48 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
 
     .engrave3d-preview-box .preview-header .dim-info {
       font-weight: 400;
-      font-size: 11px;
+      font-size: 10px;
       opacity: .7;
     }
 
     .engrave3d-preview-box .preview-body {
       flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 12px;
-      overflow: auto;
-      background: #0a0a15;
+      position: relative;
+      overflow: hidden;
+      background: #080812;
+      cursor: grab;
     }
 
-    .engrave3d-preview-box .preview-body canvas {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
+    .engrave3d-preview-box .preview-body.panning {
+      cursor: grabbing;
+    }
+
+    .engrave3d-preview-box .pz-wrap {
+      position: absolute;
+      top: 0; left: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .engrave3d-preview-box .pz-wrap canvas,
+    .engrave3d-preview-box .pz-wrap img {
+      display: block;
       image-rendering: pixelated;
     }
 
-    .engrave3d-preview-box .preview-body img {
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
+    .engrave3d-preview-box .pz-hint {
+      position: absolute;
+      bottom: 6px;
+      right: 8px;
+      font-size: 10px;
+      color: rgba(255,255,255,.3);
+      pointer-events: none;
+      user-select: none;
     }
 
     /* Buttons */
@@ -605,10 +624,31 @@
     }
 
     .engrave3d-empty-preview {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%,-50%);
       color: var(--text-secondary, #777);
       font-size: 13px;
       text-align: center;
       opacity: .6;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .engrave3d-live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      color: #4caf50;
+      opacity: 0;
+      transition: opacity .4s;
+    }
+
+    .engrave3d-live-badge.visible {
+      opacity: 1;
     }
 
     .engrave3d-divider {
@@ -686,10 +726,7 @@
     container.innerHTML = '';
     container.className = 'engrave3d-container';
 
-    // === Top row: settings panel + upload zone ===
-    const topRow = el('div', 'engrave3d-top');
-
-    // --- Settings panel ---
+    // === Left: scrollable settings panel ===
     const panel = el('div', 'engrave3d-panel');
     panel.innerHTML = `
       <h3>3D Engrave Settings</h3>
@@ -779,96 +816,190 @@
       <div id="e3d-status"></div>
     `;
 
-    // --- Upload zone ---
-    const uploadZone = el('div', 'engrave3d-upload-zone');
-    uploadZone.id = 'e3d-upload-zone';
-    uploadZone.innerHTML = `
-      <div class="upload-prompt" id="e3d-upload-prompt">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <path d="m21 15-5-5L5 21"/>
-        </svg>
-        <p>Drop an image here or click to upload</p>
-        <span>JPG / PNG supported</span>
-      </div>
-    `;
+    container.appendChild(panel);
 
+    // === Right: main area (upload strip + side-by-side previews) ===
+    const main = el('div', 'engrave3d-main');
+
+    // Compact upload strip
+    const strip = el('div', 'engrave3d-upload-strip');
+    strip.id = 'e3d-upload-strip';
+    strip.innerHTML = `
+      <span class="upload-filename" id="e3d-upload-filename">No image loaded — drop one here or click Upload</span>
+      <button class="upload-btn" id="e3d-upload-btn">Upload Image</button>
+    `;
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/jpeg,image/png';
     fileInput.style.display = 'none';
     fileInput.id = 'e3d-file-input';
-    uploadZone.appendChild(fileInput);
+    strip.appendChild(fileInput);
+    main.appendChild(strip);
 
-    topRow.appendChild(panel);
-    topRow.appendChild(uploadZone);
-    container.appendChild(topRow);
-
-    // === Preview area (side-by-side) ===
+    // Side-by-side previews
     const previewArea = el('div', 'engrave3d-preview-area');
 
     const origBox = el('div', 'engrave3d-preview-box');
     origBox.innerHTML = `
       <div class="preview-header">
-        Original
+        <span>Original</span>
         <span class="dim-info" id="e3d-orig-info"></span>
       </div>
       <div class="preview-body" id="e3d-orig-body">
-        <div class="engrave3d-empty-preview">Upload an image to begin</div>
+        <div class="pz-wrap" id="e3d-orig-wrap"></div>
+        <div class="engrave3d-empty-preview" id="e3d-orig-empty">Upload an image to begin</div>
+        <span class="pz-hint">Scroll to zoom · Drag to pan · Dbl-click to reset</span>
       </div>
     `;
 
     const resultBox = el('div', 'engrave3d-preview-box');
     resultBox.innerHTML = `
       <div class="preview-header">
-        Power Map Output
+        <span>Power Map Output</span>
         <span class="dim-info" id="e3d-result-info"></span>
       </div>
       <div class="preview-body" id="e3d-result-body">
-        <div class="engrave3d-empty-preview">Processed result will appear here</div>
+        <div class="pz-wrap" id="e3d-result-wrap"></div>
+        <div class="engrave3d-empty-preview" id="e3d-result-empty">Processed result will appear here</div>
+        <span class="pz-hint">Scroll to zoom · Drag to pan · Dbl-click to reset</span>
       </div>
     `;
 
     previewArea.appendChild(origBox);
     previewArea.appendChild(resultBox);
-    container.appendChild(previewArea);
+    main.appendChild(previewArea);
+    container.appendChild(main);
 
     // === Wire up events ===
     wireEvents();
   }
 
+  /* ─── Pan / Zoom ─────────────────────────────────────────────────── */
+  function setupPanZoom(bodyEl, wrapEl) {
+    let scale = 1, tx = 0, ty = 0;
+    let dragging = false, lastX = 0, lastY = 0;
+
+    function apply() {
+      wrapEl.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+    }
+
+    function fit() {
+      const child = wrapEl.firstElementChild;
+      if (!child) return;
+      const bw = bodyEl.clientWidth, bh = bodyEl.clientHeight;
+      const cw = child.naturalWidth || child.width || child.clientWidth || bw;
+      const ch = child.naturalHeight || child.height || child.clientHeight || bh;
+      if (!cw || !ch) return;
+      scale = Math.min(bw / cw, bh / ch);
+      tx = (bw - cw * scale) / 2;
+      ty = (bh - ch * scale) / 2;
+      apply();
+    }
+
+    bodyEl.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const rect = bodyEl.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const ns = Math.min(Math.max(scale * factor, 0.04), 40);
+      tx = mx - (mx - tx) * (ns / scale);
+      ty = my - (my - ty) * (ns / scale);
+      scale = ns;
+      apply();
+    }, { passive: false });
+
+    bodyEl.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true;
+      lastX = e.clientX; lastY = e.clientY;
+      bodyEl.classList.add('panning');
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      tx += e.clientX - lastX;
+      ty += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      apply();
+    });
+    document.addEventListener('mouseup', () => {
+      if (!dragging) return;
+      dragging = false;
+      bodyEl.classList.remove('panning');
+    });
+    bodyEl.addEventListener('dblclick', fit);
+
+    // Touch support
+    let lastDist = 0;
+    bodyEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        dragging = true;
+        lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        dragging = false;
+        lastDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    }, { passive: true });
+    bodyEl.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && dragging) {
+        tx += e.touches[0].clientX - lastX;
+        ty += e.touches[0].clientY - lastY;
+        lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+        apply();
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const f = dist / (lastDist || dist);
+        lastDist = dist;
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - bodyEl.getBoundingClientRect().left;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - bodyEl.getBoundingClientRect().top;
+        const ns = Math.min(Math.max(scale * f, 0.04), 40);
+        tx = cx - (cx - tx) * (ns / scale);
+        ty = cy - (cy - ty) * (ns / scale);
+        scale = ns;
+        apply();
+      }
+    }, { passive: false });
+    bodyEl.addEventListener('touchend', () => { dragging = false; });
+
+    return { fit, apply };
+  }
+
+  // Pan/zoom instances keyed by body element id
+  const pzInstances = {};
+
   function wireEvents() {
-    const uploadZone = document.getElementById('e3d-upload-zone');
+    const strip = document.getElementById('e3d-upload-strip');
+    const uploadBtn = document.getElementById('e3d-upload-btn');
     const fileInput = document.getElementById('e3d-file-input');
     const processBtn = document.getElementById('e3d-process-btn');
     const downloadBtn = document.getElementById('e3d-download-btn');
 
-    // Click to upload
-    uploadZone.addEventListener('click', (e) => {
-      if (e.target === fileInput) return;
-      fileInput.click();
-    });
-
-    // Drag & drop
-    uploadZone.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadZone.classList.add('drag-over');
-    });
-    uploadZone.addEventListener('dragleave', () => {
-      uploadZone.classList.remove('drag-over');
-    });
-    uploadZone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadZone.classList.remove('drag-over');
-      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-    });
-
+    // Upload button
+    uploadBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {
       if (fileInput.files.length) handleFile(fileInput.files[0]);
     });
 
-    // Process
+    // Drag & drop onto the strip
+    strip.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      strip.classList.add('drag-over');
+    });
+    strip.addEventListener('dragleave', () => strip.classList.remove('drag-over'));
+    strip.addEventListener('drop', (e) => {
+      e.preventDefault();
+      strip.classList.remove('drag-over');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+
+    // Process button
     processBtn.addEventListener('click', () => {
       if (!state.originalImg || state.processing) return;
       readSettings();
@@ -878,23 +1009,52 @@
     // Download
     downloadBtn.addEventListener('click', downloadResult);
 
-    // Live-update slider value displays
+    // Pan/zoom setup (deferred until preview bodies exist in DOM)
+    const origBody  = document.getElementById('e3d-orig-body');
+    const origWrap  = document.getElementById('e3d-orig-wrap');
+    const resBody   = document.getElementById('e3d-result-body');
+    const resWrap   = document.getElementById('e3d-result-wrap');
+    pzInstances.orig   = setupPanZoom(origBody, origWrap);
+    pzInstances.result = setupPanZoom(resBody, resWrap);
+
+    // ── Debounced live update ──────────────────────────────────────
+    let liveTimer = null;
+
+    function scheduleLiveUpdate() {
+      if (!state.originalImg) return;
+      clearTimeout(liveTimer);
+      liveTimer = setTimeout(() => {
+        readSettings();
+        runProcessing(true); // true = silent (no spinner)
+      }, 500);
+    }
+
+    // Slider display labels + live update on drag-end (change)
     const sharpenSlider = document.getElementById('e3d-sharpen');
     sharpenSlider.addEventListener('input', () => {
       document.getElementById('e3d-sharpen-val').textContent = parseFloat(sharpenSlider.value).toFixed(1);
+      scheduleLiveUpdate();
     });
     const claheToggle = document.getElementById('e3d-clahe');
     claheToggle.addEventListener('change', () => {
       document.getElementById('e3d-clahe-opts').style.display = claheToggle.checked ? '' : 'none';
+      scheduleLiveUpdate();
     });
     const claheClipSlider = document.getElementById('e3d-clahe-clip');
     claheClipSlider.addEventListener('input', () => {
       document.getElementById('e3d-clahe-clip-val').textContent = parseFloat(claheClipSlider.value).toFixed(1);
+      scheduleLiveUpdate();
     });
     const claheTileSlider = document.getElementById('e3d-clahe-tile');
     claheTileSlider.addEventListener('input', () => {
       document.getElementById('e3d-clahe-tile-val').textContent = claheTileSlider.value + 'px';
+      scheduleLiveUpdate();
     });
+    document.getElementById('e3d-invert').addEventListener('change', scheduleLiveUpdate);
+    document.getElementById('e3d-gray-values').addEventListener('change', scheduleLiveUpdate);
+    document.getElementById('e3d-dpi').addEventListener('change', scheduleLiveUpdate);
+    document.getElementById('e3d-height').addEventListener('change', scheduleLiveUpdate);
+    document.getElementById('e3d-width').addEventListener('change', scheduleLiveUpdate);
   }
 
   function handleFile(file) {
@@ -908,34 +1068,36 @@
         state.originalImg = img;
         state.resultData = null;
 
-        // Show original preview
-        const origBody = document.getElementById('e3d-orig-body');
-        origBody.innerHTML = '';
-        const previewImg = document.createElement('img');
-        previewImg.src = e.target.result;
-        origBody.appendChild(previewImg);
+        // Draw original into its canvas inside pz-wrap
+        const origWrap = document.getElementById('e3d-orig-wrap');
+        origWrap.innerHTML = '';
+        const oc = document.createElement('canvas');
+        oc.width  = img.naturalWidth;
+        oc.height = img.naturalHeight;
+        oc.getContext('2d').drawImage(img, 0, 0);
+        origWrap.appendChild(oc);
+        document.getElementById('e3d-orig-empty').style.display = 'none';
+        document.getElementById('e3d-orig-info').textContent =
+          `${img.naturalWidth} × ${img.naturalHeight} px`;
 
-        const origInfo = document.getElementById('e3d-orig-info');
-        origInfo.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+        // Fit original preview to container
+        requestAnimationFrame(() => pzInstances.orig && pzInstances.orig.fit());
 
-        // Enable process button
+        // Enable process, clear result
         document.getElementById('e3d-process-btn').disabled = false;
-
-        // Clear old result
-        const resultBody = document.getElementById('e3d-result-body');
-        resultBody.innerHTML = '<div class="engrave3d-empty-preview">Click "Process" to generate power map</div>';
+        const resWrap = document.getElementById('e3d-result-wrap');
+        resWrap.innerHTML = '';
+        document.getElementById('e3d-result-empty').style.display = '';
         document.getElementById('e3d-result-info').textContent = '';
         document.getElementById('e3d-download-btn').style.display = 'none';
 
-        // Update upload zone to show thumbnail
-        const prompt = document.getElementById('e3d-upload-prompt');
-        if (prompt) {
-          prompt.innerHTML = `
-            <img src="${e.target.result}" style="max-width:100%;max-height:160px;border-radius:6px;object-fit:contain;"/>
-            <p style="margin-top:8px;font-size:12px">${file.name}</p>
-            <span>Click or drop to replace</span>
-          `;
-        }
+        // Update strip filename
+        document.getElementById('e3d-upload-filename').textContent = file.name;
+        document.getElementById('e3d-upload-btn').textContent = 'Replace';
+
+        // Auto-process on first load
+        readSettings();
+        runProcessing(true);
       };
       img.src = e.target.result;
     };
@@ -974,11 +1136,16 @@
     state.settings.invertOutput = document.getElementById('e3d-invert').checked;
   }
 
-  function runProcessing() {
+  function runProcessing(silent = false) {
     state.processing = true;
     const statusEl = document.getElementById('e3d-status');
-    statusEl.innerHTML = '<div class="engrave3d-processing"><div class="spinner"></div>Processing image…</div>';
-    document.getElementById('e3d-process-btn').disabled = true;
+    const processBtn = document.getElementById('e3d-process-btn');
+    if (!silent) {
+      statusEl.innerHTML = '<div class="engrave3d-processing"><div class="spinner"></div>Processing image…</div>';
+      processBtn.disabled = true;
+    } else {
+      statusEl.innerHTML = '';
+    }
 
     // Use requestAnimationFrame to let the spinner render before heavy work
     requestAnimationFrame(() => {
@@ -992,22 +1159,31 @@
           showResult();
           statusEl.innerHTML = '';
         } catch (err) {
-          statusEl.innerHTML = `<div style="color:#ef5350;padding:8px 0;font-size:13px">Error: ${err.message}</div>`;
+          if (!silent) {
+            statusEl.innerHTML = `<div style="color:#ef5350;padding:8px 0;font-size:13px">Error: ${err.message}</div>`;
+          }
           console.error('3D Engrave processing error:', err);
         }
         state.processing = false;
-        document.getElementById('e3d-process-btn').disabled = false;
+        processBtn.disabled = false;
       }, 50);
     });
   }
 
   function showResult() {
-    const resultBody = document.getElementById('e3d-result-body');
-    resultBody.innerHTML = '';
+    const resWrap = document.getElementById('e3d-result-wrap');
+    const isEmpty = !resWrap.firstElementChild; // first time showing result?
 
-    const canvas = document.createElement('canvas');
-    canvas.width = state.resultWidth;
-    canvas.height = state.resultHeight;
+    // Build / reuse canvas
+    let canvas = resWrap.querySelector('canvas');
+    if (!canvas || canvas.width !== state.resultWidth || canvas.height !== state.resultHeight) {
+      canvas = document.createElement('canvas');
+      canvas.width  = state.resultWidth;
+      canvas.height = state.resultHeight;
+      resWrap.innerHTML = '';
+      resWrap.appendChild(canvas);
+    }
+
     const ctx = canvas.getContext('2d');
     const imgData = ctx.createImageData(state.resultWidth, state.resultHeight);
     for (let i = 0; i < state.resultData.length; i++) {
@@ -1019,7 +1195,15 @@
       imgData.data[j + 3] = 255;
     }
     ctx.putImageData(imgData, 0, 0);
-    resultBody.appendChild(canvas);
+
+    // Hide empty placeholder
+    const emptyEl = document.getElementById('e3d-result-empty');
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    // Fit to container only on first result; preserve zoom afterward
+    if (isEmpty) {
+      requestAnimationFrame(() => pzInstances.result && pzInstances.result.fit());
+    }
 
     // Show dimensions info
     const info = document.getElementById('e3d-result-info');
