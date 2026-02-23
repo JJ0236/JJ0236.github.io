@@ -19,18 +19,18 @@
       font-size: 13px;
       font-family: inherit;
       font-weight: 500;
-      background: transparent;
-      border: 1px solid var(--border, #2a2a4a);
+      background: rgba(233,69,96,.12);
+      border: 1px solid #e94560;
       border-radius: var(--radius, 6px);
-      color: var(--text-secondary, #a0a0c0);
+      color: #e94560;
       cursor: pointer;
       transition: border-color .15s, color .15s, background .15s;
       white-space: nowrap;
     }
     .bug-report-btn:hover {
-      border-color: #e94560;
-      color: #e94560;
-      background: rgba(233,69,96,.08);
+      background: rgba(233,69,96,.22);
+      border-color: #ff6b85;
+      color: #ff6b85;
     }
 
     /* Modal overlay */
