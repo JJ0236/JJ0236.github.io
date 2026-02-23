@@ -610,6 +610,52 @@
       text-align: center;
       opacity: .6;
     }
+
+    .engrave3d-divider {
+      border: none;
+      border-top: 1px solid var(--border, #2a2a4a);
+      margin: 14px 0;
+    }
+
+    /* Range slider rows */
+    .engrave3d-slider-label {
+      display: flex !important;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .engrave3d-slider-val {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent, #2196f3);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .engrave3d-range {
+      width: 100%;
+      accent-color: var(--accent, #2196f3);
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    /* Checkbox toggle row */
+    .engrave3d-toggle-label {
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 12px !important;
+      color: var(--text-primary, #e0e0e0) !important;
+    }
+
+    .engrave3d-toggle-label input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: var(--accent, #2196f3);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
   `;
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -647,17 +693,20 @@
     const panel = el('div', 'engrave3d-panel');
     panel.innerHTML = `
       <h3>3D Engrave Settings</h3>
+
       <div class="engrave3d-field">
         <label>Gray Values (comma-separated)</label>
         <input type="text" id="e3d-gray-values" value="${state.settings.customGrayValues.join(', ')}" />
         <div class="field-hint">Custom output gray levels for LUT mapping</div>
       </div>
+
       <div class="engrave3d-row">
         <div class="engrave3d-field">
           <label>DPI</label>
           <input type="number" id="e3d-dpi" value="${state.settings.driverDpi}" min="72" max="2400" step="1" />
         </div>
       </div>
+
       <div class="engrave3d-row">
         <div class="engrave3d-field">
           <label>Height (in)</label>
@@ -669,6 +718,54 @@
         </div>
       </div>
       <div class="field-hint" style="margin-bottom:12px">Leave one blank to auto-calculate from aspect ratio</div>
+
+      <div class="engrave3d-divider"></div>
+
+      <div class="engrave3d-field">
+        <label class="engrave3d-slider-label">
+          Sharpen Amount
+          <span class="engrave3d-slider-val" id="e3d-sharpen-val">${state.settings.sharpenAmount.toFixed(1)}</span>
+        </label>
+        <input type="range" id="e3d-sharpen" min="0" max="10" step="0.1"
+          value="${state.settings.sharpenAmount}" class="engrave3d-range" />
+        <div class="field-hint">Unsharp mask strength (0 = off)</div>
+      </div>
+
+      <div class="engrave3d-field">
+        <label class="engrave3d-toggle-label">
+          <input type="checkbox" id="e3d-clahe" ${state.settings.applyClahe ? 'checked' : ''} />
+          Apply CLAHE (local contrast enhancement)
+        </label>
+      </div>
+
+      <div id="e3d-clahe-opts" style="${state.settings.applyClahe ? '' : 'display:none'}">
+        <div class="engrave3d-field">
+          <label class="engrave3d-slider-label">
+            CLAHE Clip Limit
+            <span class="engrave3d-slider-val" id="e3d-clahe-clip-val">${state.settings.claheClip.toFixed(1)}</span>
+          </label>
+          <input type="range" id="e3d-clahe-clip" min="1" max="20" step="0.5"
+            value="${state.settings.claheClip}" class="engrave3d-range" />
+          <div class="field-hint">Higher = more contrast boost per tile</div>
+        </div>
+        <div class="engrave3d-field">
+          <label class="engrave3d-slider-label">
+            CLAHE Tile Size
+            <span class="engrave3d-slider-val" id="e3d-clahe-tile-val">${state.settings.claheTile}px</span>
+          </label>
+          <input type="range" id="e3d-clahe-tile" min="8" max="128" step="4"
+            value="${state.settings.claheTile}" class="engrave3d-range" />
+          <div class="field-hint">Smaller tiles = finer local contrast regions</div>
+        </div>
+      </div>
+
+      <div class="engrave3d-field">
+        <label class="engrave3d-toggle-label">
+          <input type="checkbox" id="e3d-invert" ${state.settings.invertOutput ? 'checked' : ''} />
+          Invert Output (white = deep engrave)
+        </label>
+      </div>
+
       <div class="engrave3d-actions">
         <button class="engrave3d-btn engrave3d-btn-primary" id="e3d-process-btn" disabled>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -781,7 +878,23 @@
     // Download
     downloadBtn.addEventListener('click', downloadResult);
 
-    // Live-update settings fields (just read on process)
+    // Live-update slider value displays
+    const sharpenSlider = document.getElementById('e3d-sharpen');
+    sharpenSlider.addEventListener('input', () => {
+      document.getElementById('e3d-sharpen-val').textContent = parseFloat(sharpenSlider.value).toFixed(1);
+    });
+    const claheToggle = document.getElementById('e3d-clahe');
+    claheToggle.addEventListener('change', () => {
+      document.getElementById('e3d-clahe-opts').style.display = claheToggle.checked ? '' : 'none';
+    });
+    const claheClipSlider = document.getElementById('e3d-clahe-clip');
+    claheClipSlider.addEventListener('input', () => {
+      document.getElementById('e3d-clahe-clip-val').textContent = parseFloat(claheClipSlider.value).toFixed(1);
+    });
+    const claheTileSlider = document.getElementById('e3d-clahe-tile');
+    claheTileSlider.addEventListener('input', () => {
+      document.getElementById('e3d-clahe-tile-val').textContent = claheTileSlider.value + 'px';
+    });
   }
 
   function handleFile(file) {
@@ -846,6 +959,19 @@
 
     const wVal = parseFloat(document.getElementById('e3d-width').value);
     state.settings.targetWidthIn = (wVal > 0) ? wVal : null;
+
+    const sharpen = parseFloat(document.getElementById('e3d-sharpen').value);
+    if (!isNaN(sharpen)) state.settings.sharpenAmount = sharpen;
+
+    state.settings.applyClahe = document.getElementById('e3d-clahe').checked;
+
+    const clip = parseFloat(document.getElementById('e3d-clahe-clip').value);
+    if (!isNaN(clip)) state.settings.claheClip = clip;
+
+    const tile = parseInt(document.getElementById('e3d-clahe-tile').value, 10);
+    if (!isNaN(tile)) state.settings.claheTile = tile;
+
+    state.settings.invertOutput = document.getElementById('e3d-invert').checked;
   }
 
   function runProcessing() {
