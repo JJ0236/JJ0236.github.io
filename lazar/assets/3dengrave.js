@@ -437,48 +437,6 @@
       flex: 1;
     }
 
-    /* Upload strip — compact bar above previews */
-    .engrave3d-upload-strip {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      background: var(--bg-panel, #16213e);
-      border-bottom: 1px solid var(--border, #2a2a4a);
-      font-size: 12px;
-      color: var(--text-secondary, #a0a0c0);
-      flex-shrink: 0;
-    }
-
-    .engrave3d-upload-strip.drag-over {
-      background: rgba(33,150,243,.12);
-      border-bottom-color: var(--accent, #2196f3);
-    }
-
-    .engrave3d-upload-strip .upload-filename {
-      flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .engrave3d-upload-strip .upload-btn {
-      flex-shrink: 0;
-      padding: 4px 10px;
-      font-size: 12px;
-      background: var(--bg-input, #0f0f23);
-      border: 1px solid var(--border, #2a2a4a);
-      border-radius: var(--radius, 6px);
-      color: var(--text-primary, #e0e0e0);
-      cursor: pointer;
-      font-family: inherit;
-      transition: border-color .15s;
-    }
-
-    .engrave3d-upload-strip .upload-btn:hover {
-      border-color: var(--accent, #2196f3);
-    }
-
     /* Side-by-side preview area */
     .engrave3d-preview-area {
       flex: 1;
@@ -634,6 +592,31 @@
       opacity: .6;
       pointer-events: none;
       white-space: nowrap;
+      line-height: 1.6;
+    }
+
+    .engrave3d-preview-box .orig-drop-active {
+      background: rgba(33,150,243,.06);
+      outline: 2px dashed var(--accent, #2196f3);
+      outline-offset: -4px;
+    }
+
+    .engrave3d-preview-box .preview-header .replace-btn {
+      display: none;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: inherit;
+      background: transparent;
+      border: 1px solid var(--border, #2a2a4a);
+      border-radius: var(--radius, 6px);
+      color: var(--text-secondary, #a0a0c0);
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+
+    .engrave3d-preview-box .preview-header .replace-btn:hover {
+      border-color: var(--accent, #2196f3);
+      color: var(--text-primary, #e0e0e0);
     }
 
     .engrave3d-live-badge {
@@ -818,23 +801,16 @@
 
     container.appendChild(panel);
 
-    // === Right: main area (upload strip + side-by-side previews) ===
+    // === Right: main area (side-by-side previews) ===
     const main = el('div', 'engrave3d-main');
 
-    // Compact upload strip
-    const strip = el('div', 'engrave3d-upload-strip');
-    strip.id = 'e3d-upload-strip';
-    strip.innerHTML = `
-      <span class="upload-filename" id="e3d-upload-filename">No image loaded — drop one here or click Upload</span>
-      <button class="upload-btn" id="e3d-upload-btn">Upload Image</button>
-    `;
+    // Hidden file input (not part of any visible element)
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/jpeg,image/png';
     fileInput.style.display = 'none';
     fileInput.id = 'e3d-file-input';
-    strip.appendChild(fileInput);
-    main.appendChild(strip);
+    main.appendChild(fileInput);
 
     // Side-by-side previews
     const previewArea = el('div', 'engrave3d-preview-area');
@@ -843,11 +819,13 @@
     origBox.innerHTML = `
       <div class="preview-header">
         <span>Original</span>
+        <span style="flex:1"></span>
         <span class="dim-info" id="e3d-orig-info"></span>
+        <button class="replace-btn" id="e3d-replace-btn">Replace</button>
       </div>
       <div class="preview-body" id="e3d-orig-body">
         <div class="pz-wrap" id="e3d-orig-wrap"></div>
-        <div class="engrave3d-empty-preview" id="e3d-orig-empty">Upload an image to begin</div>
+        <div class="engrave3d-empty-preview" id="e3d-orig-empty">Click or drop an image<br>to begin</div>
         <span class="pz-hint">Scroll to zoom · Drag to pan · Dbl-click to reset</span>
       </div>
     `;
@@ -975,27 +953,34 @@
   const pzInstances = {};
 
   function wireEvents() {
-    const strip = document.getElementById('e3d-upload-strip');
-    const uploadBtn = document.getElementById('e3d-upload-btn');
     const fileInput = document.getElementById('e3d-file-input');
     const processBtn = document.getElementById('e3d-process-btn');
     const downloadBtn = document.getElementById('e3d-download-btn');
+    const origBody   = document.getElementById('e3d-orig-body');
 
-    // Upload button
-    uploadBtn.addEventListener('click', () => fileInput.click());
+    // Click anywhere in the original preview to upload (when no image loaded)
+    origBody.addEventListener('click', (e) => {
+      if (state.originalImg) return; // let pan/zoom handle it once an image is present
+      fileInput.click();
+    });
+    origBody.style.cursor = 'pointer'; // becomes '' (grab) after first image loads
+
+    // Replace button (shown after first image)
+    document.getElementById('e3d-replace-btn').addEventListener('click', () => fileInput.click());
+
     fileInput.addEventListener('change', () => {
       if (fileInput.files.length) handleFile(fileInput.files[0]);
     });
 
-    // Drag & drop onto the strip
-    strip.addEventListener('dragover', (e) => {
+    // Drag & drop onto the original preview body
+    origBody.addEventListener('dragover', (e) => {
       e.preventDefault();
-      strip.classList.add('drag-over');
+      origBody.classList.add('orig-drop-active');
     });
-    strip.addEventListener('dragleave', () => strip.classList.remove('drag-over'));
-    strip.addEventListener('drop', (e) => {
+    origBody.addEventListener('dragleave', () => origBody.classList.remove('orig-drop-active'));
+    origBody.addEventListener('drop', (e) => {
       e.preventDefault();
-      strip.classList.remove('drag-over');
+      origBody.classList.remove('orig-drop-active');
       if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     });
 
@@ -1010,7 +995,6 @@
     downloadBtn.addEventListener('click', downloadResult);
 
     // Pan/zoom setup (deferred until preview bodies exist in DOM)
-    const origBody  = document.getElementById('e3d-orig-body');
     const origWrap  = document.getElementById('e3d-orig-wrap');
     const resBody   = document.getElementById('e3d-result-body');
     const resWrap   = document.getElementById('e3d-result-wrap');
@@ -1091,9 +1075,10 @@
         document.getElementById('e3d-result-info').textContent = '';
         document.getElementById('e3d-download-btn').style.display = 'none';
 
-        // Update strip filename
-        document.getElementById('e3d-upload-filename').textContent = file.name;
-        document.getElementById('e3d-upload-btn').textContent = 'Replace';
+        // Switch orig body cursor to grab (pan mode) and show Replace button
+        const origBody = document.getElementById('e3d-orig-body');
+        origBody.style.cursor = '';
+        document.getElementById('e3d-replace-btn').style.display = 'inline-block';
 
         // Auto-process on first load
         readSettings();
