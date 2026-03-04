@@ -26,6 +26,284 @@
      MATH / COLOR HELPERS
      ═══════════════════════════════════════════════════════════════════ */
 
+  /* ═══════════════════════════════════════════════════════════════════
+     WEB WORKER — all compute-heavy code lives here as a blob string
+     so the main thread never freezes during processing.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  const WORKER_SRC = /* js */`
+    'use strict';
+
+    /** sRGB → linear light */
+    function srgbToLinear(v) {
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+
+    /** Convert inches to pixels at given DPI */
+    function inchesToPx(inches, dpi) {
+      return Math.round(inches * dpi);
+    }
+
+    /** Build a LUT from custom gray values (evenly-spaced input → custom output) */
+    function buildMappingLut(grayValues) {
+      const sorted = [...new Set(grayValues)].sort((a, b) => a - b);
+      const inputLevels = [];
+      for (let i = 0; i < sorted.length; i++) {
+        inputLevels.push((i / (sorted.length - 1)) * 255);
+      }
+      const lut = new Uint8Array(256);
+      for (let x = 0; x < 256; x++) {
+        if (x <= inputLevels[0]) {
+          lut[x] = sorted[0];
+        } else if (x >= inputLevels[inputLevels.length - 1]) {
+          lut[x] = sorted[sorted.length - 1];
+        } else {
+          for (let i = 0; i < inputLevels.length - 1; i++) {
+            if (x >= inputLevels[i] && x <= inputLevels[i + 1]) {
+              const t = (x - inputLevels[i]) / (inputLevels[i + 1] - inputLevels[i]);
+              lut[x] = Math.round(sorted[i] + t * (sorted[i + 1] - sorted[i]));
+              break;
+            }
+          }
+        }
+      }
+      return lut;
+    }
+
+    function applyClahe(gray, width, height, clipLimit, tileSize) {
+      const tilesX = Math.max(1, Math.floor(width / tileSize));
+      const tilesY = Math.max(1, Math.floor(height / tileSize));
+      const tileW = width / tilesX;
+      const tileH = height / tilesY;
+      const tileLuts = [];
+      for (let ty = 0; ty < tilesY; ty++) {
+        tileLuts[ty] = [];
+        for (let tx = 0; tx < tilesX; tx++) {
+          const x0 = Math.round(tx * tileW);
+          const y0 = Math.round(ty * tileH);
+          const x1 = Math.round((tx + 1) * tileW);
+          const y1 = Math.round((ty + 1) * tileH);
+          const tw = x1 - x0;
+          const th = y1 - y0;
+          const numPixels = tw * th;
+          const hist = new Float64Array(256);
+          for (let r = y0; r < y1; r++) {
+            for (let c = x0; c < x1; c++) {
+              hist[gray[r * width + c]]++;
+            }
+          }
+          if (clipLimit > 0) {
+            const limit = Math.max(1, clipLimit * numPixels / 256);
+            let excess = 0;
+            for (let i = 0; i < 256; i++) {
+              if (hist[i] > limit) { excess += hist[i] - limit; hist[i] = limit; }
+            }
+            const increment = excess / 256;
+            for (let i = 0; i < 256; i++) hist[i] += increment;
+          }
+          const cdf = new Float64Array(256);
+          cdf[0] = hist[0];
+          for (let i = 1; i < 256; i++) cdf[i] = cdf[i - 1] + hist[i];
+          const cdfMin = cdf[0], cdfMax = cdf[255];
+          const lut = new Uint8Array(256);
+          for (let i = 0; i < 256; i++) {
+            lut[i] = Math.round(((cdf[i] - cdfMin) / (cdfMax - cdfMin)) * 255);
+          }
+          tileLuts[ty][tx] = { lut, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+        }
+      }
+      const result = new Uint8Array(width * height);
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const px = gray[y * width + x];
+          const ftx = (x - tileW / 2) / tileW;
+          const fty = (y - tileH / 2) / tileH;
+          const tx0 = Math.max(0, Math.min(tilesX - 1, Math.floor(ftx)));
+          const ty0 = Math.max(0, Math.min(tilesY - 1, Math.floor(fty)));
+          const tx1 = Math.min(tilesX - 1, tx0 + 1);
+          const ty1 = Math.min(tilesY - 1, ty0 + 1);
+          const ax = Math.max(0, Math.min(1, ftx - tx0));
+          const ay = Math.max(0, Math.min(1, fty - ty0));
+          const v00 = tileLuts[ty0][tx0].lut[px];
+          const v10 = tileLuts[ty0][tx1].lut[px];
+          const v01 = tileLuts[ty1][tx0].lut[px];
+          const v11 = tileLuts[ty1][tx1].lut[px];
+          const top = v00 * (1 - ax) + v10 * ax;
+          const bot = v01 * (1 - ax) + v11 * ax;
+          result[y * width + x] = Math.round(top * (1 - ay) + bot * ay);
+        }
+      }
+      return result;
+    }
+
+    function gaussianKernel(sigma) {
+      const size = Math.ceil(sigma * 3) * 2 + 1;
+      const kernel = new Float32Array(size);
+      let sum = 0;
+      const half = Math.floor(size / 2);
+      for (let i = 0; i < size; i++) {
+        const x = i - half;
+        kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
+        sum += kernel[i];
+      }
+      for (let i = 0; i < size; i++) kernel[i] /= sum;
+      return kernel;
+    }
+
+    function separableBlur(data, w, h, sigma) {
+      const kernel = gaussianKernel(sigma);
+      const half = Math.floor(kernel.length / 2);
+      const temp = new Float32Array(w * h);
+      const result = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let sum = 0;
+          for (let k = 0; k < kernel.length; k++) {
+            const sx = Math.min(w - 1, Math.max(0, x + k - half));
+            sum += data[y * w + sx] * kernel[k];
+          }
+          temp[y * w + x] = sum;
+        }
+      }
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          let sum = 0;
+          for (let k = 0; k < kernel.length; k++) {
+            const sy = Math.min(h - 1, Math.max(0, y + k - half));
+            sum += temp[sy * w + x] * kernel[k];
+          }
+          result[y * w + x] = sum;
+        }
+      }
+      return result;
+    }
+
+    function unsharpMask(data, w, h, amount, sigma) {
+      const blurred = separableBlur(data, w, h, sigma);
+      const result = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        result[i] = Math.max(0, Math.min(1, data[i] * (1 + amount) - blurred[i] * amount));
+      }
+      return result;
+    }
+
+    function resizeBilinear(data, srcW, srcH, dstW, dstH) {
+      const result = new Float32Array(dstW * dstH);
+      const xRatio = srcW / dstW;
+      const yRatio = srcH / dstH;
+      for (let dy = 0; dy < dstH; dy++) {
+        for (let dx = 0; dx < dstW; dx++) {
+          const sx = dx * xRatio;
+          const sy = dy * yRatio;
+          const x0 = Math.floor(sx), y0 = Math.floor(sy);
+          const x1 = Math.min(x0 + 1, srcW - 1);
+          const y1 = Math.min(y0 + 1, srcH - 1);
+          const fx = sx - x0, fy = sy - y0;
+          result[dy * dstW + dx] =
+            data[y0 * srcW + x0] * (1 - fx) * (1 - fy) +
+            data[y0 * srcW + x1] * fx * (1 - fy) +
+            data[y1 * srcW + x0] * (1 - fx) * fy +
+            data[y1 * srcW + x1] * fx * fy;
+        }
+      }
+      return result;
+    }
+
+    function processImage(pixels, w, h, settings) {
+      const { customGrayValues, driverDpi, invertOutput, applyClahe: doClahe,
+              claheClip, claheTile, sharpenAmount, targetHeightIn, targetWidthIn } = settings;
+
+      // 1) sRGB → linear → luminance Y
+      const Y = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        const j = i * 4;
+        const rL = srgbToLinear(pixels[j]     / 255);
+        const gL = srgbToLinear(pixels[j + 1] / 255);
+        const bL = srgbToLinear(pixels[j + 2] / 255);
+        Y[i] = 0.2126 * rL + 0.7152 * gL + 0.0722 * bL;
+      }
+
+      // 2) Optional CLAHE
+      let Yp = Y;
+      if (doClahe) {
+        const Y8 = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) Y8[i] = Math.round(Math.max(0, Math.min(255, Y[i] * 255)));
+        const clahed = applyClahe(Y8, w, h, claheClip, claheTile);
+        Yp = new Float32Array(w * h);
+        for (let i = 0; i < w * h; i++) Yp[i] = clahed[i] / 255;
+      }
+
+      // 3) Invert + gamma (gamma=1.0)
+      const base = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        let b = invertOutput ? 1.0 - Yp[i] : Yp[i];
+        b = Math.max(1e-6, Math.min(1.0, b));
+        base[i] = Math.max(0, Math.min(1, invertOutput ? 1.0 - Math.pow(b, 1.0) : Math.pow(b, 1.0)));
+      }
+
+      // 4) Sharpen
+      let sharpened = base;
+      if (sharpenAmount > 0) sharpened = unsharpMask(base, w, h, sharpenAmount, 0.7);
+
+      // 5) Resize
+      let finalW = w, finalH = h, finalData = sharpened;
+      const hasW = targetWidthIn  > 0;
+      const hasH = targetHeightIn > 0;
+      if (hasW || hasH) {
+        if (hasW && !hasH) {
+          finalW = inchesToPx(targetWidthIn, driverDpi);
+          finalH = Math.round(h * (finalW / w));
+        } else if (hasH && !hasW) {
+          finalH = inchesToPx(targetHeightIn, driverDpi);
+          finalW = Math.round(w * (finalH / h));
+        } else {
+          finalW = inchesToPx(targetWidthIn,  driverDpi);
+          finalH = inchesToPx(targetHeightIn, driverDpi);
+        }
+        finalData = resizeBilinear(sharpened, w, h, finalW, finalH);
+      }
+
+      // 6) Quantize + LUT
+      const lut = buildMappingLut(customGrayValues);
+      const out = new Uint8Array(finalW * finalH);
+      for (let i = 0; i < finalW * finalH; i++) {
+        out[i] = lut[Math.round(Math.max(0, Math.min(255, finalData[i] * 255)))];
+      }
+
+      return { data: out, width: finalW, height: finalH, dpi: driverDpi };
+    }
+
+    // ── Message handler ──────────────────────────────────────────────
+    self.onmessage = function (e) {
+      const { pixels, width, height, settings, jobId } = e.data;
+      try {
+        const result = processImage(pixels, width, height, settings);
+        self.postMessage({ ok: true, jobId, data: result.data.buffer,
+                           width: result.width, height: result.height, dpi: result.dpi },
+                         [result.data.buffer]);
+      } catch (err) {
+        self.postMessage({ ok: false, jobId, error: err.message });
+      }
+    };
+  `;
+
+  /* ─── Worker singleton ──────────────────────────────────────────── */
+  let _worker = null;
+  let _jobGen = 0;  // incremented each run; stale results are dropped
+
+  function getWorker() {
+    if (!_worker) {
+      const blob = new Blob([WORKER_SRC], { type: 'application/javascript' });
+      _worker = new Worker(URL.createObjectURL(blob));
+    }
+    return _worker;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     MATH / COLOR HELPERS  (main-thread stubs — NOT used for processing)
+     Only kept so nothing else in this file breaks
+     ═══════════════════════════════════════════════════════════════════ */
+
   /** sRGB → linear light */
   function srgbToLinear(v) {
     return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -61,290 +339,6 @@
       }
     }
     return lut;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     CLAHE (Contrast Limited Adaptive Histogram Equalization)
-     Pure JS implementation matching OpenCV's createCLAHE behavior
-     ═══════════════════════════════════════════════════════════════════ */
-
-  function applyClahe(gray, width, height, clipLimit, tileSize) {
-    const tilesX = Math.max(1, Math.floor(width / tileSize));
-    const tilesY = Math.max(1, Math.floor(height / tileSize));
-    const tileW = width / tilesX;
-    const tileH = height / tilesY;
-
-    // Build equalized LUTs per tile
-    const tileLuts = [];
-    for (let ty = 0; ty < tilesY; ty++) {
-      tileLuts[ty] = [];
-      for (let tx = 0; tx < tilesX; tx++) {
-        const x0 = Math.round(tx * tileW);
-        const y0 = Math.round(ty * tileH);
-        const x1 = Math.round((tx + 1) * tileW);
-        const y1 = Math.round((ty + 1) * tileH);
-        const tw = x1 - x0;
-        const th = y1 - y0;
-        const numPixels = tw * th;
-
-        // Histogram
-        const hist = new Float64Array(256);
-        for (let r = y0; r < y1; r++) {
-          for (let c = x0; c < x1; c++) {
-            hist[gray[r * width + c]]++;
-          }
-        }
-
-        // Clip histogram
-        if (clipLimit > 0) {
-          const limit = Math.max(1, clipLimit * numPixels / 256);
-          let excess = 0;
-          for (let i = 0; i < 256; i++) {
-            if (hist[i] > limit) {
-              excess += hist[i] - limit;
-              hist[i] = limit;
-            }
-          }
-          const increment = excess / 256;
-          for (let i = 0; i < 256; i++) {
-            hist[i] += increment;
-          }
-        }
-
-        // CDF → LUT
-        const cdf = new Float64Array(256);
-        cdf[0] = hist[0];
-        for (let i = 1; i < 256; i++) cdf[i] = cdf[i - 1] + hist[i];
-        const cdfMin = cdf[0];
-        const cdfMax = cdf[255];
-        const lut = new Uint8Array(256);
-        for (let i = 0; i < 256; i++) {
-          lut[i] = Math.round(((cdf[i] - cdfMin) / (cdfMax - cdfMin)) * 255);
-        }
-        tileLuts[ty][tx] = { lut, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
-      }
-    }
-
-    // Bilinear interpolation between tile LUTs
-    const result = new Uint8Array(width * height);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const px = gray[y * width + x];
-
-        // Find surrounding tile centers
-        const ftx = (x - tileW / 2) / tileW;
-        const fty = (y - tileH / 2) / tileH;
-        const tx0 = Math.max(0, Math.min(tilesX - 1, Math.floor(ftx)));
-        const ty0 = Math.max(0, Math.min(tilesY - 1, Math.floor(fty)));
-        const tx1 = Math.min(tilesX - 1, tx0 + 1);
-        const ty1 = Math.min(tilesY - 1, ty0 + 1);
-
-        const sx = ftx - tx0;
-        const sy = fty - ty0;
-        const ax = Math.max(0, Math.min(1, sx));
-        const ay = Math.max(0, Math.min(1, sy));
-
-        const v00 = tileLuts[ty0][tx0].lut[px];
-        const v10 = tileLuts[ty0][tx1].lut[px];
-        const v01 = tileLuts[ty1][tx0].lut[px];
-        const v11 = tileLuts[ty1][tx1].lut[px];
-
-        const top = v00 * (1 - ax) + v10 * ax;
-        const bot = v01 * (1 - ax) + v11 * ax;
-        result[y * width + x] = Math.round(top * (1 - ay) + bot * ay);
-      }
-    }
-    return result;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     IMAGE PROCESSING PIPELINE
-     Mirrors the Python script: sRGB→Linear→Luminance→CLAHE→Invert→
-     Sharpen→Resize→LUT mapping
-     ═══════════════════════════════════════════════════════════════════ */
-
-  function processImage(img, settings) {
-    const {
-      customGrayValues, driverDpi, invertOutput, applyClahe: doClahe,
-      claheClip, claheTile, sharpenAmount, targetHeightIn, targetWidthIn
-    } = settings;
-
-    // 1) Draw image to canvas and get pixel data
-    const srcCanvas = document.createElement('canvas');
-    srcCanvas.width = img.naturalWidth || img.width;
-    srcCanvas.height = img.naturalHeight || img.height;
-    const srcCtx = srcCanvas.getContext('2d');
-    srcCtx.drawImage(img, 0, 0);
-    const imgData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
-    const pixels = imgData.data;
-    const w = srcCanvas.width;
-    const h = srcCanvas.height;
-
-    // 2) sRGB → linear → luminance Y
-    const Y = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) {
-      const j = i * 4;
-      const rLin = srgbToLinear(pixels[j] / 255);
-      const gLin = srgbToLinear(pixels[j + 1] / 255);
-      const bLin = srgbToLinear(pixels[j + 2] / 255);
-      Y[i] = 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin;
-    }
-
-    // 3) Optional CLAHE
-    let Yprocessed = Y;
-    if (doClahe) {
-      const Y8 = new Uint8Array(w * h);
-      for (let i = 0; i < w * h; i++) {
-        Y8[i] = Math.round(Math.max(0, Math.min(255, Y[i] * 255)));
-      }
-      const clahed = applyClahe(Y8, w, h, claheClip, claheTile);
-      Yprocessed = new Float32Array(w * h);
-      for (let i = 0; i < w * h; i++) {
-        Yprocessed[i] = clahed[i] / 255;
-      }
-    }
-
-    // 4) Invert + gamma (gamma=1.0 per original code)
-    const base = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) {
-      let b = invertOutput ? 1.0 - Yprocessed[i] : Yprocessed[i];
-      b = Math.max(1e-6, Math.min(1.0, b));
-      const adj = Math.pow(b, 1.0);
-      base[i] = invertOutput ? 1.0 - adj : adj;
-      base[i] = Math.max(0, Math.min(1, base[i]));
-    }
-
-    // 5) Sharpen (unsharp mask)
-    let sharpened = base;
-    if (sharpenAmount > 0) {
-      sharpened = unsharpMask(base, w, h, sharpenAmount, 0.7);
-    }
-
-    // 6) Resize to target dimensions
-    let finalW = w, finalH = h;
-    let finalData = sharpened;
-
-    const hasW = targetWidthIn !== null && targetWidthIn !== '' && targetWidthIn > 0;
-    const hasH = targetHeightIn !== null && targetHeightIn !== '' && targetHeightIn > 0;
-
-    if (hasW || hasH) {
-      if (hasW && !hasH) {
-        finalW = inchesToPx(targetWidthIn, driverDpi);
-        finalH = Math.round(h * (finalW / w));
-      } else if (hasH && !hasW) {
-        finalH = inchesToPx(targetHeightIn, driverDpi);
-        finalW = Math.round(w * (finalH / h));
-      } else {
-        finalW = inchesToPx(targetWidthIn, driverDpi);
-        finalH = inchesToPx(targetHeightIn, driverDpi);
-      }
-      finalData = resizeBilinear(sharpened, w, h, finalW, finalH);
-    }
-
-    // 7) Quantize to 8-bit
-    const cont8 = new Uint8Array(finalW * finalH);
-    for (let i = 0; i < finalW * finalH; i++) {
-      cont8[i] = Math.round(Math.max(0, Math.min(255, finalData[i] * 255)));
-    }
-
-    // 8) Apply custom gray value LUT
-    const lut = buildMappingLut(customGrayValues);
-    const mapped = new Uint8Array(finalW * finalH);
-    for (let i = 0; i < cont8.length; i++) {
-      mapped[i] = lut[cont8[i]];
-    }
-
-    return { data: mapped, width: finalW, height: finalH, dpi: driverDpi };
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     UNSHARP MASK  (Gaussian blur + weighted blend)
-     ═══════════════════════════════════════════════════════════════════ */
-
-  function gaussianKernel(sigma) {
-    const size = Math.ceil(sigma * 3) * 2 + 1;
-    const kernel = new Float32Array(size);
-    let sum = 0;
-    const half = Math.floor(size / 2);
-    for (let i = 0; i < size; i++) {
-      const x = i - half;
-      kernel[i] = Math.exp(-(x * x) / (2 * sigma * sigma));
-      sum += kernel[i];
-    }
-    for (let i = 0; i < size; i++) kernel[i] /= sum;
-    return kernel;
-  }
-
-  function separableBlur(data, w, h, sigma) {
-    const kernel = gaussianKernel(sigma);
-    const half = Math.floor(kernel.length / 2);
-    const temp = new Float32Array(w * h);
-    const result = new Float32Array(w * h);
-
-    // Horizontal pass
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let sum = 0;
-        for (let k = 0; k < kernel.length; k++) {
-          const sx = Math.min(w - 1, Math.max(0, x + k - half));
-          sum += data[y * w + sx] * kernel[k];
-        }
-        temp[y * w + x] = sum;
-      }
-    }
-
-    // Vertical pass
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        let sum = 0;
-        for (let k = 0; k < kernel.length; k++) {
-          const sy = Math.min(h - 1, Math.max(0, y + k - half));
-          sum += temp[sy * w + x] * kernel[k];
-        }
-        result[y * w + x] = sum;
-      }
-    }
-    return result;
-  }
-
-  function unsharpMask(data, w, h, amount, sigma) {
-    const blurred = separableBlur(data, w, h, sigma);
-    const result = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) {
-      result[i] = Math.max(0, Math.min(1, data[i] * (1 + amount) - blurred[i] * amount));
-    }
-    return result;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     BILINEAR RESIZE (INTER_AREA analog for downscale)
-     ═══════════════════════════════════════════════════════════════════ */
-
-  function resizeBilinear(data, srcW, srcH, dstW, dstH) {
-    const result = new Float32Array(dstW * dstH);
-    const xRatio = srcW / dstW;
-    const yRatio = srcH / dstH;
-    for (let dy = 0; dy < dstH; dy++) {
-      for (let dx = 0; dx < dstW; dx++) {
-        const sx = dx * xRatio;
-        const sy = dy * yRatio;
-        const x0 = Math.floor(sx);
-        const y0 = Math.floor(sy);
-        const x1 = Math.min(x0 + 1, srcW - 1);
-        const y1 = Math.min(y0 + 1, srcH - 1);
-        const fx = sx - x0;
-        const fy = sy - y0;
-        const v00 = data[y0 * srcW + x0];
-        const v10 = data[y0 * srcW + x1];
-        const v01 = data[y1 * srcW + x0];
-        const v11 = data[y1 * srcW + x1];
-        result[dy * dstW + dx] = v00 * (1 - fx) * (1 - fy) +
-          v10 * fx * (1 - fy) +
-          v01 * (1 - fx) * fy +
-          v11 * fx * fy;
-      }
-    }
-    return result;
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -1009,8 +1003,8 @@
       clearTimeout(liveTimer);
       liveTimer = setTimeout(() => {
         readSettings();
-        runProcessing(true); // true = silent (no spinner)
-      }, 500);
+        runProcessing();
+      }, 150);
     }
 
     // Slider display labels + live update on drag-end (change)
@@ -1051,6 +1045,7 @@
       img.onload = () => {
         state.originalImg = img;
         state.resultData = null;
+        state.srcPixels = null; // force fresh pixel capture for new image
 
         // Draw original into its canvas inside pz-wrap
         const origWrap = document.getElementById('e3d-orig-wrap');
@@ -1082,7 +1077,7 @@
 
         // Auto-process on first load
         readSettings();
-        runProcessing(true);
+        runProcessing();
       };
       img.src = e.target.result;
     };
@@ -1121,38 +1116,53 @@
     state.settings.invertOutput = document.getElementById('e3d-invert').checked;
   }
 
-  function runProcessing(silent = false) {
-    state.processing = true;
-    const statusEl = document.getElementById('e3d-status');
-    const processBtn = document.getElementById('e3d-process-btn');
-    if (!silent) {
-      statusEl.innerHTML = '<div class="engrave3d-processing"><div class="spinner"></div>Processing image…</div>';
-      processBtn.disabled = true;
-    } else {
-      statusEl.innerHTML = '';
+  function runProcessing() {
+    if (!state.originalImg) return;
+
+    // Capture a snapshot of the source pixels once (reused for every live update)
+    if (!state.srcPixels) {
+      const tmp = document.createElement('canvas');
+      tmp.width  = state.originalImg.naturalWidth  || state.originalImg.width;
+      tmp.height = state.originalImg.naturalHeight || state.originalImg.height;
+      tmp.getContext('2d').drawImage(state.originalImg, 0, 0);
+      state.srcPixels = tmp.getContext('2d')
+        .getImageData(0, 0, tmp.width, tmp.height).data;
+      state.srcW = tmp.width;
+      state.srcH = tmp.height;
     }
 
-    // Use requestAnimationFrame to let the spinner render before heavy work
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        try {
-          const result = processImage(state.originalImg, state.settings);
-          state.resultData = result.data;
-          state.resultWidth = result.width;
-          state.resultHeight = result.height;
-          state.resultDpi = result.dpi;
-          showResult();
-          statusEl.innerHTML = '';
-        } catch (err) {
-          if (!silent) {
-            statusEl.innerHTML = `<div style="color:#ef5350;padding:8px 0;font-size:13px">Error: ${err.message}</div>`;
-          }
-          console.error('3D Engrave processing error:', err);
-        }
-        state.processing = false;
-        processBtn.disabled = false;
-      }, 50);
-    });
+    const jobId = ++_jobGen;
+    state.processing = true;
+
+    // Transfer a copy of the pixel buffer to the worker (zero-copy via Transferable)
+    const pixelsCopy = new Uint8ClampedArray(state.srcPixels).buffer;
+
+    const worker = getWorker();
+    worker.onmessage = (e) => {
+      const msg = e.data;
+      if (msg.jobId !== _jobGen) return; // stale — a newer job already started
+
+      state.processing = false;
+      document.getElementById('e3d-process-btn').disabled = false;
+      document.getElementById('e3d-status').innerHTML = '';
+
+      if (!msg.ok) {
+        console.error('3D Engrave worker error:', msg.error);
+        return;
+      }
+
+      state.resultData   = new Uint8Array(msg.data);
+      state.resultWidth  = msg.width;
+      state.resultHeight = msg.height;
+      state.resultDpi    = msg.dpi;
+      showResult();
+    };
+
+    worker.postMessage(
+      { pixels: pixelsCopy, width: state.srcW, height: state.srcH,
+        settings: state.settings, jobId },
+      [pixelsCopy]   // transfer ownership — no copy on the main thread
+    );
   }
 
   function showResult() {
