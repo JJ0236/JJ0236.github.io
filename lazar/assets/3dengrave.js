@@ -277,7 +277,9 @@
     self.onmessage = function (e) {
       const { pixels, width, height, settings, jobId } = e.data;
       try {
-        const result = processImage(pixels, width, height, settings);
+        // pixels arrives as an ArrayBuffer — wrap it in a typed array view
+        const pixelArray = new Uint8ClampedArray(pixels);
+        const result = processImage(pixelArray, width, height, settings);
         self.postMessage({ ok: true, jobId, data: result.data.buffer,
                            width: result.width, height: result.height, dpi: result.dpi },
                          [result.data.buffer]);
