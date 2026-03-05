@@ -20,6 +20,9 @@
     sharpenAmount: 3.0,
     targetHeightIn: 2.0,
     targetWidthIn: null,
+    lutMode: 'linear',   // 'linear' | 'lut'
+    linearMin: 0,
+    linearMax: 255,
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -615,6 +618,39 @@
       color: var(--text-primary, #e0e0e0);
     }
 
+    /* LUT mode subtabs */
+    .e3d-subtabs {
+      display: flex;
+      margin: 0 -16px 14px;
+      border-bottom: 1px solid var(--border, #2a2a4a);
+    }
+
+    .e3d-subtab {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      text-align: center;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary, #a0a0c0);
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+      margin-bottom: -1px;
+      letter-spacing: .3px;
+    }
+
+    .e3d-subtab:hover {
+      color: var(--text-primary, #e0e0e0);
+    }
+
+    .e3d-subtab.active {
+      color: var(--accent, #2196f3);
+      border-bottom-color: var(--accent, #2196f3);
+    }
+
     .engrave3d-live-badge {
       display: inline-flex;
       align-items: center;
@@ -710,10 +746,41 @@
     panel.innerHTML = `
       <h3>3D Engrave Settings</h3>
 
-      <div class="engrave3d-field">
-        <label>Gray Values (comma-separated)</label>
-        <input type="text" id="e3d-gray-values" value="${state.settings.customGrayValues.join(', ')}" />
-        <div class="field-hint">Custom output gray levels for LUT mapping</div>
+      <!-- Output mapping mode tabs -->
+      <div class="e3d-subtabs">
+        <button class="e3d-subtab ${state.settings.lutMode === 'linear' ? 'active' : ''}" data-mode="linear">Linear</button>
+        <button class="e3d-subtab ${state.settings.lutMode === 'lut'    ? 'active' : ''}" data-mode="lut">Custom LUT</button>
+      </div>
+
+      <!-- Linear mode -->
+      <div id="e3d-linear-panel" ${state.settings.lutMode !== 'linear' ? 'style="display:none"' : ''}>
+        <div class="engrave3d-field">
+          <label class="engrave3d-slider-label">
+            Min Output
+            <span class="engrave3d-slider-val" id="e3d-linear-min-val">${state.settings.linearMin}</span>
+          </label>
+          <input type="range" id="e3d-linear-min" min="0" max="255" step="1"
+            value="${state.settings.linearMin}" class="engrave3d-range" />
+          <div class="field-hint">Darkest output gray (0 = pure black)</div>
+        </div>
+        <div class="engrave3d-field">
+          <label class="engrave3d-slider-label">
+            Max Output
+            <span class="engrave3d-slider-val" id="e3d-linear-max-val">${state.settings.linearMax}</span>
+          </label>
+          <input type="range" id="e3d-linear-max" min="0" max="255" step="1"
+            value="${state.settings.linearMax}" class="engrave3d-range" />
+          <div class="field-hint">Brightest output gray (255 = pure white)</div>
+        </div>
+      </div>
+
+      <!-- Custom LUT mode -->
+      <div id="e3d-lut-panel" ${state.settings.lutMode !== 'lut' ? 'style="display:none"' : ''}>
+        <div class="engrave3d-field">
+          <label>Gray Values (comma-separated)</label>
+          <input type="text" id="e3d-gray-values" value="${state.settings.customGrayValues.join(', ')}" />
+          <div class="field-hint">Custom output gray levels for piecewise LUT mapping</div>
+        </div>
       </div>
 
       <div class="engrave3d-row">
@@ -1009,6 +1076,30 @@
       }, 150);
     }
 
+    // ── LUT mode subtab switching ──────────────────────────────────
+    document.querySelectorAll('.e3d-subtab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.e3d-subtab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const mode = tab.dataset.mode;
+        document.getElementById('e3d-linear-panel').style.display = mode === 'linear' ? '' : 'none';
+        document.getElementById('e3d-lut-panel').style.display    = mode === 'lut'    ? '' : 'none';
+        scheduleLiveUpdate();
+      });
+    });
+
+    // Linear sliders
+    const linearMinSlider = document.getElementById('e3d-linear-min');
+    const linearMaxSlider = document.getElementById('e3d-linear-max');
+    linearMinSlider.addEventListener('input', () => {
+      document.getElementById('e3d-linear-min-val').textContent = linearMinSlider.value;
+      scheduleLiveUpdate();
+    });
+    linearMaxSlider.addEventListener('input', () => {
+      document.getElementById('e3d-linear-max-val').textContent = linearMaxSlider.value;
+      scheduleLiveUpdate();
+    });
+
     // Slider display labels + live update on drag-end (change)
     const sharpenSlider = document.getElementById('e3d-sharpen');
     sharpenSlider.addEventListener('input', () => {
@@ -1087,12 +1178,22 @@
   }
 
   function readSettings() {
-    const grayStr = document.getElementById('e3d-gray-values').value;
-    const grayVals = grayStr.split(',')
-      .map(s => parseInt(s.trim(), 10))
-      .filter(n => !isNaN(n) && n >= 0 && n <= 255);
-    if (grayVals.length >= 2) {
-      state.settings.customGrayValues = grayVals;
+    // LUT mode
+    state.settings.lutMode = document.querySelector('.e3d-subtab.active')?.dataset.mode || 'linear';
+
+    if (state.settings.lutMode === 'linear') {
+      const minV = parseInt(document.getElementById('e3d-linear-min').value, 10);
+      const maxV = parseInt(document.getElementById('e3d-linear-max').value, 10);
+      state.settings.linearMin = minV;
+      state.settings.linearMax = maxV;
+      // Feed as 2-point array — buildMappingLut produces a perfect linear ramp
+      state.settings.customGrayValues = [Math.min(minV, maxV), Math.max(minV, maxV)];
+    } else {
+      const grayStr = document.getElementById('e3d-gray-values').value;
+      const grayVals = grayStr.split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => !isNaN(n) && n >= 0 && n <= 255);
+      if (grayVals.length >= 2) state.settings.customGrayValues = grayVals;
     }
 
     const dpi = parseInt(document.getElementById('e3d-dpi').value, 10);
