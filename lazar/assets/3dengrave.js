@@ -1340,7 +1340,27 @@
     const stem = state.file?.name
       ? state.file.name.replace(/\.[^.]+$/, '')
       : 'image';
-    const filename = `${stem}_power_map_8bit_${state.resultDpi}dpi.png`;
+
+    const s = state.settings;
+
+    // Mode tag
+    const modeTag = s.lutMode === 'linear'
+      ? `linear_${s.linearMin}-${s.linearMax}`
+      : `lut_${s.customGrayValues.join('-')}`;
+
+    // Size tag (only if user specified dimensions)
+    const hasH = s.targetHeightIn > 0;
+    const hasW = s.targetWidthIn  > 0;
+    const sizeTag = hasH || hasW
+      ? `_${hasW ? s.targetWidthIn + 'w' : ''}${hasH ? s.targetHeightIn + 'h' : ''}in`
+      : '';
+
+    // Processing tags
+    const sharpenTag = s.sharpenAmount > 0 ? `_sh${s.sharpenAmount.toFixed(1)}` : '';
+    const claheTag   = s.applyClahe ? `_clahe${s.claheClip.toFixed(1)}c${s.claheTile}t` : '';
+    const invertTag  = s.invertOutput ? '_inv' : '';
+
+    const filename = `${stem}_${modeTag}${sizeTag}${sharpenTag}${claheTag}${invertTag}_${state.resultDpi}dpi.png`;
 
     canvas.toBlob((blob) => {
       const a = document.createElement('a');
