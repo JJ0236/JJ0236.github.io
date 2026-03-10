@@ -1173,8 +1173,8 @@
     isActive = true;
     ensureBody();
 
-    // Hide React content
-    document.querySelectorAll('.app-body, .app-body-3d, .step-toolbar').forEach(e => {
+    // Hide React content AND other injected tabs' content
+    document.querySelectorAll('.app-body, .app-body-3d, .step-toolbar, .halftone-container').forEach(e => {
       e.style.setProperty('display', 'none', 'important');
     });
 
