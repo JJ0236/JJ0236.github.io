@@ -1636,7 +1636,7 @@
 
     // Hide React content AND other injected tabs' content
     // Note: 3dengrave.js replaces .app-body-3d class with .engrave3d-container
-    document.querySelectorAll('.app-body, .app-body-3d, .engrave3d-container, .step-toolbar, .halftone-container, .lineart-container').forEach(e => {
+    document.querySelectorAll('.app-body, .app-body-3d, .engrave3d-container, .step-toolbar, .halftone-container, .lineart-container, .dm-container').forEach(e => {
       e.style.setProperty('display', 'none', 'important');
     });
 
