@@ -1068,7 +1068,8 @@
     ensureBody();
 
     // Hide React content AND other injected tabs' content
-    document.querySelectorAll('.app-body, .app-body-3d, .step-toolbar, .lineart-container').forEach(e => {
+    // Note: 3dengrave.js replaces .app-body-3d class with .engrave3d-container
+    document.querySelectorAll('.app-body, .app-body-3d, .engrave3d-container, .step-toolbar, .lineart-container').forEach(e => {
       e.style.setProperty('display', 'none', 'important');
     });
 
@@ -1083,7 +1084,7 @@
 
     if (halftoneBody) halftoneBody.style.display = 'none';
 
-    document.querySelectorAll('.app-body, .app-body-3d, .step-toolbar').forEach(e => {
+    document.querySelectorAll('.app-body, .app-body-3d, .engrave3d-container, .step-toolbar').forEach(e => {
       e.style.removeProperty('display');
     });
     if (halftoneTab) halftoneTab.classList.remove('active');
