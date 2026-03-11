@@ -13,12 +13,17 @@
     small: {
       id: 'onnx-community/depth-anything-v2-small',
       label: 'Small',
-      desc: '~25 MB · faster',
+      desc: '~25 MB · fastest',
     },
     base: {
       id: 'onnx-community/depth-anything-v2-base',
       label: 'Base',
-      desc: '~100 MB · better quality',
+      desc: '~100 MB · balanced',
+    },
+    large: {
+      id: 'onnx-community/depth-anything-v2-large',
+      label: 'Large',
+      desc: '~350 MB · best detail',
     },
   };
 
@@ -27,9 +32,21 @@
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
     modelSize: 'small',
-    displacement: 0.2,
+    resScale: 1,
+    sharpen: true,
+    displacement: 0.3,
     autoSway: true,
     invert: false,
+
+    // Orbit state
+    orbitTheta: 0,
+    orbitPhi: Math.PI / 2,
+    orbitDist: 1,
+    orbitTargetTheta: 0,
+    orbitTargetPhi: Math.PI / 2,
+    isDragging3D: false,
+    lastDragX: 0,
+    lastDragY: 0,
 
     file: null,
     originalImg: null,
@@ -277,9 +294,10 @@
     /* ── 3D canvas ── */
     .dm-3d-canvas {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      display: none;
+      display: none; cursor: grab;
     }
     .dm-3d-canvas.visible { display: block; }
+    .dm-3d-canvas:active { cursor: grabbing; }
   `;
 
   let stylesInjected = false;
@@ -381,13 +399,45 @@
         </label>
         <div class="dm-opt-group" id="dm-model-group">
           <button class="dm-opt-btn ${state.modelSize==='small'?'active':''}" data-val="small">
-            Small<span class="desc">~25 MB · faster</span>
+            Small<span class="desc">~25 MB · fastest</span>
           </button>
           <button class="dm-opt-btn ${state.modelSize==='base'?'active':''}" data-val="base">
-            Base<span class="desc">~100 MB · better</span>
+            Base<span class="desc">~100 MB · balanced</span>
+          </button>
+          <button class="dm-opt-btn ${state.modelSize==='large'?'active':''}" data-val="large">
+            Large<span class="desc">~350 MB · best</span>
           </button>
         </div>
         <div class="dm-field-hint">Model downloads on first use, then cached</div>
+      </div>
+
+      <hr class="dm-divider">
+
+      <!-- Quality settings -->
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Resolution Scale
+          <span class="dm-slider-val" id="dm-res-val">${state.resScale}x</span>
+        </label>
+        <input type="range" id="dm-res-scale" min="1" max="3" step="1"
+          value="${state.resScale}" class="dm-range" />
+        <div class="dm-field-hint">Upscale input before inference (higher = finer detail, slower)</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-toggle-label">
+          <input type="checkbox" id="dm-sharpen" ${state.sharpen?'checked':''} />
+          Edge Sharpening
+        </label>
+        <div class="dm-field-hint">Post-process to crisp up depth boundaries</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-toggle-label">
+          <input type="checkbox" id="dm-invert" ${state.invert?'checked':''} />
+          Invert Depth
+        </label>
+        <div class="dm-field-hint">Swap near/far (white↔black)</div>
       </div>
 
       <hr class="dm-divider">
@@ -409,14 +459,6 @@
           Auto-Sway
         </label>
         <div class="dm-field-hint">Gentle idle animation in 3D preview</div>
-      </div>
-
-      <div class="dm-field">
-        <label class="dm-toggle-label">
-          <input type="checkbox" id="dm-invert" ${state.invert?'checked':''} />
-          Invert Depth
-        </label>
-        <div class="dm-field-hint">Swap near/far (white↔black)</div>
       </div>
 
       <hr class="dm-divider">
@@ -643,6 +685,14 @@
       });
     });
 
+    /* ── Resolution scale slider ── */
+    const resSlider = document.getElementById('dm-res-scale');
+    resSlider.addEventListener('input', () => {
+      const v = parseInt(resSlider.value, 10);
+      state.resScale = v;
+      document.getElementById('dm-res-val').textContent = v + 'x';
+    });
+
     /* ── Displacement slider ── */
     const dispSlider = document.getElementById('dm-displacement');
     dispSlider.addEventListener('input', () => {
@@ -653,15 +703,16 @@
     });
 
     /* ── Toggles ── */
+    document.getElementById('dm-sharpen').addEventListener('change', (e) => {
+      state.sharpen = e.target.checked;
+      if (cachedRawDepth) regenerateFromCachedDepth();
+    });
     document.getElementById('dm-auto-sway').addEventListener('change', (e) => {
       state.autoSway = e.target.checked;
     });
     document.getElementById('dm-invert').addEventListener('change', (e) => {
       state.invert = e.target.checked;
-      if (state.depthCanvas) {
-        // Re-render depth map with new invert setting
-        regenerateFromCachedDepth();
-      }
+      if (cachedRawDepth) regenerateFromCachedDepth();
     });
 
     /* ── View toggle (Depth / 3D) ── */
@@ -782,7 +833,23 @@
       // ── 2. Run inference ──
       showProgress(100, '<span class="pulse">Generating depth map…</span>');
 
-      const result = await pipe(state.imageDataUrl);
+      // Build input — optionally upscale for more detail
+      let inputSource = state.imageDataUrl;
+      if (state.resScale > 1) {
+        showProgress(100, '<span class="pulse">Upscaling input…</span>');
+        const sc = state.resScale;
+        const upCanvas = document.createElement('canvas');
+        upCanvas.width  = state.originalImg.naturalWidth  * sc;
+        upCanvas.height = state.originalImg.naturalHeight * sc;
+        const uctx = upCanvas.getContext('2d');
+        uctx.imageSmoothingEnabled = true;
+        uctx.imageSmoothingQuality = 'high';
+        uctx.drawImage(state.originalImg, 0, 0, upCanvas.width, upCanvas.height);
+        inputSource = upCanvas.toDataURL('image/png');
+        showProgress(100, '<span class="pulse">Generating depth map…</span>');
+      }
+
+      const result = await pipe(inputSource);
 
       // ── 3. Extract depth data ──
       const depthImage = result.depth;    // RawImage
@@ -806,6 +873,60 @@
   function regenerateFromCachedDepth() {
     if (!cachedRawDepth) return;
     renderDepthFromRaw(cachedRawDepth);
+  }
+
+  /* ── Edge-preserving sharpen (unsharp mask) ── */
+  function sharpenDepth(canvas) {
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext('2d');
+    const src = ctx.getImageData(0, 0, w, h);
+    const d = src.data;
+
+    // Extract grayscale channel
+    const gray = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) gray[i] = d[i * 4];
+
+    // Gaussian-ish blur (3-pass box blur, radius 2)
+    function boxBlur(input, r) {
+      const tmp = new Float32Array(w * h);
+      const out = new Float32Array(w * h);
+      const diam = 2 * r + 1;
+      // Horizontal
+      for (let y = 0; y < h; y++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) sum += input[y * w + Math.min(w-1, Math.max(0, k))];
+        tmp[y * w] = sum / diam;
+        for (let x = 1; x < w; x++) {
+          sum += input[y * w + Math.min(w-1, x + r)] - input[y * w + Math.max(0, x - r - 1)];
+          tmp[y * w + x] = sum / diam;
+        }
+      }
+      // Vertical
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        for (let k = -r; k <= r; k++) sum += tmp[Math.min(h-1, Math.max(0, k)) * w + x];
+        out[x] = sum / diam;
+        for (let y = 1; y < h; y++) {
+          sum += tmp[Math.min(h-1, y + r) * w + x] - tmp[Math.max(0, y - r - 1) * w + x];
+          out[y * w + x] = sum / diam;
+        }
+      }
+      return out;
+    }
+
+    let blurred = gray;
+    for (let p = 0; p < 3; p++) blurred = boxBlur(blurred, 2);
+
+    // Unsharp mask: sharpened = original + strength * (original - blurred)
+    const strength = 1.5;
+    const result = ctx.createImageData(w, h);
+    const rd = result.data;
+    for (let i = 0; i < w * h; i++) {
+      let v = gray[i] + strength * (gray[i] - blurred[i]);
+      v = Math.max(0, Math.min(255, Math.round(v)));
+      rd[i * 4] = v; rd[i * 4 + 1] = v; rd[i * 4 + 2] = v; rd[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(result, 0, 0);
   }
 
   function renderDepthFromRaw(depthImage) {
@@ -844,6 +965,10 @@
     fctx.imageSmoothingEnabled = true;
     fctx.imageSmoothingQuality = 'high';
     fctx.drawImage(nativeCanvas, 0, 0, origW, origH);
+
+    // Apply sharpening if enabled
+    if (state.sharpen) sharpenDepth(fullCanvas);
+
     state.depthFullCanvas = fullCanvas;
 
     // Show in result preview
@@ -855,7 +980,6 @@
 
   function showDepthResult() {
     const wrapEl = document.getElementById('dm-result-wrap');
-    const isEmpty = !wrapEl.firstElementChild;
 
     // Show depth map as image
     const dataUrl = state.depthFullCanvas.toDataURL('image/png');
@@ -863,9 +987,8 @@
     img.onload = () => {
       wrapEl.innerHTML = '';
       wrapEl.appendChild(img);
-      if (isEmpty) {
-        requestAnimationFrame(() => pzInstances.result && pzInstances.result.fit());
-      }
+      // Always fit the depth map preview so it's centered
+      requestAnimationFrame(() => pzInstances.result && pzInstances.result.fit());
     };
     img.src = dataUrl;
 
@@ -957,7 +1080,7 @@
     // ── Camera ──
     const cw = container.clientWidth || 400;
     const ch = container.clientHeight || 400;
-    const camera = new THREE.PerspectiveCamera(50, cw / ch, 0.01, 100);
+    const camera = new THREE.PerspectiveCamera(35, cw / ch, 0.01, 100);
 
     // ── Renderer ──
     const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
@@ -1012,7 +1135,7 @@
     } else {
       camZ = (planeW / 2) / Math.tan(vFov / 2) / containerAspect;
     }
-    camZ *= 1.15; // padding
+    camZ *= 1.02; // minimal padding — fill the viewport
     camera.position.z = camZ;
     camera.lookAt(0, 0, 0);
 
@@ -1021,16 +1144,25 @@
     state.renderer = renderer;
     state.mesh = mesh;
     state.cameraBaseZ = camZ;
+    state.orbitDist = camZ;
+    state.orbitTheta = 0;
+    state.orbitPhi = Math.PI / 2;
+    state.orbitTargetTheta = 0;
+    state.orbitTargetPhi = Math.PI / 2;
     state.swayTime = 0;
     state.currentMX = 0;
     state.currentMY = 0;
 
-    // ── Mouse / touch interaction ──
+    // ── Mouse / touch interaction (orbit drag) ──
+    canvas3d.addEventListener('mousedown', on3DMouseDown);
     canvas3d.addEventListener('mousemove', on3DMouseMove);
     canvas3d.addEventListener('mouseenter', () => { state.isHovering = true; });
-    canvas3d.addEventListener('mouseleave', () => { state.isHovering = false; });
+    canvas3d.addEventListener('mouseleave', () => { state.isHovering = false; state.isDragging3D = false; });
+    document.addEventListener('mouseup', on3DMouseUp);
+    canvas3d.addEventListener('touchstart', on3DTouchStart, { passive: false });
     canvas3d.addEventListener('touchmove', on3DTouchMove, { passive: false });
-    canvas3d.addEventListener('touchend', () => { state.isHovering = false; });
+    canvas3d.addEventListener('touchend', () => { state.isHovering = false; state.isDragging3D = false; });
+    canvas3d.addEventListener('wheel', on3DWheel, { passive: false });
 
     // ── Resize observer ──
     if (!state._resizeObs) {
@@ -1046,20 +1178,58 @@
     setResultView('3d');
   }
 
+  function on3DMouseDown(e) {
+    if (e.button !== 0) return;
+    state.isDragging3D = true;
+    state.lastDragX = e.clientX;
+    state.lastDragY = e.clientY;
+  }
+
   function on3DMouseMove(e) {
-    const rect = e.target.getBoundingClientRect();
     state.isHovering = true;
-    state.targetMX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-    state.targetMY = -((e.clientY - rect.top) / rect.height - 0.5) * 2;
+    if (state.isDragging3D) {
+      const dx = e.clientX - state.lastDragX;
+      const dy = e.clientY - state.lastDragY;
+      state.lastDragX = e.clientX;
+      state.lastDragY = e.clientY;
+      state.orbitTargetTheta -= dx * 0.005;
+      state.orbitTargetPhi   -= dy * 0.005;
+      // Clamp phi so camera doesn't flip
+      state.orbitTargetPhi = Math.max(0.3, Math.min(Math.PI - 0.3, state.orbitTargetPhi));
+    }
+  }
+
+  function on3DMouseUp() {
+    state.isDragging3D = false;
+  }
+
+  function on3DTouchStart(e) {
+    if (e.touches.length === 1) {
+      e.preventDefault();
+      state.isDragging3D = true;
+      state.isHovering = true;
+      state.lastDragX = e.touches[0].clientX;
+      state.lastDragY = e.touches[0].clientY;
+    }
   }
 
   function on3DTouchMove(e) {
     e.preventDefault();
-    if (e.touches.length !== 1) return;
-    const rect = e.target.getBoundingClientRect();
-    state.isHovering = true;
-    state.targetMX = ((e.touches[0].clientX - rect.left) / rect.width - 0.5) * 2;
-    state.targetMY = -((e.touches[0].clientY - rect.top) / rect.height - 0.5) * 2;
+    if (e.touches.length === 1 && state.isDragging3D) {
+      const dx = e.touches[0].clientX - state.lastDragX;
+      const dy = e.touches[0].clientY - state.lastDragY;
+      state.lastDragX = e.touches[0].clientX;
+      state.lastDragY = e.touches[0].clientY;
+      state.orbitTargetTheta -= dx * 0.005;
+      state.orbitTargetPhi   -= dy * 0.005;
+      state.orbitTargetPhi = Math.max(0.3, Math.min(Math.PI - 0.3, state.orbitTargetPhi));
+    }
+  }
+
+  function on3DWheel(e) {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 1.08 : 1 / 1.08;
+    state.orbitDist = Math.max(0.2, Math.min(5, state.orbitDist * factor));
   }
 
   function resize3D() {
@@ -1075,11 +1245,17 @@
 
   function update3DCamera() {
     if (!state.camera) return;
-    const maxAngle = 0.2;
-    const bz = state.cameraBaseZ;
-    state.camera.position.x = state.currentMX * maxAngle * bz * 0.5;
-    state.camera.position.y = state.currentMY * maxAngle * bz * 0.5;
-    state.camera.position.z = bz;
+
+    // Smooth lerp orbit angles
+    state.orbitTheta += (state.orbitTargetTheta - state.orbitTheta) * 0.08;
+    state.orbitPhi   += (state.orbitTargetPhi   - state.orbitPhi)   * 0.08;
+
+    const r = state.orbitDist;
+    const theta = state.orbitTheta;
+    const phi = state.orbitPhi;
+    state.camera.position.x = r * Math.sin(phi) * Math.sin(theta);
+    state.camera.position.y = r * Math.cos(phi);
+    state.camera.position.z = r * Math.sin(phi) * Math.cos(theta);
     state.camera.lookAt(0, 0, 0);
   }
 
@@ -1095,17 +1271,11 @@
 
       state.swayTime += 0.008;
 
-      if (!state.isHovering && state.autoSway) {
-        state.targetMX = Math.sin(state.swayTime) * 0.4;
-        state.targetMY = Math.cos(state.swayTime * 0.7) * 0.25;
-      } else if (!state.isHovering) {
-        state.targetMX *= 0.95;
-        state.targetMY *= 0.95;
+      // Auto-sway when not dragging
+      if (!state.isDragging3D && state.autoSway) {
+        state.orbitTargetTheta = Math.sin(state.swayTime) * 0.3;
+        state.orbitTargetPhi   = Math.PI / 2 + Math.cos(state.swayTime * 0.7) * 0.15;
       }
-
-      // Smooth lerp
-      state.currentMX += (state.targetMX - state.currentMX) * 0.06;
-      state.currentMY += (state.targetMY - state.currentMY) * 0.06;
 
       update3DCamera();
 
