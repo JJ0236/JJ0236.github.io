@@ -32,8 +32,8 @@
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
     modelSize: 'small',
-    resScale: 1,
-    sharpen: true,
+    tileGrid: 1,
+    guidedFilter: true,
     displacement: 0.3,
     autoSway: true,
     invert: false,
@@ -415,21 +415,27 @@
 
       <!-- Quality settings -->
       <div class="dm-field">
-        <label class="dm-slider-label">
-          Resolution Scale
-          <span class="dm-slider-val" id="dm-res-val">${state.resScale}x</span>
-        </label>
-        <input type="range" id="dm-res-scale" min="1" max="3" step="1"
-          value="${state.resScale}" class="dm-range" />
-        <div class="dm-field-hint">Upscale input before inference (higher = finer detail, slower)</div>
+        <label>Detail Level</label>
+        <div class="dm-opt-group" id="dm-tile-group">
+          <button class="dm-opt-btn ${state.tileGrid===1?'active':''}" data-val="1">
+            Standard<span class="desc">1 pass · fast</span>
+          </button>
+          <button class="dm-opt-btn ${state.tileGrid===2?'active':''}" data-val="2">
+            High<span class="desc">4 tiles · 2× detail</span>
+          </button>
+          <button class="dm-opt-btn ${state.tileGrid===3?'active':''}" data-val="3">
+            Ultra<span class="desc">9 tiles · 3× detail</span>
+          </button>
+        </div>
+        <div class="dm-field-hint">Process image in tiles for higher effective resolution</div>
       </div>
 
       <div class="dm-field">
         <label class="dm-toggle-label">
-          <input type="checkbox" id="dm-sharpen" ${state.sharpen?'checked':''} />
-          Edge Sharpening
+          <input type="checkbox" id="dm-guided-filter" ${state.guidedFilter?'checked':''} />
+          Edge Refinement
         </label>
-        <div class="dm-field-hint">Post-process to crisp up depth boundaries</div>
+        <div class="dm-field-hint">Guided filter sharpens depth edges using original image</div>
       </div>
 
       <div class="dm-field">
@@ -685,12 +691,13 @@
       });
     });
 
-    /* ── Resolution scale slider ── */
-    const resSlider = document.getElementById('dm-res-scale');
-    resSlider.addEventListener('input', () => {
-      const v = parseInt(resSlider.value, 10);
-      state.resScale = v;
-      document.getElementById('dm-res-val').textContent = v + 'x';
+    /* ── Detail level picker ── */
+    document.querySelectorAll('#dm-tile-group .dm-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#dm-tile-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.tileGrid = parseInt(btn.dataset.val, 10);
+      });
     });
 
     /* ── Displacement slider ── */
@@ -703,16 +710,16 @@
     });
 
     /* ── Toggles ── */
-    document.getElementById('dm-sharpen').addEventListener('change', (e) => {
-      state.sharpen = e.target.checked;
-      if (cachedRawDepth) regenerateFromCachedDepth();
+    document.getElementById('dm-guided-filter').addEventListener('change', (e) => {
+      state.guidedFilter = e.target.checked;
+      if (cachedDepthFloat) processAndDisplayDepth();
     });
     document.getElementById('dm-auto-sway').addEventListener('change', (e) => {
       state.autoSway = e.target.checked;
     });
     document.getElementById('dm-invert').addEventListener('change', (e) => {
       state.invert = e.target.checked;
-      if (cachedRawDepth) regenerateFromCachedDepth();
+      if (cachedDepthFloat) processAndDisplayDepth();
     });
 
     /* ── View toggle (Depth / 3D) ── */
@@ -801,8 +808,183 @@
      DEPTH MAP GENERATION
      ═══════════════════════════════════════════════════════════════════ */
 
-  // Cache raw depth for re-invert without re-running inference
-  let cachedRawDepth = null;
+  // Cache depth as Float32Array (0-1 range, original image resolution)
+  let cachedDepthFloat = null;
+
+  /* ── Separable box-mean filter (O(N), memory-efficient) ── */
+  function boxMeanSep(src, w, h, r, out, tmp) {
+    // Pass 1: Horizontal (src → tmp)
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      let sum = src[row];
+      for (let i = 1; i <= Math.min(r, w - 1); i++) sum += src[row + i];
+      tmp[row] = sum / (Math.min(r, w - 1) + 1);
+      for (let x = 1; x < w; x++) {
+        if (x + r <= w - 1) sum += src[row + x + r];
+        if (x - r - 1 >= 0) sum -= src[row + x - r - 1];
+        tmp[row + x] = sum / (Math.min(w - 1, x + r) - Math.max(0, x - r) + 1);
+      }
+    }
+    // Pass 2: Vertical (tmp → out)
+    for (let x = 0; x < w; x++) {
+      let sum = tmp[x];
+      for (let i = 1; i <= Math.min(r, h - 1); i++) sum += tmp[i * w + x];
+      out[x] = sum / (Math.min(r, h - 1) + 1);
+      for (let y = 1; y < h; y++) {
+        if (y + r <= h - 1) sum += tmp[(y + r) * w + x];
+        if (y - r - 1 >= 0) sum -= tmp[(y - r - 1) * w + x];
+        out[y * w + x] = sum / (Math.min(h - 1, y + r) - Math.max(0, y - r) + 1);
+      }
+    }
+  }
+
+  /* ── Guided Filter (He et al.) — uses original image edges to sharpen depth ── */
+  function guidedFilterApply(guide, src, w, h, radius, eps) {
+    const n = w * h;
+    const tmp   = new Float32Array(n);
+    const meanI = new Float32Array(n);
+    const meanP = new Float32Array(n);
+    const corrII = new Float32Array(n);
+    const corrIP = new Float32Array(n);
+
+    for (let i = 0; i < n; i++) corrII[i] = guide[i] * guide[i];
+    for (let i = 0; i < n; i++) corrIP[i] = guide[i] * src[i];
+
+    boxMeanSep(guide,  w, h, radius, meanI,  tmp);
+    boxMeanSep(src,    w, h, radius, meanP,  tmp);
+    boxMeanSep(corrII, w, h, radius, corrII, tmp); // now mean(I*I)
+    boxMeanSep(corrIP, w, h, radius, corrIP, tmp); // now mean(I*P)
+
+    // a = cov(I,P) / (var(I) + eps),  b = meanP - a·meanI
+    for (let i = 0; i < n; i++) {
+      const varI  = corrII[i] - meanI[i] * meanI[i];
+      const covIP = corrIP[i] - meanI[i] * meanP[i];
+      corrIP[i] = covIP / (varI + eps);              // a
+      corrII[i] = meanP[i] - corrIP[i] * meanI[i];   // b
+    }
+
+    boxMeanSep(corrIP, w, h, radius, meanI, tmp); // meanA → meanI
+    boxMeanSep(corrII, w, h, radius, meanP, tmp); // meanB → meanP
+
+    const output = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      output[i] = Math.max(0, Math.min(1, meanI[i] * guide[i] + meanP[i]));
+    }
+    return output;
+  }
+
+  function getOrigGray() {
+    const img = state.originalImg;
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    const g = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      g[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
+    }
+    return g;
+  }
+
+  /* ── Tiled depth inference for higher effective resolution ── */
+  async function tiledDepthInference(pipe) {
+    const img = state.originalImg;
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const grid = state.tileGrid;
+
+    if (grid <= 1) {
+      // Single-pass inference
+      showProgress(100, '<span class="pulse">Running depth inference…</span>');
+      const result = await pipe(state.imageDataUrl);
+      const di = result.depth;
+      const dw = di.width, dh = di.height, ch = di.channels, dd = di.data;
+      const depth = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) {
+        const sy = Math.min(Math.floor(y / H * dh), dh - 1);
+        for (let x = 0; x < W; x++) {
+          const sx = Math.min(Math.floor(x / W * dw), dw - 1);
+          depth[y * W + x] = (ch === 1 ? dd[sy * dw + sx] : dd[(sy * dw + sx) * ch]) / 255;
+        }
+      }
+      return depth;
+    }
+
+    // Multi-tile: split into grid×grid overlapping tiles
+    const srcCanvas = document.createElement('canvas');
+    srcCanvas.width = W; srcCanvas.height = H;
+    srcCanvas.getContext('2d').drawImage(img, 0, 0);
+
+    const stepX = Math.ceil(W / grid);
+    const stepY = Math.ceil(H / grid);
+    const padX = Math.round(stepX * 0.25);
+    const padY = Math.round(stepY * 0.25);
+
+    const depthAccum  = new Float32Array(W * H);
+    const weightAccum = new Float32Array(W * H);
+    let tileIdx = 0;
+    const total = grid * grid;
+
+    for (let gy = 0; gy < grid; gy++) {
+      for (let gx = 0; gx < grid; gx++) {
+        tileIdx++;
+        showProgress(100, `<span class="pulse">Depth tile ${tileIdx}/${total}…</span>`);
+
+        let x0 = gx * stepX - padX;
+        let y0 = gy * stepY - padY;
+        let x1 = (gx + 1) * stepX + padX;
+        let y1 = (gy + 1) * stepY + padY;
+        x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+        x1 = Math.min(W, x1); y1 = Math.min(H, y1);
+        const tw = x1 - x0, th = y1 - y0;
+
+        const tc = document.createElement('canvas');
+        tc.width = tw; tc.height = th;
+        tc.getContext('2d').drawImage(srcCanvas, x0, y0, tw, th, 0, 0, tw, th);
+
+        const result = await pipe(tc.toDataURL('image/png'));
+        const di = result.depth;
+        const dw = di.width, dh = di.height, ch = di.channels, dd = di.data;
+        const ramp = Math.min(padX, padY);
+
+        for (let ly = 0; ly < th; ly++) {
+          const gyPos = y0 + ly;
+          if (gyPos >= H) continue;
+          const sy = Math.min(Math.floor(ly / th * dh), dh - 1);
+          for (let lx = 0; lx < tw; lx++) {
+            const gxPos = x0 + lx;
+            if (gxPos >= W) continue;
+            const sx = Math.min(Math.floor(lx / tw * dw), dw - 1);
+            const v = (ch === 1 ? dd[sy * dw + sx] : dd[(sy * dw + sx) * ch]) / 255;
+
+            // Cosine-ramp blending weight at tile edges
+            const edgeDist = Math.min(lx, tw - 1 - lx, ly, th - 1 - ly);
+            let wt = 1;
+            if (ramp > 0 && edgeDist < ramp) {
+              wt = 0.5 * (1 - Math.cos(Math.PI * edgeDist / ramp));
+            }
+
+            const idx = gyPos * W + gxPos;
+            depthAccum[idx]  += v * wt;
+            weightAccum[idx] += wt;
+          }
+        }
+      }
+    }
+
+    // Normalize and rescale to 0-1
+    const depth = new Float32Array(W * H);
+    let minD = Infinity, maxD = -Infinity;
+    for (let i = 0; i < W * H; i++) {
+      depth[i] = weightAccum[i] > 0 ? depthAccum[i] / weightAccum[i] : 0;
+      if (depth[i] < minD) minD = depth[i];
+      if (depth[i] > maxD) maxD = depth[i];
+    }
+    const range = maxD - minD || 1;
+    for (let i = 0; i < W * H; i++) depth[i] = (depth[i] - minD) / range;
+    return depth;
+  }
 
   async function generateDepthMap() {
     if (state.generating || !state.originalImg) return;
@@ -823,38 +1005,16 @@
             `Downloading model… <strong>${lastProgress}%</strong>`);
         } else if (info.status === 'initiate') {
           showProgress(lastProgress, `<span class="pulse">Initializing ${info.file || ''}…</span>`);
-        } else if (info.status === 'done') {
-          // individual file done
-        } else if (info.status === 'ready') {
-          showProgress(100, 'Model ready');
-        }
+        } else if (info.status === 'done') { /* file done */ }
+        else if (info.status === 'ready') { showProgress(100, 'Model ready'); }
       });
 
-      // ── 2. Run inference ──
-      showProgress(100, '<span class="pulse">Generating depth map…</span>');
+      // ── 2. Run tiled or single-pass inference ──
+      cachedDepthFloat = await tiledDepthInference(pipe);
 
-      // Build input — optionally upscale for more detail
-      let inputSource = state.imageDataUrl;
-      if (state.resScale > 1) {
-        showProgress(100, '<span class="pulse">Upscaling input…</span>');
-        const sc = state.resScale;
-        const upCanvas = document.createElement('canvas');
-        upCanvas.width  = state.originalImg.naturalWidth  * sc;
-        upCanvas.height = state.originalImg.naturalHeight * sc;
-        const uctx = upCanvas.getContext('2d');
-        uctx.imageSmoothingEnabled = true;
-        uctx.imageSmoothingQuality = 'high';
-        uctx.drawImage(state.originalImg, 0, 0, upCanvas.width, upCanvas.height);
-        inputSource = upCanvas.toDataURL('image/png');
-        showProgress(100, '<span class="pulse">Generating depth map…</span>');
-      }
-
-      const result = await pipe(inputSource);
-
-      // ── 3. Extract depth data ──
-      const depthImage = result.depth;    // RawImage
-      cachedRawDepth = depthImage;
-      renderDepthFromRaw(depthImage);
+      // ── 3. Post-process and display ──
+      showProgress(100, '<span class="pulse">Post-processing…</span>');
+      processAndDisplayDepth();
 
     } catch (err) {
       console.error('Depth map generation failed:', err);
@@ -870,106 +1030,43 @@
     hideProgress();
   }
 
-  function regenerateFromCachedDepth() {
-    if (!cachedRawDepth) return;
-    renderDepthFromRaw(cachedRawDepth);
-  }
+  /* ── Apply guided filter + invert and render to canvas ── */
+  function processAndDisplayDepth() {
+    if (!cachedDepthFloat) return;
+    const W = state.originalImg.naturalWidth;
+    const H = state.originalImg.naturalHeight;
+    let depth = cachedDepthFloat;
 
-  /* ── Edge-preserving sharpen (unsharp mask) ── */
-  function sharpenDepth(canvas) {
-    const w = canvas.width, h = canvas.height;
+    // Guided filter: use original image edges to sharpen depth boundaries
+    if (state.guidedFilter) {
+      const guide = getOrigGray();
+      const radius = Math.max(4, Math.round(Math.min(W, H) / 80));
+      depth = guidedFilterApply(guide, depth, W, H, radius, 0.01);
+    }
+
+    // Invert if enabled
+    if (state.invert) {
+      const inv = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) inv[i] = 1 - depth[i];
+      depth = inv;
+    }
+
+    // Render to canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
-    const src = ctx.getImageData(0, 0, w, h);
-    const d = src.data;
-
-    // Extract grayscale channel
-    const gray = new Float32Array(w * h);
-    for (let i = 0; i < w * h; i++) gray[i] = d[i * 4];
-
-    // Gaussian-ish blur (3-pass box blur, radius 2)
-    function boxBlur(input, r) {
-      const tmp = new Float32Array(w * h);
-      const out = new Float32Array(w * h);
-      const diam = 2 * r + 1;
-      // Horizontal
-      for (let y = 0; y < h; y++) {
-        let sum = 0;
-        for (let k = -r; k <= r; k++) sum += input[y * w + Math.min(w-1, Math.max(0, k))];
-        tmp[y * w] = sum / diam;
-        for (let x = 1; x < w; x++) {
-          sum += input[y * w + Math.min(w-1, x + r)] - input[y * w + Math.max(0, x - r - 1)];
-          tmp[y * w + x] = sum / diam;
-        }
-      }
-      // Vertical
-      for (let x = 0; x < w; x++) {
-        let sum = 0;
-        for (let k = -r; k <= r; k++) sum += tmp[Math.min(h-1, Math.max(0, k)) * w + x];
-        out[x] = sum / diam;
-        for (let y = 1; y < h; y++) {
-          sum += tmp[Math.min(h-1, y + r) * w + x] - tmp[Math.max(0, y - r - 1) * w + x];
-          out[y * w + x] = sum / diam;
-        }
-      }
-      return out;
-    }
-
-    let blurred = gray;
-    for (let p = 0; p < 3; p++) blurred = boxBlur(blurred, 2);
-
-    // Unsharp mask: sharpened = original + strength * (original - blurred)
-    const strength = 1.5;
-    const result = ctx.createImageData(w, h);
-    const rd = result.data;
-    for (let i = 0; i < w * h; i++) {
-      let v = gray[i] + strength * (gray[i] - blurred[i]);
-      v = Math.max(0, Math.min(255, Math.round(v)));
-      rd[i * 4] = v; rd[i * 4 + 1] = v; rd[i * 4 + 2] = v; rd[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(result, 0, 0);
-  }
-
-  function renderDepthFromRaw(depthImage) {
-    const w = depthImage.width;
-    const h = depthImage.height;
-    const channels = depthImage.channels;
-    const data = depthImage.data;
-
-    // Render to native-res canvas
-    const nativeCanvas = document.createElement('canvas');
-    nativeCanvas.width = w;
-    nativeCanvas.height = h;
-    const ctx = nativeCanvas.getContext('2d');
-    const imgData = ctx.createImageData(w, h);
-
-    for (let i = 0; i < w * h; i++) {
-      let val;
-      if (channels === 1) val = data[i];
-      else val = data[i * channels];
-      if (state.invert) val = 255 - val;
-      imgData.data[i * 4]     = val;
-      imgData.data[i * 4 + 1] = val;
-      imgData.data[i * 4 + 2] = val;
+    const imgData = ctx.createImageData(W, H);
+    for (let i = 0; i < W * H; i++) {
+      const v = Math.max(0, Math.min(255, Math.round(depth[i] * 255)));
+      imgData.data[i * 4]     = v;
+      imgData.data[i * 4 + 1] = v;
+      imgData.data[i * 4 + 2] = v;
       imgData.data[i * 4 + 3] = 255;
     }
     ctx.putImageData(imgData, 0, 0);
-    state.depthCanvas = nativeCanvas;
 
-    // Upscale to original dimensions for high-res download
-    const origW = state.originalImg.naturalWidth;
-    const origH = state.originalImg.naturalHeight;
-    const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = origW;
-    fullCanvas.height = origH;
-    const fctx = fullCanvas.getContext('2d');
-    fctx.imageSmoothingEnabled = true;
-    fctx.imageSmoothingQuality = 'high';
-    fctx.drawImage(nativeCanvas, 0, 0, origW, origH);
-
-    // Apply sharpening if enabled
-    if (state.sharpen) sharpenDepth(fullCanvas);
-
-    state.depthFullCanvas = fullCanvas;
+    state.depthFullCanvas = canvas;
+    state.depthCanvas = canvas;
 
     // Show in result preview
     showDepthResult();
