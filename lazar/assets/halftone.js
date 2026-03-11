@@ -1042,7 +1042,13 @@
       navTabs.appendChild(halftoneTab);
     }
 
-    if (isActive) halftoneTab.classList.add('active');
+    if (isActive) {
+      halftoneTab.classList.add('active');
+      // Remove active from React tabs so two tabs don't look selected
+      navTabs.querySelectorAll('.nav-tab:not(.halftone-tab):not(.lineart-tab)').forEach(t => {
+        t.classList.remove('active');
+      });
+    }
   }
 
   function ensureBody() {
@@ -1096,11 +1102,6 @@
      ═══════════════════════════════════════════════════════════════════ */
   const observer = new MutationObserver(() => {
     injectTab();
-    if (isActive) {
-      const reactTabs = document.querySelectorAll('.nav-tabs .nav-tab:not(.halftone-tab)');
-      const anyReactActive = [...reactTabs].some(t => t.classList.contains('active'));
-      if (anyReactActive) deactivateHalftone();
-    }
   });
 
   function init() {

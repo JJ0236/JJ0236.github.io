@@ -1154,7 +1154,13 @@
     lineartTab.addEventListener('click', activateLineart);
     navTabs.appendChild(lineartTab);
 
-    if (isActive) lineartTab.classList.add('active');
+    if (isActive) {
+      lineartTab.classList.add('active');
+      // Remove active from React tabs so two tabs don't look selected
+      navTabs.querySelectorAll('.nav-tab:not(.lineart-tab):not(.halftone-tab)').forEach(t => {
+        t.classList.remove('active');
+      });
+    }
   }
 
   function ensureBody() {
@@ -1210,12 +1216,6 @@
      ═══════════════════════════════════════════════════════════════════ */
   const observer = new MutationObserver(() => {
     injectTab();
-    // If React re-rendered and activated its own tab while we were active, deactivate
-    if (isActive) {
-      const reactTabs = document.querySelectorAll('.nav-tabs .nav-tab:not(.lineart-tab)');
-      const anyReactActive = [...reactTabs].some(t => t.classList.contains('active'));
-      if (anyReactActive) deactivateLineart();
-    }
   });
 
   function init() {
