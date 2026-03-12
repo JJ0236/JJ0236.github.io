@@ -299,6 +299,31 @@
     }
     .dm-3d-canvas.visible { display: block; }
     .dm-3d-canvas:active { cursor: grabbing; }
+
+    /* ── Fallback launcher ── */
+    .dm-launcher {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 10001;
+      padding: 10px 14px;
+      border: 1px solid rgba(233,69,96,.45);
+      border-radius: 999px;
+      background: rgba(15,15,35,.92);
+      color: #fff;
+      font: 600 12px/1 Inter, system-ui, sans-serif;
+      letter-spacing: .2px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.35);
+      cursor: pointer;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+      backdrop-filter: blur(8px);
+    }
+    .dm-launcher:hover {
+      transform: translateY(-1px);
+      background: rgba(233,69,96,.95);
+      border-color: rgba(233,69,96,.95);
+    }
+    .dm-launcher.hidden { display: none; }
   `;
 
   let stylesInjected = false;
@@ -1715,17 +1740,45 @@
      ═══════════════════════════════════════════════════════════════════ */
   let dmTab = null;
   let dmBody = null;
+  let dmLauncher = null;
   let isActive = false;
+
+  function ensureLauncher() {
+    injectStyles();
+    if (dmLauncher && document.body.contains(dmLauncher)) return;
+    dmLauncher = document.createElement('button');
+    dmLauncher.className = 'dm-launcher';
+    dmLauncher.type = 'button';
+    dmLauncher.textContent = 'Depth Map';
+    dmLauncher.addEventListener('click', activateDepthMap);
+    document.body.appendChild(dmLauncher);
+  }
+
+  function syncLauncherVisibility() {
+    ensureLauncher();
+    if (!dmLauncher) return;
+    dmLauncher.classList.toggle('hidden', !!document.querySelector('.depthmap-tab'));
+  }
 
   function injectTab() {
     const navTabs = document.querySelector('.nav-tabs');
-    if (!navTabs || navTabs.querySelector('.depthmap-tab')) return;
+    syncLauncherVisibility();
+    if (!navTabs) return;
+
+    const existingTab = navTabs.querySelector('.depthmap-tab');
+    if (existingTab) {
+      dmTab = existingTab;
+      syncLauncherVisibility();
+      return;
+    }
 
     dmTab = document.createElement('button');
     dmTab.className = 'nav-tab depthmap-tab';
     dmTab.textContent = 'Depth Map';
+    dmTab.type = 'button';
     dmTab.addEventListener('click', activateDepthMap);
     navTabs.appendChild(dmTab);
+    syncLauncherVisibility();
 
     if (isActive) {
       dmTab.classList.add('active');
@@ -1803,8 +1856,10 @@
   });
 
   function init() {
+    ensureLauncher();
     injectTab();
     observer.observe(document.body, { childList: true, subtree: true });
+    setInterval(injectTab, 1500);
   }
 
   if (document.readyState === 'loading') {
