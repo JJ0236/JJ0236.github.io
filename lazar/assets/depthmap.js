@@ -1129,149 +1129,172 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════════
-     MEDIAPIPE FACE LANDMARKER (lazy-loaded for portrait mode)
+     FACE DETECTION FOR PORTRAIT MODE
+     Primary:  browser's built-in FaceDetector (Chrome/Edge, no download)
+     Optional: MediaPipe Face Landmarker loaded in background for 478-pt
+               landmarks — never blocks the main inference pipeline
      ═══════════════════════════════════════════════════════════════════ */
-  let mpVisionModule = null;
-  let faceLandmarker  = null;
-  let mpLoadPromise   = null;
 
-  const MP_CDN   = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
-  const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+  // Optional MediaPipe state — loaded in background, never blocks depth gen
+  let mpFaceLandmarker = null;
+  let mpLoadPromise    = null;
 
-  async function loadMediaPipe() {
-    if (faceLandmarker) return faceLandmarker;
-    if (mpLoadPromise)  return mpLoadPromise;
-
+  function loadMediaPipeBackground() {
+    if (mpFaceLandmarker || mpLoadPromise) return;
+    // Loads asynchronously in the background — never blocks the main flow.
+    // Used only to optionally refine landmark positions after detection.
     mpLoadPromise = (async () => {
       try {
-        // Use the ES-module vision bundle provided by the CDN
         const mod = await import(
           'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
         );
-        mpVisionModule = mod;
         const { FaceLandmarker, FilesetResolver } = mod;
-        const vision = await FilesetResolver.forVisionTasks(MP_CDN);
-        faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: MP_MODEL, delegate: 'GPU' },
+        if (!FaceLandmarker || !FilesetResolver) return null;
+
+        const vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        );
+        mpFaceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU',
+          },
           outputFaceBlendshapes: false,
           runningMode: 'IMAGE',
           numFaces: 1,
         });
-        return faceLandmarker;
+        return mpFaceLandmarker;
       } catch (err) {
-        console.warn('[DepthMap] MediaPipe failed to load, portrait mode uses crop-only fallback:', err);
+        console.info('[DepthMap] MediaPipe optional landmark refinement unavailable:', err.message || err);
         return null;
       }
     })();
-
-    return mpLoadPromise;
   }
 
-  /* ── Detect face and return bounding box in pixel coords (or null).
-       Returns null if no large face is found. ── */
-  async function detectFace(imgEl) {
-    const lm = await loadMediaPipe();
-    if (!lm) return null;
-
-    let results;
+  /* ── Primary face detection: browser-native FaceDetector API.
+       Available in Chrome/Edge without any downloads.
+       Returns {x,y,w,h,coverage} bbox in image pixels, or null. ── */
+  async function detectFaceNative(imgEl) {
+    if (!('FaceDetector' in window)) return null;
     try {
-      results = lm.detect(imgEl);
+      const fd = new window.FaceDetector({ maxDetectedFaces: 1, fastMode: false });
+      const faces = await fd.detect(imgEl);
+      if (!faces || faces.length === 0) return null;
+
+      const face = faces[0];
+      const bbox = face.boundingBox;
+      const W = imgEl.naturalWidth, H = imgEl.naturalHeight;
+      const coverage = (bbox.width * bbox.height) / (W * H);
+
+      if (coverage < 0.08) return null; // not a portrait
+
+      return { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height, coverage };
     } catch (err) {
-      console.warn('[DepthMap] Face detection error:', err);
+      console.info('[DepthMap] FaceDetector unavailable:', err.message);
       return null;
     }
+  }
 
-    if (!results || !results.faceLandmarks || results.faceLandmarks.length === 0) {
-      return null;
-    }
+  /* ── Derive approximate landmark positions from bounding box using
+       standard facial proportion rules (the "thirds" rule).
+       Returns an object matching the named positions expected by
+       buildAnatomicalPriors(), all in crop-normalized [0,1] coords. ── */
+  function deriveLandmarksFromBox(faceBoxInCrop, cw, ch) {
+    // faceBoxInCrop: {x,y,w,h} in crop pixel coords
+    const {x: fx, y: fy, w: fw, h: fh} = faceBoxInCrop;
 
-    const landmarks = results.faceLandmarks[0]; // 478 normalized [0,1] points
-    const W = imgEl.naturalWidth, H = imgEl.naturalHeight;
+    // Normalize to [0,1] within the crop
+    const l = fx / cw, r = (fx + fw) / cw;
+    const t = fy / ch, b = (fy + fh) / ch;
+    const cx = (l + r) * 0.5;
 
-    // Compute bounding box from all landmarks
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const pt of landmarks) {
-      if (pt.x < x0) x0 = pt.x;
-      if (pt.y < y0) y0 = pt.y;
-      if (pt.x > x1) x1 = pt.x;
-      if (pt.y > y1) y1 = pt.y;
-    }
-
-    const fw = (x1 - x0) * W, fh = (y1 - y0) * H;
-    const coverage = (fw * fh) / (W * H);
-
-    // Only classify as portrait if face takes >= 10% of image area
-    if (coverage < 0.10) return null;
-
+    // Vertical proportions (of face height):
+    // forehead ~15%, eyes ~35%, nose ~50%, mouth ~65%, chin ~100%
     return {
-      x: x0 * W,
-      y: y0 * H,
-      w: fw,
-      h: fh,
-      coverage,
-      landmarks,  // array of {x,y,z} normalized to [0,1] over full image
+      forehead:   { x: cx,          y: t + fh/ch * 0.12 },
+      leftEye:    { x: cx - fw/cw * 0.175, y: t + fh/ch * 0.35 },
+      rightEye:   { x: cx + fw/cw * 0.175, y: t + fh/ch * 0.35 },
+      noseBridge: { x: cx,          y: t + fh/ch * 0.43 },
+      noseTip:    { x: cx,          y: t + fh/ch * 0.52 },
+      mouth:      { x: cx,          y: t + fh/ch * 0.65 },
+      leftCheek:  { x: cx - fw/cw * 0.22, y: t + fh/ch * 0.55 },
+      rightCheek: { x: cx + fw/cw * 0.22, y: t + fh/ch * 0.55 },
     };
   }
 
-  /* ── Build landmark-based depth priors within face-crop coordinates.
-       All values are small (≤ 0.08) residual offsets so they ADJUST
-       rather than override the model's inferred depth. ── */
-  function buildLandmarkPriors(cropLandmarks, tw, th) {
-    // Key MediaPipe 478-pt landmark indices
-    const LM = { noseTip:4, noseBridge:6, leftEye:159, rightEye:386,
-                 upperLip:13, lowerLip:14, lipLeft:61, lipRight:291,
-                 chin:152, forehead:10 };
-
+  /* ── Build depth priors from anatomical landmark positions.
+       Works with either MediaPipe 478-pt landmarks or bbox-derived estimates.
+       All values are small (≤ 0.08) residual offsets. ── */
+  function buildAnatomicalPriors(lmPositions, tw, th, faceW, faceH) {
     const prior = new Float32Array(tw * th);
 
-    function addGaussian(cxN, cyN, sigX, sigY, amp) {
-      const px = cxN * tw, py = cyN * th;
+    // Gaussian blob helper
+    function addG(cx, cy, sigX, sigY, amp) {
+      const px = cx * tw, py = cy * th;
       const sx2 = (sigX * tw) ** 2, sy2 = (sigY * th) ** 2;
       for (let y = 0; y < th; y++) {
         const dy2 = (y - py) ** 2;
-        if (dy2 / sy2 > 9) continue; // skip if > 3 sigma away (speed)
+        if (sy2 > 0 && dy2 / sy2 > 9) continue;
         for (let x = 0; x < tw; x++) {
           const dx2 = (x - px) ** 2;
-          if (dx2 / sx2 > 9) continue;
+          if (sx2 > 0 && dx2 / sx2 > 9) continue;
           prior[y * tw + x] += amp * Math.exp(-0.5 * (dx2 / sx2 + dy2 / sy2));
         }
       }
     }
 
-    function g(idx) { return cropLandmarks[idx] || { x:0.5, y:0.5, z:0 }; }
+    const {noseTip, noseBridge, leftEye, rightEye, mouth, leftCheek, rightCheek, forehead} = lmPositions;
 
-    const noseTip    = g(LM.noseTip);
-    const noseBridge = g(LM.noseBridge);
-    const leftEye    = g(LM.leftEye);
-    const rightEye   = g(LM.rightEye);
-    const upperLip   = g(LM.upperLip);
-    const lowerLip   = g(LM.lowerLip);
-    const lipLeft    = g(LM.lipLeft);
-    const lipRight   = g(LM.lipRight);
-    const forehead   = g(LM.forehead);
+    // Scale sigma based on relative face size in crop (larger face = broader features)
+    const relFaceW = (faceW / tw) || 0.5;
+    const s = relFaceW; // scale factor for feature sizes
 
-    // Nose tip: forward protrusion
-    addGaussian(noseTip.x,    noseTip.y,    0.07, 0.07,  0.045);
-    // Nose bridge: slightly raised
-    addGaussian(noseBridge.x, noseBridge.y, 0.06, 0.10,  0.025);
-    // Eye sockets: recessed
-    addGaussian(leftEye.x,    leftEye.y,    0.05, 0.04, -0.018);
-    addGaussian(rightEye.x,   rightEye.y,   0.05, 0.04, -0.018);
-    // Lip ridge
-    const mouthCx = (upperLip.x + lowerLip.x) * 0.5;
-    const mouthCy = (upperLip.y + lowerLip.y) * 0.5;
-    addGaussian(mouthCx, mouthCy, 0.10, 0.04, 0.014);
-    // Cheeks
-    addGaussian((leftEye.x  + lipLeft.x ) * 0.5, (leftEye.y  + lipLeft.y ) * 0.5, 0.10, 0.10, 0.013);
-    addGaussian((rightEye.x + lipRight.x) * 0.5, (rightEye.y + lipRight.y) * 0.5, 0.10, 0.10, 0.013);
-    // Forehead
-    addGaussian(forehead.x, forehead.y, 0.12, 0.08, 0.010);
+    addG(noseTip.x,    noseTip.y,    0.07*s, 0.07*s,  0.044); // nose protrusion
+    addG(noseBridge.x, noseBridge.y, 0.06*s, 0.10*s,  0.025); // nose bridge
+    addG(leftEye.x,    leftEye.y,    0.05*s, 0.04*s, -0.020); // left eye socket
+    addG(rightEye.x,   rightEye.y,   0.05*s, 0.04*s, -0.020); // right eye socket
+    addG(mouth.x,      mouth.y,      0.10*s, 0.04*s,  0.014); // lip ridge
+    addG(leftCheek.x,  leftCheek.y,  0.10*s, 0.10*s,  0.013); // left cheek
+    addG(rightCheek.x, rightCheek.y, 0.10*s, 0.10*s,  0.013); // right cheek
+    addG(forehead.x,   forehead.y,   0.12*s, 0.08*s,  0.010); // forehead
 
-    // Clamp to ±0.08
     for (let i = 0; i < prior.length; i++) {
       prior[i] = Math.max(-0.08, Math.min(0.08, prior[i]));
     }
     return prior;
+  }
+
+  /* ── Convert MediaPipe 478-point landmarks to the named positions
+       expected by buildAnatomicalPriors() ── */
+  function mpLandmarksToNamed(mpLandmarks, W, H, cx0, cy0, cw, ch) {
+    function toLandmark(idx) {
+      const pt = mpLandmarks[idx] || { x:0.5, y:0.5 };
+      return {
+        x: (pt.x * W - cx0) / cw,
+        y: (pt.y * H - cy0) / ch,
+      };
+    }
+    const upperLip = toLandmark(13), lowerLip = toLandmark(14);
+    return {
+      noseTip:    toLandmark(4),
+      noseBridge: toLandmark(6),
+      leftEye:    toLandmark(159),
+      rightEye:   toLandmark(386),
+      mouth:      { x: (upperLip.x + lowerLip.x)*0.5, y: (upperLip.y + lowerLip.y)*0.5 },
+      leftCheek:  { x: (toLandmark(159).x + toLandmark(61).x)*0.5,
+                    y: (toLandmark(159).y + toLandmark(61).y)*0.5 },
+      rightCheek: { x: (toLandmark(386).x + toLandmark(291).x)*0.5,
+                    y: (toLandmark(386).y + toLandmark(291).y)*0.5 },
+      forehead:   toLandmark(10),
+    };
+  }
+
+  /* ── Detect face: try native FaceDetector, with MediaPipe as optional
+       background enhancement. Hard 4s timeout — never blocks inference. ── */
+  async function detectFace(imgEl) {
+    const detectPromise = detectFaceNative(imgEl);
+    const timeout = new Promise(r => setTimeout(() => r(null), 4000));
+    return Promise.race([detectPromise, timeout]);
   }
 
   /* ── Portrait enhancement pipeline ── */
@@ -1285,16 +1308,16 @@
 
     // Expand face bbox by 40% padding
     const padFrac = 0.40;
-    const px  = Math.round(fb.w * padFrac), py = Math.round(fb.h * padFrac);
-    const cx0 = Math.max(0, Math.round(fb.x - px));
-    const cy0 = Math.max(0, Math.round(fb.y - py));
-    const cx1 = Math.min(W, Math.round(fb.x + fb.w + px));
-    const cy1 = Math.min(H, Math.round(fb.y + fb.h + py));
+    const pxPad = Math.round(fb.w * padFrac), pyPad = Math.round(fb.h * padFrac);
+    const cx0 = Math.max(0, Math.round(fb.x - pxPad));
+    const cy0 = Math.max(0, Math.round(fb.y - pyPad));
+    const cx1 = Math.min(W, Math.round(fb.x + fb.w + pxPad));
+    const cy1 = Math.min(H, Math.round(fb.y + fb.h + pyPad));
     const cw  = cx1 - cx0, ch = cy1 - cy0;
 
     if (cw < 32 || ch < 32) return globalDepth;
 
-    // Extract crop
+    // Extract crop canvas
     const cropCanvas = document.createElement('canvas');
     cropCanvas.width = cw; cropCanvas.height = ch;
     const cCtx = cropCanvas.getContext('2d');
@@ -1302,15 +1325,15 @@
     cCtx.drawImage(img, cx0, cy0, cw, ch, 0, 0, cw, ch);
 
     // Crop inference + TTA
-    const cropRes   = await pipe(cropCanvas.toDataURL('image/png'));
-    const cropNorm  = extractDepthTile(cropRes, cw, ch);
-    const flipRes   = await pipe(flipCanvasH(cropCanvas));
-    const cropFlip  = flipDepthH(extractDepthTile(flipRes, cw, ch), cw, ch);
+    const cropRes  = await pipe(cropCanvas.toDataURL('image/png'));
+    const cropNorm = extractDepthTile(cropRes, cw, ch);
+    const flipRes  = await pipe(flipCanvasH(cropCanvas));
+    const cropFlip = flipDepthH(extractDepthTile(flipRes, cw, ch), cw, ch);
 
     const cropTTA = new Float32Array(cw * ch);
     for (let i = 0; i < cw * ch; i++) cropTTA[i] = (cropNorm[i] + cropFlip[i]) * 0.5;
 
-    // Extract corresponding global reference patch
+    // Reference patch from global depth
     const refPatch = new Float32Array(cw * ch);
     const mask     = new Float32Array(cw * ch);
     for (let ly = 0; ly < ch; ly++) {
@@ -1322,10 +1345,8 @@
       }
     }
 
-    // Affine-align crop to global range
+    // Affine-align crop → global range, then rescale to match global patch range
     const aligned = affineAlignTile(cropTTA, refPatch, mask, cw * ch);
-
-    // Re-scale aligned crop to match global patch range
     let sMin = Infinity, sMax = -Infinity, rMin = Infinity, rMax = -Infinity;
     for (let i = 0; i < cw * ch; i++) {
       if (aligned[i] < sMin) sMin = aligned[i];
@@ -1339,25 +1360,24 @@
       scaledCrop[i] = rMin + ((aligned[i] - sMin) / sRange) * rRange;
     }
 
-    // Landmark priors (residual bumps/dips)
-    let priorCrop = new Float32Array(cw * ch);
+    // Landmark priors — use MediaPipe 478-pt if available, else bbox anatomy
+    const faceBoxInCrop = { x: fb.x - cx0, y: fb.y - cy0, w: fb.w, h: fb.h };
+    let lmPositions;
     if (state.faceLandmarks && state.faceLandmarks.length > 0) {
-      const cropLandmarks = state.faceLandmarks.map(pt => ({
-        x: (pt.x * W - cx0) / cw,
-        y: (pt.y * H - cy0) / ch,
-        z: pt.z,
-      }));
-      priorCrop = buildLandmarkPriors(cropLandmarks, cw, ch);
+      lmPositions = mpLandmarksToNamed(state.faceLandmarks, W, H, cx0, cy0, cw, ch);
+    } else {
+      lmPositions = deriveLandmarksFromBox(faceBoxInCrop, cw, ch);
     }
+    const priorCrop = buildAnatomicalPriors(lmPositions, cw, ch, fb.w, fb.h);
 
     const enhancedCrop = new Float32Array(cw * ch);
     for (let i = 0; i < cw * ch; i++) {
       enhancedCrop[i] = scaledCrop[i] + priorCrop[i];
     }
 
-    // Soft blend mask: full weight inside face bbox, tapers to 0 in padding
-    const fxOff  = fb.x - cx0, fyOff = fb.y - cy0;
-    const fxEnd  = fxOff + fb.w, fyEnd = fyOff + fb.h;
+    // Soft blend mask: full weight inside face bbox, cosine taper in padding
+    const fxOff = fb.x - cx0, fyOff = fb.y - cy0;
+    const fxEnd = fxOff + fb.w, fyEnd = fyOff + fb.h;
     const blendMask = new Float32Array(cw * ch);
     for (let ly = 0; ly < ch; ly++) {
       const dy = ly < fyOff ? (fyOff - ly) / Math.max(1, fyOff) :
@@ -1365,12 +1385,12 @@
       for (let lx = 0; lx < cw; lx++) {
         const dx = lx < fxOff ? (fxOff - lx) / Math.max(1, fxOff) :
                    lx > fxEnd ? (lx - fxEnd) / Math.max(1, cw - fxEnd) : 0;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        blendMask[ly * cw + lx] = Math.max(0, Math.cos(Math.min(1, dist) * Math.PI * 0.5));
+        blendMask[ly * cw + lx] = Math.max(0,
+          Math.cos(Math.min(1, Math.sqrt(dx*dx + dy*dy)) * Math.PI * 0.5));
       }
     }
 
-    // Fuse back into global depth
+    // Fuse back into global depth at 65% blend strength
     const BLEND = 0.65;
     const result = Float32Array.from(globalDepth);
     for (let ly = 0; ly < ch; ly++) {
@@ -1384,6 +1404,18 @@
         result[gi] = globalDepth[gi] * (1 - bw) + enhancedCrop[ly * cw + lx] * bw;
       }
     }
+
+    // If MediaPipe is now available (loaded in background since detect started),
+    // use it to refine the face landmarks for any future re-runs
+    if (mpFaceLandmarker && !state.faceLandmarks) {
+      try {
+        const mpRes = mpFaceLandmarker.detect(img);
+        if (mpRes && mpRes.faceLandmarks && mpRes.faceLandmarks.length > 0) {
+          state.faceLandmarks = mpRes.faceLandmarks[0];
+        }
+      } catch { /* ignore */ }
+    }
+
     return result;
   }
 
@@ -1580,12 +1612,14 @@
       const isMaybePortrait = state.portraitMode !== 'off';
       let faceDetectPromise = Promise.resolve(null);
       if (isMaybePortrait) {
+        // Start loading MediaPipe in the background (non-blocking, for landmark refinement)
+        loadMediaPipeBackground();
         showProgress(100, '<span class="pulse">Detecting faces…</span>');
         faceDetectPromise = detectFace(state.originalImg).then(fb => {
           if (fb) {
             state.portraitDetected = true;
             state.faceBox = fb;
-            state.faceLandmarks = fb.landmarks;
+            state.faceLandmarks = fb.landmarks || null;
           }
           updatePortraitBadge();
           return fb;
