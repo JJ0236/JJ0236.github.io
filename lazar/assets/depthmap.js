@@ -31,7 +31,7 @@
      STATE
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
-    modelSize: 'small',
+    modelSize: 'base',
     tileGrid: 2,
     guidedFilter: true,
     detailBoost: 0.35,
@@ -419,16 +419,16 @@
         <label>Detail Level</label>
         <div class="dm-opt-group" id="dm-tile-group">
           <button class="dm-opt-btn ${state.tileGrid===1?'active':''}" data-val="1">
-            Standard<span class="desc">1 pass · fast</span>
+            Standard<span class="desc">2 passes · fast</span>
           </button>
           <button class="dm-opt-btn ${state.tileGrid===2?'active':''}" data-val="2">
-            High<span class="desc">4 tiles · 2× detail</span>
+            High<span class="desc">10 passes · detailed</span>
           </button>
           <button class="dm-opt-btn ${state.tileGrid===3?'active':''}" data-val="3">
-            Ultra<span class="desc">9 tiles · 3× detail</span>
+            Ultra<span class="desc">20 passes · maximum</span>
           </button>
         </div>
-        <div class="dm-field-hint">Process image in tiles for higher effective resolution</div>
+        <div class="dm-field-hint">Uses tiling + flip augmentation + affine alignment for accuracy</div>
       </div>
 
       <div class="dm-field">
@@ -990,38 +990,120 @@
     return result;
   }
 
-  /* ── Tiled depth inference for higher effective resolution ── */
+  /* ── Helper: extract raw depth Float32Array from pipeline result,
+       bilinearly upsampled to target (tw × th) ── */
+  function extractDepthTile(result, tw, th) {
+    const di = result.depth;
+    const dw = di.width, dh = di.height, ch = di.channels, dd = di.data;
+    const out = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      const sy = Math.min(Math.floor(y / th * dh), dh - 1);
+      for (let x = 0; x < tw; x++) {
+        const sx = Math.min(Math.floor(x / tw * dw), dw - 1);
+        out[y * tw + x] = (ch === 1 ? dd[sy * dw + sx] : dd[(sy * dw + sx) * ch]) / 255;
+      }
+    }
+    return out;
+  }
+
+  /* ── Flip a canvas horizontally and return a data URL ── */
+  function flipCanvasH(canvas) {
+    const fc = document.createElement('canvas');
+    fc.width = canvas.width; fc.height = canvas.height;
+    const ctx = fc.getContext('2d');
+    ctx.translate(fc.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(canvas, 0, 0);
+    return fc.toDataURL('image/png');
+  }
+
+  /* ── Flip a Float32 depth map horizontally in-place ── */
+  function flipDepthH(depth, w, h) {
+    const flipped = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        flipped[row + x] = depth[row + (w - 1 - x)];
+      }
+    }
+    return flipped;
+  }
+
+  /* ── Per-tile affine alignment: find scale+shift to align tile to reference
+       in the overlap region, using least-squares regression ── */
+  function affineAlignTile(tileDepth, refDepth, mask, n) {
+    // Collect paired values where both tile and ref have valid data
+    let sumR = 0, sumT = 0, sumRT = 0, sumTT = 0, count = 0;
+    for (let i = 0; i < n; i++) {
+      if (mask[i] <= 0) continue;
+      const r = refDepth[i], t = tileDepth[i];
+      sumR += r; sumT += t; sumRT += r * t; sumTT += t * t;
+      count++;
+    }
+    if (count < 100) return tileDepth; // not enough overlap
+
+    const meanR = sumR / count, meanT = sumT / count;
+    const covRT = sumRT / count - meanR * meanT;
+    const varT  = sumTT / count - meanT * meanT;
+
+    const scale = varT > 1e-8 ? covRT / varT : 1;
+    const shift = meanR - scale * meanT;
+
+    const aligned = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      aligned[i] = scale * tileDepth[i] + shift;
+    }
+    return aligned;
+  }
+
+  /* ── Tiled depth inference with flip-TTA, affine alignment, and
+       global reference pass for maximum accuracy ── */
   async function tiledDepthInference(pipe) {
     const img = state.originalImg;
     const W = img.naturalWidth, H = img.naturalHeight;
     const grid = state.tileGrid;
 
-    if (grid <= 1) {
-      // Single-pass inference
-      showProgress(100, '<span class="pulse">Running depth inference…</span>');
-      const result = await pipe(state.imageDataUrl);
-      const di = result.depth;
-      const dw = di.width, dh = di.height, ch = di.channels, dd = di.data;
-      const depth = new Float32Array(W * H);
-      for (let y = 0; y < H; y++) {
-        const sy = Math.min(Math.floor(y / H * dh), dh - 1);
-        for (let x = 0; x < W; x++) {
-          const sx = Math.min(Math.floor(x / W * dw), dw - 1);
-          depth[y * W + x] = (ch === 1 ? dd[sy * dw + sx] : dd[(sy * dw + sx) * ch]) / 255;
-        }
-      }
-      return depth;
-    }
+    // ── Step 0: Global reference pass (full image at model's native 518px) ──
+    showProgress(100, '<span class="pulse">Running global depth pass…</span>');
+    const globalResult = await pipe(state.imageDataUrl);
+    const globalDepth = extractDepthTile(globalResult, W, H);
 
-    // Multi-tile: split into grid×grid overlapping tiles
+    // Also run flipped for TTA
+    showProgress(100, '<span class="pulse">Running flipped global pass…</span>');
     const srcCanvas = document.createElement('canvas');
     srcCanvas.width = W; srcCanvas.height = H;
-    srcCanvas.getContext('2d').drawImage(img, 0, 0);
+    const srcCtx = srcCanvas.getContext('2d');
+    srcCtx.imageSmoothingQuality = 'high';
+    srcCtx.drawImage(img, 0, 0);
 
+    const globalFlipUrl = flipCanvasH(srcCanvas);
+    const globalFlipResult = await pipe(globalFlipUrl);
+    const globalFlipDepth = flipDepthH(extractDepthTile(globalFlipResult, W, H), W, H);
+
+    // Average the two global passes (TTA)
+    const globalRef = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      globalRef[i] = (globalDepth[i] + globalFlipDepth[i]) * 0.5;
+    }
+    // Normalize global reference to 0-1
+    let gMin = Infinity, gMax = -Infinity;
+    for (let i = 0; i < W * H; i++) {
+      if (globalRef[i] < gMin) gMin = globalRef[i];
+      if (globalRef[i] > gMax) gMax = globalRef[i];
+    }
+    const gRange = gMax - gMin || 1;
+    for (let i = 0; i < W * H; i++) globalRef[i] = (globalRef[i] - gMin) / gRange;
+
+    if (grid <= 1) {
+      // No tiling — just return the TTA'd global pass
+      return globalRef;
+    }
+
+    // ── Step 1: Tiled inference with flip-TTA and affine alignment ──
     const stepX = Math.ceil(W / grid);
     const stepY = Math.ceil(H / grid);
-    const padX = Math.round(stepX * 0.25);
-    const padY = Math.round(stepY * 0.25);
+    const padX = Math.round(stepX * 0.33);  // 33% overlap
+    const padY = Math.round(stepY * 0.33);
 
     const depthAccum  = new Float32Array(W * H);
     const weightAccum = new Float32Array(W * H);
@@ -1031,7 +1113,6 @@
     for (let gy = 0; gy < grid; gy++) {
       for (let gx = 0; gx < grid; gx++) {
         tileIdx++;
-        showProgress(100, `<span class="pulse">Depth tile ${tileIdx}/${total}…</span>`);
 
         let x0 = gx * stepX - padX;
         let y0 = gy * stepY - padY;
@@ -1041,26 +1122,57 @@
         x1 = Math.min(W, x1); y1 = Math.min(H, y1);
         const tw = x1 - x0, th = y1 - y0;
 
+        // Extract tile with bicubic quality
         const tc = document.createElement('canvas');
         tc.width = tw; tc.height = th;
-        tc.getContext('2d').drawImage(srcCanvas, x0, y0, tw, th, 0, 0, tw, th);
+        const tCtx = tc.getContext('2d');
+        tCtx.imageSmoothingQuality = 'high';
+        tCtx.drawImage(srcCanvas, x0, y0, tw, th, 0, 0, tw, th);
 
-        const result = await pipe(tc.toDataURL('image/png'));
-        const di = result.depth;
-        const dw = di.width, dh = di.height, ch = di.channels, dd = di.data;
+        // ── Normal inference ──
+        showProgress(100,
+          `<span class="pulse">Tile ${tileIdx}/${total} (normal)…</span>`);
+        const tileResult = await pipe(tc.toDataURL('image/png'));
+        const tileDepthNormal = extractDepthTile(tileResult, tw, th);
+
+        // ── Flipped inference (TTA) ──
+        showProgress(100,
+          `<span class="pulse">Tile ${tileIdx}/${total} (flipped)…</span>`);
+        const flipUrl = flipCanvasH(tc);
+        const flipResult = await pipe(flipUrl);
+        const tileDepthFlipRaw = extractDepthTile(flipResult, tw, th);
+        const tileDepthFlip = flipDepthH(tileDepthFlipRaw, tw, th);
+
+        // ── Average normal + flipped (TTA) ──
+        const tileDepthTTA = new Float32Array(tw * th);
+        for (let i = 0; i < tw * th; i++) {
+          tileDepthTTA[i] = (tileDepthNormal[i] + tileDepthFlip[i]) * 0.5;
+        }
+
+        // ── Affine-align tile to global reference in this region ──
+        // Build overlap mask from global reference
+        const refPatch = new Float32Array(tw * th);
+        const overlapMask = new Float32Array(tw * th);
+        for (let ly = 0; ly < th; ly++) {
+          for (let lx = 0; lx < tw; lx++) {
+            const gxPos = x0 + lx, gyPos = y0 + ly;
+            if (gxPos < W && gyPos < H) {
+              refPatch[ly * tw + lx] = globalRef[gyPos * W + gxPos];
+              overlapMask[ly * tw + lx] = 1;
+            }
+          }
+        }
+        const alignedTile = affineAlignTile(tileDepthTTA, refPatch, overlapMask, tw * th);
+
+        // ── Blend into accumulator with cosine-ramp weights ──
         const ramp = Math.min(padX, padY);
-
         for (let ly = 0; ly < th; ly++) {
           const gyPos = y0 + ly;
           if (gyPos >= H) continue;
-          const sy = Math.min(Math.floor(ly / th * dh), dh - 1);
           for (let lx = 0; lx < tw; lx++) {
             const gxPos = x0 + lx;
             if (gxPos >= W) continue;
-            const sx = Math.min(Math.floor(lx / tw * dw), dw - 1);
-            const v = (ch === 1 ? dd[sy * dw + sx] : dd[(sy * dw + sx) * ch]) / 255;
 
-            // Cosine-ramp blending weight at tile edges
             const edgeDist = Math.min(lx, tw - 1 - lx, ly, th - 1 - ly);
             let wt = 1;
             if (ramp > 0 && edgeDist < ramp) {
@@ -1068,18 +1180,18 @@
             }
 
             const idx = gyPos * W + gxPos;
-            depthAccum[idx]  += v * wt;
+            depthAccum[idx]  += alignedTile[ly * tw + lx] * wt;
             weightAccum[idx] += wt;
           }
         }
       }
     }
 
-    // Normalize and rescale to 0-1
+    // ── Step 2: Merge tiles and normalize to 0-1 ──
     const depth = new Float32Array(W * H);
     let minD = Infinity, maxD = -Infinity;
     for (let i = 0; i < W * H; i++) {
-      depth[i] = weightAccum[i] > 0 ? depthAccum[i] / weightAccum[i] : 0;
+      depth[i] = weightAccum[i] > 0 ? depthAccum[i] / weightAccum[i] : globalRef[i];
       if (depth[i] < minD) minD = depth[i];
       if (depth[i] > maxD) maxD = depth[i];
     }
