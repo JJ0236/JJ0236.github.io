@@ -32,8 +32,9 @@
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
     modelSize: 'small',
-    tileGrid: 1,
+    tileGrid: 2,
     guidedFilter: true,
+    detailBoost: 0.35,
     displacement: 0.12,
     autoSway: true,
     invert: false,
@@ -435,7 +436,17 @@
           <input type="checkbox" id="dm-guided-filter" ${state.guidedFilter?'checked':''} />
           Edge Refinement
         </label>
-        <div class="dm-field-hint">Guided filter sharpens depth edges using original image</div>
+        <div class="dm-field-hint">Multi-scale guided filter sharpens depth using original image edges</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Detail Boost
+          <span class="dm-slider-val" id="dm-detail-val">${(state.detailBoost * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-detail-boost" min="0" max="1" step="0.05"
+          value="${state.detailBoost}" class="dm-range" />
+        <div class="dm-field-hint">Injects fine texture from original photo into depth map</div>
       </div>
 
       <div class="dm-field">
@@ -714,6 +725,13 @@
       state.guidedFilter = e.target.checked;
       if (cachedDepthFloat) processAndDisplayDepth();
     });
+    const detailSlider = document.getElementById('dm-detail-boost');
+    detailSlider.addEventListener('input', (e) => {
+      state.detailBoost = parseFloat(e.target.value);
+      document.getElementById('dm-detail-val').textContent =
+        (state.detailBoost * 100).toFixed(0) + '%';
+      if (cachedDepthFloat) processAndDisplayDepth();
+    });
     document.getElementById('dm-auto-sway').addEventListener('change', (e) => {
       state.autoSway = e.target.checked;
     });
@@ -888,6 +906,90 @@
     return g;
   }
 
+  /* ── Multi-scale guided filter — 3 coarse→fine passes for progressive
+       edge-detail transfer from the original image into the depth map ── */
+  function multiScaleGuidedFilter(guide, src, w, h) {
+    const dim = Math.min(w, h);
+    const scales = [
+      { radius: Math.max(8,  Math.round(dim / 20)),  eps: 0.02   },
+      { radius: Math.max(4,  Math.round(dim / 60)),  eps: 0.004  },
+      { radius: Math.max(2,  Math.round(dim / 160)), eps: 0.0008 }
+    ];
+    let result = src;
+    for (const { radius, eps } of scales) {
+      result = guidedFilterApply(guide, result, w, h, radius, eps);
+    }
+    return result;
+  }
+
+  /* ── Detail injection — extract high-frequency texture from original
+       image at two scales and blend it into the depth map ── */
+  function injectDetail(depth, guide, w, h, strength) {
+    if (strength <= 0) return depth;
+    const n = w * h;
+    const blur1 = new Float32Array(n);
+    const blur2 = new Float32Array(n);
+    const tmp   = new Float32Array(n);
+    const r1 = Math.max(2, Math.round(Math.min(w, h) / 150)); // fine texture
+    const r2 = Math.max(5, Math.round(Math.min(w, h) / 50));  // medium features
+
+    boxMeanSep(guide, w, h, r1, blur1, tmp);
+    boxMeanSep(guide, w, h, r2, blur2, tmp);
+
+    const result = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const fineDetail = guide[i] - blur1[i];    // fine edges & texture
+      const medDetail  = blur1[i] - blur2[i];    // medium features
+      result[i] = depth[i] + strength * (0.65 * fineDetail + 0.35 * medDetail);
+    }
+
+    // Renormalize to 0-1
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (result[i] < mn) mn = result[i];
+      if (result[i] > mx) mx = result[i];
+    }
+    const range = mx - mn || 1;
+    for (let i = 0; i < n; i++) result[i] = (result[i] - mn) / range;
+    return result;
+  }
+
+  /* ── Adaptive local contrast enhancement on depth ── */
+  function depthContrastEnhance(depth, w, h) {
+    const n = w * h;
+    const blurred = new Float32Array(n);
+    const tmp     = new Float32Array(n);
+    const radius  = Math.max(6, Math.round(Math.min(w, h) / 30));
+    boxMeanSep(depth, w, h, radius, blurred, tmp);
+
+    // Compute local standard deviation for adaptive gain
+    const sq = new Float32Array(n);
+    for (let i = 0; i < n; i++) sq[i] = depth[i] * depth[i];
+    const meanSq = new Float32Array(n);
+    boxMeanSep(sq, w, h, radius, meanSq, tmp);
+
+    // Global statistics
+    let gMean = 0;
+    for (let i = 0; i < n; i++) gMean += depth[i];
+    gMean /= n;
+    let gVar = 0;
+    for (let i = 0; i < n; i++) gVar += (depth[i] - gMean) * (depth[i] - gMean);
+    const gStd = Math.sqrt(gVar / n) || 0.01;
+
+    const result = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const localVar = Math.max(0, meanSq[i] - blurred[i] * blurred[i]);
+      const localStd = Math.sqrt(localVar) || 0.001;
+      // Adaptive gain: stretch local contrast toward global contrast
+      const gain = Math.min(3.0, gStd / localStd);
+      result[i] = gMean + gain * (depth[i] - blurred[i]);
+    }
+
+    // Clip to 0-1
+    for (let i = 0; i < n; i++) result[i] = Math.max(0, Math.min(1, result[i]));
+    return result;
+  }
+
   /* ── Tiled depth inference for higher effective resolution ── */
   async function tiledDepthInference(pipe) {
     const img = state.originalImg;
@@ -1030,18 +1132,24 @@
     hideProgress();
   }
 
-  /* ── Apply guided filter + invert and render to canvas ── */
+  /* ── Full depth post-processing pipeline ── */
   function processAndDisplayDepth() {
     if (!cachedDepthFloat) return;
     const W = state.originalImg.naturalWidth;
     const H = state.originalImg.naturalHeight;
     let depth = cachedDepthFloat;
 
-    // Guided filter: use original image edges to sharpen depth boundaries
     if (state.guidedFilter) {
       const guide = getOrigGray();
-      const radius = Math.max(4, Math.round(Math.min(W, H) / 80));
-      depth = guidedFilterApply(guide, depth, W, H, radius, 0.01);
+
+      // Step 1: Multi-scale guided filter (coarse→fine edge transfer)
+      depth = multiScaleGuidedFilter(guide, depth, W, H);
+
+      // Step 2: Inject high-frequency detail from the original photo
+      depth = injectDetail(depth, guide, W, H, state.detailBoost);
+
+      // Step 3: Adaptive local contrast enhancement
+      depth = depthContrastEnhance(depth, W, H);
     }
 
     // Invert if enabled
