@@ -981,7 +981,6 @@
     }
     return result;
   }
-  }
 
   /* ── Helper: extract raw depth Float32Array from pipeline result,
        bilinearly upsampled to target (tw × th) ── */
