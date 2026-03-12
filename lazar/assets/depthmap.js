@@ -34,7 +34,7 @@
     modelSize: 'small',
     tileGrid: 1,
     guidedFilter: true,
-    displacement: 0.3,
+    displacement: 0.12,
     autoSway: true,
     invert: false,
 
@@ -454,7 +454,7 @@
           3D Displacement
           <span class="dm-slider-val" id="dm-disp-val">${state.displacement.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-displacement" min="0" max="0.5" step="0.01"
+        <input type="range" id="dm-displacement" min="0" max="0.3" step="0.005"
           value="${state.displacement}" class="dm-range" />
         <div class="dm-field-hint">Depth extrusion amount for 3D preview</div>
       </div>
@@ -1139,6 +1139,7 @@
       vUv = uv;
       vec3 pos = position;
       float d = texture2D(uDepth, uv).r;
+      // Push along the surface normal for cleaner extrusion
       pos.z += d * uDisplacement;
       gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
     }
@@ -1152,6 +1153,68 @@
       gl_FragColor = texture2D(uImage, vUv);
     }
   `;
+
+  /* ── Create a smoothed depth canvas for 3D displacement ── */
+  function createSmooth3DDepth(srcCanvas) {
+    const w = srcCanvas.width, h = srcCanvas.height;
+    // Downscale to a manageable size for the 3D mesh, then smooth
+    const maxDim = 1024;
+    const scale = Math.min(1, maxDim / Math.max(w, h));
+    const sw = Math.round(w * scale), sh = Math.round(h * scale);
+
+    const c = document.createElement('canvas');
+    c.width = sw; c.height = sh;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(srcCanvas, 0, 0, sw, sh);
+
+    // Apply a light Gaussian-ish blur (2-pass box blur, radius ~2-3 px)
+    const imgData = ctx.getImageData(0, 0, sw, sh);
+    const d = imgData.data;
+    const gray = new Float32Array(sw * sh);
+    for (let i = 0; i < sw * sh; i++) gray[i] = d[i * 4] / 255;
+
+    const blurRadius = Math.max(1, Math.round(Math.min(sw, sh) / 250));
+    let blurred = gray;
+    for (let pass = 0; pass < 2; pass++) {
+      const tmp = new Float32Array(sw * sh);
+      const out = new Float32Array(sw * sh);
+      // Horizontal
+      for (let y = 0; y < sh; y++) {
+        const row = y * sw;
+        for (let x = 0; x < sw; x++) {
+          let sum = 0, cnt = 0;
+          for (let k = -blurRadius; k <= blurRadius; k++) {
+            const xx = Math.min(sw - 1, Math.max(0, x + k));
+            sum += blurred[row + xx]; cnt++;
+          }
+          tmp[row + x] = sum / cnt;
+        }
+      }
+      // Vertical
+      for (let x = 0; x < sw; x++) {
+        for (let y = 0; y < sh; y++) {
+          let sum = 0, cnt = 0;
+          for (let k = -blurRadius; k <= blurRadius; k++) {
+            const yy = Math.min(sh - 1, Math.max(0, y + k));
+            sum += tmp[yy * sw + x]; cnt++;
+          }
+          out[y * sw + x] = sum / cnt;
+        }
+      }
+      blurred = out;
+    }
+
+    const result = ctx.createImageData(sw, sh);
+    const rd = result.data;
+    for (let i = 0; i < sw * sh; i++) {
+      const v = Math.max(0, Math.min(255, Math.round(blurred[i] * 255)));
+      rd[i * 4] = v; rd[i * 4 + 1] = v; rd[i * 4 + 2] = v; rd[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(result, 0, 0);
+    return c;
+  }
 
   async function setup3DPreview() {
     if (!state.depthCanvas || !state.originalImg) return;
@@ -1190,7 +1253,7 @@
     const aspect = imgH / imgW;
     const planeW = 1;
     const planeH = planeW * aspect;
-    const segsX = 256;
+    const segsX = 512;
     const segsY = Math.round(segsX * aspect);
     const geo = new THREE.PlaneGeometry(planeW, planeH, segsX, segsY);
 
@@ -1203,8 +1266,9 @@
     imageTex.minFilter = THREE.LinearFilter;
     imageTex.magFilter = THREE.LinearFilter;
 
-    // Depth texture
-    const depthTex = new THREE.CanvasTexture(state.depthCanvas);
+    // Depth texture — use a smoothed version for 3D to avoid jagged mesh
+    const smoothDepthCanvas = createSmooth3DDepth(state.depthCanvas);
+    const depthTex = new THREE.CanvasTexture(smoothDepthCanvas);
     depthTex.minFilter = THREE.LinearFilter;
     depthTex.magFilter = THREE.LinearFilter;
 
