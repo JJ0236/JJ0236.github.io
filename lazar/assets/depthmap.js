@@ -77,6 +77,12 @@
     currentMX: 0, currentMY: 0,
 
     resultView: 'depth', // 'depth' | '3d'
+
+    // Portrait mode
+    portraitMode: 'auto',  // 'auto' | 'on' | 'off'
+    portraitDetected: false,
+    faceBox: null,         // { x, y, w, h } in original image pixels
+    faceLandmarks: null,   // 478×{x,y,z} normalized landmarks
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -300,6 +306,27 @@
     .dm-3d-canvas.visible { display: block; }
     .dm-3d-canvas:active { cursor: grabbing; }
 
+    /* ── Portrait badge ── */
+    .dm-portrait-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+      background: rgba(100,180,255,.12); color: #60b8ff;
+      text-transform: uppercase; letter-spacing: .5px;
+      margin-left: 4px; vertical-align: middle;
+      opacity: 0; transition: opacity .3s;
+    }
+    .dm-portrait-badge.visible { opacity: 1; }
+
+    /* ── Portrait mode toggle ── */
+    .dm-portrait-row {
+      display: flex; align-items: center; gap: 6px;
+      flex-wrap: wrap;
+    }
+    .dm-portrait-row .dm-opt-btn {
+      flex: none; min-width: 0; padding: 4px 10px; font-size: 11px;
+    }
+
     /* ── Fallback launcher ── */
     .dm-launcher {
       position: fixed;
@@ -472,6 +499,19 @@
         <input type="range" id="dm-detail-boost" min="0" max="1" step="0.05"
           value="${state.detailBoost}" class="dm-range" />
         <div class="dm-field-hint">Sharpens depth transitions where the model detected real depth changes</div>
+      </div>
+
+      <div class="dm-field">
+        <label>
+          Portrait Mode
+          <span class="dm-portrait-badge" id="dm-portrait-badge">Face Detected</span>
+        </label>
+        <div class="dm-portrait-row" id="dm-portrait-group">
+          <button class="dm-opt-btn ${state.portraitMode==='auto'?'active':''}" data-val="auto">Auto</button>
+          <button class="dm-opt-btn ${state.portraitMode==='on'?'active':''}" data-val="on">Always On</button>
+          <button class="dm-opt-btn ${state.portraitMode==='off'?'active':''}" data-val="off">Off</button>
+        </div>
+        <div class="dm-field-hint">Auto-enhances face geometry when a large face is detected. Uses face crop re-inference + landmark priors for nose, eyes, and lips.</div>
       </div>
 
       <div class="dm-field">
@@ -765,6 +805,15 @@
       if (cachedDepthFloat) processAndDisplayDepth();
     });
 
+    /* ── Portrait mode picker ── */
+    document.querySelectorAll('#dm-portrait-group .dm-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#dm-portrait-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.portraitMode = btn.dataset.val;
+      });
+    });
+
     /* ── View toggle (Depth / 3D) ── */
     document.querySelectorAll('#dm-view-toggle button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -793,6 +842,12 @@
         state.originalImg = img;
         state.depthCanvas = null;
         state.depthFullCanvas = null;
+
+        // Reset portrait state
+        state.portraitDetected = false;
+        state.faceBox = null;
+        state.faceLandmarks = null;
+        updatePortraitBadge();
 
         // Show original
         const origWrap = document.getElementById('dm-orig-wrap');
@@ -1073,6 +1128,280 @@
     return aligned;
   }
 
+  /* ═══════════════════════════════════════════════════════════════════
+     MEDIAPIPE FACE LANDMARKER (lazy-loaded for portrait mode)
+     ═══════════════════════════════════════════════════════════════════ */
+  let mpVisionModule = null;
+  let faceLandmarker  = null;
+  let mpLoadPromise   = null;
+
+  const MP_CDN   = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+  const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+
+  async function loadMediaPipe() {
+    if (faceLandmarker) return faceLandmarker;
+    if (mpLoadPromise)  return mpLoadPromise;
+
+    mpLoadPromise = (async () => {
+      try {
+        // Use the ES-module vision bundle provided by the CDN
+        const mod = await import(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
+        );
+        mpVisionModule = mod;
+        const { FaceLandmarker, FilesetResolver } = mod;
+        const vision = await FilesetResolver.forVisionTasks(MP_CDN);
+        faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath: MP_MODEL, delegate: 'GPU' },
+          outputFaceBlendshapes: false,
+          runningMode: 'IMAGE',
+          numFaces: 1,
+        });
+        return faceLandmarker;
+      } catch (err) {
+        console.warn('[DepthMap] MediaPipe failed to load, portrait mode uses crop-only fallback:', err);
+        return null;
+      }
+    })();
+
+    return mpLoadPromise;
+  }
+
+  /* ── Detect face and return bounding box in pixel coords (or null).
+       Returns null if no large face is found. ── */
+  async function detectFace(imgEl) {
+    const lm = await loadMediaPipe();
+    if (!lm) return null;
+
+    let results;
+    try {
+      results = lm.detect(imgEl);
+    } catch (err) {
+      console.warn('[DepthMap] Face detection error:', err);
+      return null;
+    }
+
+    if (!results || !results.faceLandmarks || results.faceLandmarks.length === 0) {
+      return null;
+    }
+
+    const landmarks = results.faceLandmarks[0]; // 478 normalized [0,1] points
+    const W = imgEl.naturalWidth, H = imgEl.naturalHeight;
+
+    // Compute bounding box from all landmarks
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const pt of landmarks) {
+      if (pt.x < x0) x0 = pt.x;
+      if (pt.y < y0) y0 = pt.y;
+      if (pt.x > x1) x1 = pt.x;
+      if (pt.y > y1) y1 = pt.y;
+    }
+
+    const fw = (x1 - x0) * W, fh = (y1 - y0) * H;
+    const coverage = (fw * fh) / (W * H);
+
+    // Only classify as portrait if face takes >= 10% of image area
+    if (coverage < 0.10) return null;
+
+    return {
+      x: x0 * W,
+      y: y0 * H,
+      w: fw,
+      h: fh,
+      coverage,
+      landmarks,  // array of {x,y,z} normalized to [0,1] over full image
+    };
+  }
+
+  /* ── Build landmark-based depth priors within face-crop coordinates.
+       All values are small (≤ 0.08) residual offsets so they ADJUST
+       rather than override the model's inferred depth. ── */
+  function buildLandmarkPriors(cropLandmarks, tw, th) {
+    // Key MediaPipe 478-pt landmark indices
+    const LM = { noseTip:4, noseBridge:6, leftEye:159, rightEye:386,
+                 upperLip:13, lowerLip:14, lipLeft:61, lipRight:291,
+                 chin:152, forehead:10 };
+
+    const prior = new Float32Array(tw * th);
+
+    function addGaussian(cxN, cyN, sigX, sigY, amp) {
+      const px = cxN * tw, py = cyN * th;
+      const sx2 = (sigX * tw) ** 2, sy2 = (sigY * th) ** 2;
+      for (let y = 0; y < th; y++) {
+        const dy2 = (y - py) ** 2;
+        if (dy2 / sy2 > 9) continue; // skip if > 3 sigma away (speed)
+        for (let x = 0; x < tw; x++) {
+          const dx2 = (x - px) ** 2;
+          if (dx2 / sx2 > 9) continue;
+          prior[y * tw + x] += amp * Math.exp(-0.5 * (dx2 / sx2 + dy2 / sy2));
+        }
+      }
+    }
+
+    function g(idx) { return cropLandmarks[idx] || { x:0.5, y:0.5, z:0 }; }
+
+    const noseTip    = g(LM.noseTip);
+    const noseBridge = g(LM.noseBridge);
+    const leftEye    = g(LM.leftEye);
+    const rightEye   = g(LM.rightEye);
+    const upperLip   = g(LM.upperLip);
+    const lowerLip   = g(LM.lowerLip);
+    const lipLeft    = g(LM.lipLeft);
+    const lipRight   = g(LM.lipRight);
+    const forehead   = g(LM.forehead);
+
+    // Nose tip: forward protrusion
+    addGaussian(noseTip.x,    noseTip.y,    0.07, 0.07,  0.045);
+    // Nose bridge: slightly raised
+    addGaussian(noseBridge.x, noseBridge.y, 0.06, 0.10,  0.025);
+    // Eye sockets: recessed
+    addGaussian(leftEye.x,    leftEye.y,    0.05, 0.04, -0.018);
+    addGaussian(rightEye.x,   rightEye.y,   0.05, 0.04, -0.018);
+    // Lip ridge
+    const mouthCx = (upperLip.x + lowerLip.x) * 0.5;
+    const mouthCy = (upperLip.y + lowerLip.y) * 0.5;
+    addGaussian(mouthCx, mouthCy, 0.10, 0.04, 0.014);
+    // Cheeks
+    addGaussian((leftEye.x  + lipLeft.x ) * 0.5, (leftEye.y  + lipLeft.y ) * 0.5, 0.10, 0.10, 0.013);
+    addGaussian((rightEye.x + lipRight.x) * 0.5, (rightEye.y + lipRight.y) * 0.5, 0.10, 0.10, 0.013);
+    // Forehead
+    addGaussian(forehead.x, forehead.y, 0.12, 0.08, 0.010);
+
+    // Clamp to ±0.08
+    for (let i = 0; i < prior.length; i++) {
+      prior[i] = Math.max(-0.08, Math.min(0.08, prior[i]));
+    }
+    return prior;
+  }
+
+  /* ── Portrait enhancement pipeline ── */
+  async function portraitEnhance(pipe, globalDepth) {
+    const img  = state.originalImg;
+    const W    = img.naturalWidth, H = img.naturalHeight;
+    const fb   = state.faceBox;
+    if (!fb) return globalDepth;
+
+    showProgress(100, '<span class="pulse">Portrait: running face depth pass…</span>');
+
+    // Expand face bbox by 40% padding
+    const padFrac = 0.40;
+    const px  = Math.round(fb.w * padFrac), py = Math.round(fb.h * padFrac);
+    const cx0 = Math.max(0, Math.round(fb.x - px));
+    const cy0 = Math.max(0, Math.round(fb.y - py));
+    const cx1 = Math.min(W, Math.round(fb.x + fb.w + px));
+    const cy1 = Math.min(H, Math.round(fb.y + fb.h + py));
+    const cw  = cx1 - cx0, ch = cy1 - cy0;
+
+    if (cw < 32 || ch < 32) return globalDepth;
+
+    // Extract crop
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = cw; cropCanvas.height = ch;
+    const cCtx = cropCanvas.getContext('2d');
+    cCtx.imageSmoothingQuality = 'high';
+    cCtx.drawImage(img, cx0, cy0, cw, ch, 0, 0, cw, ch);
+
+    // Crop inference + TTA
+    const cropRes   = await pipe(cropCanvas.toDataURL('image/png'));
+    const cropNorm  = extractDepthTile(cropRes, cw, ch);
+    const flipRes   = await pipe(flipCanvasH(cropCanvas));
+    const cropFlip  = flipDepthH(extractDepthTile(flipRes, cw, ch), cw, ch);
+
+    const cropTTA = new Float32Array(cw * ch);
+    for (let i = 0; i < cw * ch; i++) cropTTA[i] = (cropNorm[i] + cropFlip[i]) * 0.5;
+
+    // Extract corresponding global reference patch
+    const refPatch = new Float32Array(cw * ch);
+    const mask     = new Float32Array(cw * ch);
+    for (let ly = 0; ly < ch; ly++) {
+      for (let lx = 0; lx < cw; lx++) {
+        if (cx0 + lx < W && cy0 + ly < H) {
+          refPatch[ly * cw + lx] = globalDepth[(cy0 + ly) * W + (cx0 + lx)];
+          mask[ly * cw + lx] = 1;
+        }
+      }
+    }
+
+    // Affine-align crop to global range
+    const aligned = affineAlignTile(cropTTA, refPatch, mask, cw * ch);
+
+    // Re-scale aligned crop to match global patch range
+    let sMin = Infinity, sMax = -Infinity, rMin = Infinity, rMax = -Infinity;
+    for (let i = 0; i < cw * ch; i++) {
+      if (aligned[i] < sMin) sMin = aligned[i];
+      if (aligned[i] > sMax) sMax = aligned[i];
+      if (refPatch[i] < rMin) rMin = refPatch[i];
+      if (refPatch[i] > rMax) rMax = refPatch[i];
+    }
+    const sRange = sMax - sMin || 1, rRange = rMax - rMin || 1;
+    const scaledCrop = new Float32Array(cw * ch);
+    for (let i = 0; i < cw * ch; i++) {
+      scaledCrop[i] = rMin + ((aligned[i] - sMin) / sRange) * rRange;
+    }
+
+    // Landmark priors (residual bumps/dips)
+    let priorCrop = new Float32Array(cw * ch);
+    if (state.faceLandmarks && state.faceLandmarks.length > 0) {
+      const cropLandmarks = state.faceLandmarks.map(pt => ({
+        x: (pt.x * W - cx0) / cw,
+        y: (pt.y * H - cy0) / ch,
+        z: pt.z,
+      }));
+      priorCrop = buildLandmarkPriors(cropLandmarks, cw, ch);
+    }
+
+    const enhancedCrop = new Float32Array(cw * ch);
+    for (let i = 0; i < cw * ch; i++) {
+      enhancedCrop[i] = scaledCrop[i] + priorCrop[i];
+    }
+
+    // Soft blend mask: full weight inside face bbox, tapers to 0 in padding
+    const fxOff  = fb.x - cx0, fyOff = fb.y - cy0;
+    const fxEnd  = fxOff + fb.w, fyEnd = fyOff + fb.h;
+    const blendMask = new Float32Array(cw * ch);
+    for (let ly = 0; ly < ch; ly++) {
+      const dy = ly < fyOff ? (fyOff - ly) / Math.max(1, fyOff) :
+                 ly > fyEnd ? (ly - fyEnd) / Math.max(1, ch - fyEnd) : 0;
+      for (let lx = 0; lx < cw; lx++) {
+        const dx = lx < fxOff ? (fxOff - lx) / Math.max(1, fxOff) :
+                   lx > fxEnd ? (lx - fxEnd) / Math.max(1, cw - fxEnd) : 0;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        blendMask[ly * cw + lx] = Math.max(0, Math.cos(Math.min(1, dist) * Math.PI * 0.5));
+      }
+    }
+
+    // Fuse back into global depth
+    const BLEND = 0.65;
+    const result = Float32Array.from(globalDepth);
+    for (let ly = 0; ly < ch; ly++) {
+      const gy = cy0 + ly;
+      if (gy >= H) continue;
+      for (let lx = 0; lx < cw; lx++) {
+        const gx = cx0 + lx;
+        if (gx >= W) continue;
+        const bw = blendMask[ly * cw + lx] * BLEND;
+        const gi = gy * W + gx;
+        result[gi] = globalDepth[gi] * (1 - bw) + enhancedCrop[ly * cw + lx] * bw;
+      }
+    }
+    return result;
+  }
+
+  /* ── Should portrait mode run for the current image? ── */
+  function shouldRunPortrait() {
+    if (state.portraitMode === 'off') return false;
+    if (state.portraitMode === 'on')  return true;
+    return state.portraitDetected; // auto
+  }
+
+  /* ── Update portrait badge visibility ── */
+  function updatePortraitBadge() {
+    const badge = document.getElementById('dm-portrait-badge');
+    if (!badge) return;
+    const show = state.portraitDetected || state.portraitMode === 'on';
+    badge.classList.toggle('visible', show);
+  }
+
   /* ── Tiled depth inference with flip-TTA, affine alignment, and
        global reference pass for maximum accuracy ── */
   async function tiledDepthInference(pipe) {
@@ -1240,10 +1569,41 @@
         else if (info.status === 'ready') { showProgress(100, 'Model ready'); }
       });
 
-      // ── 2. Run tiled or single-pass inference ──
+      // ── 2. Face detection for portrait mode (parallel with inference start) ──
+      // Reset portrait state
+      state.portraitDetected = false;
+      state.faceBox = null;
+      state.faceLandmarks = null;
+
+      // Kick off face detection concurrently with model load completing
+      // Only run if portrait mode isn't disabled
+      const isMaybePortrait = state.portraitMode !== 'off';
+      let faceDetectPromise = Promise.resolve(null);
+      if (isMaybePortrait) {
+        showProgress(100, '<span class="pulse">Detecting faces…</span>');
+        faceDetectPromise = detectFace(state.originalImg).then(fb => {
+          if (fb) {
+            state.portraitDetected = true;
+            state.faceBox = fb;
+            state.faceLandmarks = fb.landmarks;
+          }
+          updatePortraitBadge();
+          return fb;
+        }).catch(() => null);
+      }
+
+      // ── 3. Run tiled or single-pass inference ──
       cachedDepthFloat = await tiledDepthInference(pipe);
 
-      // ── 3. Post-process and display ──
+      // Wait for face detection to complete (usually already done by now)
+      await faceDetectPromise;
+
+      // ── 4. Portrait enhancement (if portrait mode is active) ──
+      if (shouldRunPortrait() && state.faceBox) {
+        cachedDepthFloat = await portraitEnhance(pipe, cachedDepthFloat);
+      }
+
+      // ── 5. Post-process and display ──
       showProgress(100, '<span class="pulse">Post-processing…</span>');
       processAndDisplayDepth();
 
