@@ -12,20 +12,44 @@
   const MODELS = {
     small: {
       id: 'onnx-community/depth-anything-v2-small',
-      label: 'Small',
+      label: 'DA2 Small',
       desc: '~25 MB · fastest',
     },
     base: {
       id: 'onnx-community/depth-anything-v2-base',
-      label: 'Base',
+      label: 'DA2 Base',
       desc: '~100 MB · balanced',
     },
     large: {
       id: 'onnx-community/depth-anything-v2-large',
-      label: 'Large',
-      desc: '~350 MB · best detail',
+      label: 'DA2 Large',
+      desc: '~350 MB · detail',
+    },
+    dptLarge: {
+      id: 'Xenova/dpt-large',
+      label: 'DPT Large',
+      desc: '~420 MB · sharp edges',
+    },
+    dptHybrid: {
+      id: 'Xenova/dpt-hybrid-midas',
+      label: 'DPT Hybrid',
+      desc: '~330 MB · good faces',
+    },
+    midasV3: {
+      id: 'Xenova/midas-v3-large',
+      label: 'MiDaS v3',
+      desc: '~300 MB · legacy strong',
+    },
+    dptSwinV2: {
+      id: 'Xenova/dpt-swinv2-large-384',
+      label: 'DPT SwinV2',
+      desc: '~500 MB · max quality',
     },
   };
+
+  const MODEL_ORDER = [
+    'small', 'base', 'large', 'dptLarge', 'dptHybrid', 'midasV3', 'dptSwinV2',
+  ];
 
   /* ═══════════════════════════════════════════════════════════════════
      STATE
@@ -439,6 +463,14 @@
   function buildUI(container) {
     container.innerHTML = '';
 
+    const modelButtons = MODEL_ORDER.map(key => {
+      const m = MODELS[key];
+      return `
+          <button class="dm-opt-btn ${state.modelSize===key?'active':''}" data-val="${key}">
+            ${m.label}<span class="desc">${m.desc}</span>
+          </button>`;
+    }).join('');
+
     /* ── Left panel ── */
     const panel = el('div', 'dm-panel');
     panel.innerHTML = `
@@ -451,15 +483,7 @@
           <span class="dm-device-badge" id="dm-device-badge" style="display:none"></span>
         </label>
         <div class="dm-opt-group" id="dm-model-group">
-          <button class="dm-opt-btn ${state.modelSize==='small'?'active':''}" data-val="small">
-            Small<span class="desc">~25 MB · fastest</span>
-          </button>
-          <button class="dm-opt-btn ${state.modelSize==='base'?'active':''}" data-val="base">
-            Base<span class="desc">~100 MB · balanced</span>
-          </button>
-          <button class="dm-opt-btn ${state.modelSize==='large'?'active':''}" data-val="large">
-            Large<span class="desc">~350 MB · best</span>
-          </button>
+          ${modelButtons}
         </div>
         <div class="dm-field-hint">Model downloads on first use, then cached</div>
       </div>
