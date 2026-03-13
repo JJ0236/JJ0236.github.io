@@ -1084,7 +1084,7 @@
 
   /* ── Gentle depth contrast: stretch histogram to use full 0-1 range
        without amplifying noise or creating artifacts ── */
-  function depthContrastStretch(depth, w, h) {
+  function depthContrastStretch(depth, w, h, strength = 0) {
     const n = w * h;
 
     // Compute percentile-based min/max (1st and 99th percentile)
@@ -1095,10 +1095,31 @@
     const range = hi - lo || 1;
 
     const result = new Float32Array(n);
+    // Mild S-curve based on strength to lift midtones without crushing extremes
+    const gamma = Math.max(0.55, 1 - strength * 0.35); // stronger detail -> lower gamma (more pop)
     for (let i = 0; i < n; i++) {
-      result[i] = Math.max(0, Math.min(1, (depth[i] - lo) / range));
+      const norm = Math.max(0, Math.min(1, (depth[i] - lo) / range));
+      result[i] = Math.pow(norm, gamma);
     }
     return result;
+  }
+
+  /* ── Depth local contrast: unsharp mask on depth itself (no RGB texture) ── */
+  function depthLocalContrast(depth, w, h, strength) {
+    if (strength <= 0) return depth;
+    const n = w * h;
+    const radius = Math.max(2, Math.round(Math.min(w, h) / (140 - 60 * strength)));
+    const tmp = new Float32Array(n);
+    const blur = new Float32Array(n);
+    boxMeanSep(depth, w, h, radius, blur, tmp);
+
+    const out = new Float32Array(n);
+    const gain = 0.4 + strength * 1.6;
+    for (let i = 0; i < n; i++) {
+      const high = depth[i] - blur[i];
+      out[i] = Math.max(0, Math.min(1, depth[i] + high * gain));
+    }
+    return out;
   }
 
   /* ── Helper: extract raw depth Float32Array from pipeline result,
@@ -1701,6 +1722,8 @@
     const H = state.originalImg.naturalHeight;
     let depth = cachedDepthFloat;
 
+    const strength = Math.max(0, Math.min(1, state.detailBoost));
+
     if (state.guidedFilter) {
       const guide = getOrigGray();
 
@@ -1711,14 +1734,17 @@
       // Step 2: Depth-aware edge refinement — sharpen depth boundaries
       // only where the MODEL detected a depth transition, not where
       // arbitrary photo texture exists
-      if (state.detailBoost > 0) {
-        depth = depthEdgeRefine(depth, guide, W, H, state.detailBoost);
-        depth = depthMicroDetail(depth, W, H, state.detailBoost);
+      if (strength > 0) {
+        depth = depthEdgeRefine(depth, guide, W, H, strength);
+        depth = depthMicroDetail(depth, W, H, strength);
       }
     }
 
-    // Step 3: Gentle contrast stretch (percentile-based, no amplification)
-    depth = depthContrastStretch(depth, W, H);
+    // Step 3: Gentle contrast stretch with S-curve tuned by strength
+    depth = depthContrastStretch(depth, W, H, strength);
+
+    // Step 4: Depth-only local contrast (unsharp on depth)
+    depth = depthLocalContrast(depth, W, H, strength);
 
     // Invert if enabled
     if (state.invert) {
