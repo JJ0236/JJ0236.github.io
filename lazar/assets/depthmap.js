@@ -10,52 +10,25 @@
      MODEL CONFIGS
      ═══════════════════════════════════════════════════════════════════ */
   const MODELS = {
-    small: {
-      id: 'onnx-community/depth-anything-v2-small',
-      label: 'DA2 Small',
-      desc: '~25 MB · fastest',
+    marigold: {
+      id: 'Xenova/marigold-depth-lcm-v1-onnx',
+      label: 'Marigold',
+      desc: 'Diffusion depth · max detail (~420 MB)',
     },
-    base: {
-      id: 'onnx-community/depth-anything-v2-base',
-      label: 'DA2 Base',
-      desc: '~100 MB · balanced',
-    },
-    large: {
-      id: 'onnx-community/depth-anything-v2-large',
-      label: 'DA2 Large',
-      desc: '~350 MB · detail',
-    },
-    dptLarge: {
-      id: 'Xenova/dpt-large',
-      label: 'DPT Large',
-      desc: '~420 MB · sharp edges',
-    },
-    dptHybrid: {
-      id: 'Xenova/dpt-hybrid-midas',
-      label: 'DPT Hybrid',
-      desc: '~330 MB · good faces',
-    },
-    midasV3: {
-      id: 'Xenova/midas-v3-large',
-      label: 'MiDaS v3',
-      desc: '~300 MB · legacy strong',
-    },
-    dptSwinV2: {
-      id: 'onnx-community/dpt-swinv2-large-384',
-      label: 'DPT SwinV2',
-      desc: '~500 MB · max quality (open mirror)',
+    zoedepth: {
+      id: 'Xenova/zoedepth-m12-nk-nyu-kitti-onnx',
+      label: 'ZoeDepth',
+      desc: 'Strong edges/structure (~190 MB)',
     },
   };
 
-  const MODEL_ORDER = [
-    'small', 'base', 'large', 'dptLarge', 'dptHybrid', 'midasV3', 'dptSwinV2',
-  ];
+  const MODEL_ORDER = ['marigold', 'zoedepth'];
 
   /* ═══════════════════════════════════════════════════════════════════
      STATE
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
-    modelSize: 'base',
+    modelSize: 'marigold',
     tileGrid: 2,
     guidedFilter: true,
     detailBoost: 0.35,
@@ -427,11 +400,11 @@
   }
 
   async function getOrCreatePipeline(progressCb) {
-    let modelKey = state.modelSize;
+    const preferred = state.modelSize;
+    const fallback = preferred === 'marigold' ? 'zoedepth' : 'marigold';
+    const tried = new Set();
 
-    if (state.pipeline && state.pipelineModel === modelKey) {
-      return state.pipeline;
-    }
+    if (state.pipeline && state.pipelineModel === preferred) return state.pipeline;
 
     // Dispose previous pipeline
     if (state.pipeline) {
@@ -441,43 +414,41 @@
 
     const device = await getDevice();
     updateDeviceBadge(device);
+    const dtype = device === 'webgpu' ? 'fp16' : 'fp32';
 
     const tfModule = await import(
       'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3'
     );
 
-    try {
-      const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
+    async function tryLoad(key) {
+      const pipe = await tfModule.pipeline('depth-estimation', MODELS[key].id, {
         device,
-        dtype: device === 'webgpu' ? 'fp32' : 'fp32',
+        dtype,
         progress_callback: progressCb || (() => {}),
       });
       state.pipeline = pipe;
-      state.pipelineModel = modelKey;
-      return pipe;
-    } catch (err) {
-      // If SwinV2 mirror is gated in the user region, fall back to DA2 Large automatically
-      if (modelKey === 'dptSwinV2') {
-        console.warn('DPT SwinV2 failed, falling back to DA2 Large', err);
-        showProgress(5, 'SwinV2 unavailable here — falling back to DA2 Large');
-        modelKey = 'large';
-        state.modelSize = 'large';
-        const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="large"]`);
-        if (btn) {
-          document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-        }
-        const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
-          device,
-          dtype: device === 'webgpu' ? 'fp32' : 'fp32',
-          progress_callback: progressCb || (() => {}),
-        });
-        state.pipeline = pipe;
-        state.pipelineModel = modelKey;
-        return pipe;
+      state.pipelineModel = key;
+      state.modelSize = key;
+      const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="${key}"]`);
+      if (btn) {
+        document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
       }
-      throw err;
+      return pipe;
     }
+
+    const order = [preferred, fallback];
+    for (const key of order) {
+      if (tried.has(key)) continue;
+      try {
+        return await tryLoad(key);
+      } catch (err) {
+        console.warn(`Model ${key} failed, trying fallback`, err);
+        tried.add(key);
+        showProgress(5, `Model ${MODELS[key].label} unavailable — trying fallback...`);
+      }
+    }
+    throw new Error('All depth models failed to load');
   }
 
   /* ═══════════════════════════════════════════════════════════════════
