@@ -33,8 +33,12 @@
   const state = {
     modelSize: 'base',
     tileGrid: 2,
-    guidedFilter: true,
-    detailBoost: 0.35,
+    depthContrast: 1.1,
+    foregroundBoost: 0.2,
+    backgroundFlatten: 0.7,
+    planarSmoothing: 0.58,
+    windowRecess: 0.32,
+    edgeDenoise: 0.45,
     displacement: 0.12,
     autoSway: true,
     invert: false,
@@ -77,6 +81,10 @@
     currentMX: 0, currentMY: 0,
 
     resultView: 'depth', // 'depth' | '3d'
+    previewStage: 'final',
+    processedDepthFloat: null,
+    debugOutputs: null,
+    origFeatures: null,
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -150,6 +158,14 @@
       color: var(--accent, #e94560); font-size: 12px; font-weight: 600;
     }
     .dm-range { width: 100%; margin: 4px 0 2px; }
+    .dm-select {
+      width: 100%; margin: 4px 0 2px; padding: 8px 10px;
+      background: var(--bg-input, #0f0f23);
+      border: 1px solid var(--border, #2a2a4a);
+      border-radius: var(--radius, 6px);
+      color: var(--text-primary, #e0e0e0);
+      font: inherit;
+    }
 
     /* ── Toggle ── */
     .dm-toggle-label {
@@ -432,21 +448,75 @@
       </div>
 
       <div class="dm-field">
-        <label class="dm-toggle-label">
-          <input type="checkbox" id="dm-guided-filter" ${state.guidedFilter?'checked':''} />
-          Edge Refinement
+        <label class="dm-slider-label">
+          Depth Contrast
+          <span class="dm-slider-val" id="dm-depth-contrast-val">${state.depthContrast.toFixed(2)}</span>
         </label>
-        <div class="dm-field-hint">Multi-scale guided filter sharpens depth using original image edges</div>
+        <input type="range" id="dm-depth-contrast" min="0.7" max="1.8" step="0.05"
+          value="${state.depthContrast}" class="dm-range" />
+        <div class="dm-field-hint">Overall relief separation between near and far geometry</div>
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Detail Boost
-          <span class="dm-slider-val" id="dm-detail-val">${(state.detailBoost * 100).toFixed(0)}%</span>
+          Foreground Boost
+          <span class="dm-slider-val" id="dm-foreground-boost-val">${(state.foregroundBoost * 100).toFixed(0)}%</span>
         </label>
-        <input type="range" id="dm-detail-boost" min="0" max="1" step="0.05"
-          value="${state.detailBoost}" class="dm-range" />
-        <div class="dm-field-hint">Injects fine texture from original photo into depth map</div>
+        <input type="range" id="dm-foreground-boost" min="0" max="1" step="0.05"
+          value="${state.foregroundBoost}" class="dm-range" />
+        <div class="dm-field-hint">Pushes columns, roof edges, and front-most structure higher</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Background Flattening
+          <span class="dm-slider-val" id="dm-background-flatten-val">${(state.backgroundFlatten * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-background-flatten" min="0" max="1" step="0.05"
+          value="${state.backgroundFlatten}" class="dm-range" />
+        <div class="dm-field-hint">Forces sky and distant clutter to a clean far-depth plane</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Planar Smoothing
+          <span class="dm-slider-val" id="dm-planar-smoothing-val">${(state.planarSmoothing * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-planar-smoothing" min="0" max="1" step="0.05"
+          value="${state.planarSmoothing}" class="dm-range" />
+        <div class="dm-field-hint">Smooths pavement, walls, and glass into believable planes</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Window Recess Depth
+          <span class="dm-slider-val" id="dm-window-recess-val">${(state.windowRecess * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-window-recess" min="0" max="1" step="0.05"
+          value="${state.windowRecess}" class="dm-range" />
+        <div class="dm-field-hint">Biases glazing, doors, and dark vestibules deeper than outer framing</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          Edge-Preserving Denoise
+          <span class="dm-slider-val" id="dm-edge-denoise-val">${(state.edgeDenoise * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-edge-denoise" min="0" max="1" step="0.05"
+          value="${state.edgeDenoise}" class="dm-range" />
+        <div class="dm-field-hint">Removes relief noise without creating glowing outline halos</div>
+      </div>
+
+      <div class="dm-field">
+        <label>Preview Stage</label>
+        <select id="dm-stage-select" class="dm-select">
+          <option value="final" ${state.previewStage === 'final' ? 'selected' : ''}>Final height map</option>
+          <option value="raw" ${state.previewStage === 'raw' ? 'selected' : ''}>Raw model depth</option>
+          <option value="normalized" ${state.previewStage === 'normalized' ? 'selected' : ''}>Normalized depth</option>
+          <option value="masks" ${state.previewStage === 'masks' ? 'selected' : ''}>Segmentation masks</option>
+          <option value="smoothed" ${state.previewStage === 'smoothed' ? 'selected' : ''}>Planar-smoothed depth</option>
+        </select>
+        <div class="dm-field-hint">Deterministic debug stages for tuning the bas-relief pipeline</div>
       </div>
 
       <div class="dm-field">
@@ -494,7 +564,10 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          Download PNG
+          Download 16-bit PNG
+        </button>
+        <button class="dm-btn dm-btn-secondary" id="dm-download-preview-btn" style="display:none">
+          Preview PNG
         </button>
       </div>
 
@@ -657,6 +730,7 @@
     const fileInput   = document.getElementById('dm-file-input');
     const generateBtn = document.getElementById('dm-generate-btn');
     const downloadBtn = document.getElementById('dm-download-btn');
+    const downloadPreviewBtn = document.getElementById('dm-download-preview-btn');
     const origBody    = document.getElementById('dm-orig-body');
 
     /* ── Upload ── */
@@ -686,6 +760,7 @@
       generateDepthMap();
     });
     downloadBtn.addEventListener('click', downloadDepthMap);
+    downloadPreviewBtn.addEventListener('click', downloadPreviewStage);
 
     /* ── Pan/zoom ── */
     pzInstances.orig   = setupPanZoom(origBody, document.getElementById('dm-orig-wrap'));
@@ -720,24 +795,37 @@
       update3DDisplacement();
     });
 
+    const rerenderIfReady = () => {
+      if (cachedDepthFloat) processAndDisplayDepth();
+    };
+    const sliderBindings = [
+      ['dm-depth-contrast', 'depthContrast', 'dm-depth-contrast-val', (v) => v.toFixed(2)],
+      ['dm-foreground-boost', 'foregroundBoost', 'dm-foreground-boost-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-background-flatten', 'backgroundFlatten', 'dm-background-flatten-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-planar-smoothing', 'planarSmoothing', 'dm-planar-smoothing-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-window-recess', 'windowRecess', 'dm-window-recess-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-edge-denoise', 'edgeDenoise', 'dm-edge-denoise-val', (v) => `${(v * 100).toFixed(0)}%`],
+    ];
+    sliderBindings.forEach(([id, key, outId, format]) => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', (e) => {
+        state[key] = parseFloat(e.target.value);
+        document.getElementById(outId).textContent = format(state[key]);
+        rerenderIfReady();
+      });
+    });
+    document.getElementById('dm-stage-select').addEventListener('change', (e) => {
+      state.previewStage = e.target.value;
+      if (state.debugOutputs) showDepthResult();
+    });
+
     /* ── Toggles ── */
-    document.getElementById('dm-guided-filter').addEventListener('change', (e) => {
-      state.guidedFilter = e.target.checked;
-      if (cachedDepthFloat) processAndDisplayDepth();
-    });
-    const detailSlider = document.getElementById('dm-detail-boost');
-    detailSlider.addEventListener('input', (e) => {
-      state.detailBoost = parseFloat(e.target.value);
-      document.getElementById('dm-detail-val').textContent =
-        (state.detailBoost * 100).toFixed(0) + '%';
-      if (cachedDepthFloat) processAndDisplayDepth();
-    });
     document.getElementById('dm-auto-sway').addEventListener('change', (e) => {
       state.autoSway = e.target.checked;
     });
     document.getElementById('dm-invert').addEventListener('change', (e) => {
       state.invert = e.target.checked;
-      if (cachedDepthFloat) processAndDisplayDepth();
+      rerenderIfReady();
     });
 
     /* ── View toggle (Depth / 3D) ── */
@@ -757,6 +845,9 @@
   function handleFile(file) {
     if (!file.type.match(/image\/(jpeg|png|webp)/)) return;
     state.file = file;
+    state.origFeatures = null;
+    state.debugOutputs = null;
+    state.processedDepthFloat = null;
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -786,6 +877,7 @@
         document.getElementById('dm-result-empty').style.display = '';
         document.getElementById('dm-result-info').textContent = '';
         document.getElementById('dm-download-btn').style.display = 'none';
+        document.getElementById('dm-download-preview-btn').style.display = 'none';
 
         document.getElementById('dm-orig-body').style.cursor = '';
         document.getElementById('dm-replace-btn').style.display = 'inline-block';
@@ -828,6 +920,123 @@
 
   // Cache depth as Float32Array (0-1 range, original image resolution)
   let cachedDepthFloat = null;
+
+  function clamp01(v) {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  function lerp(a, b, t) {
+    return a + (b - a) * t;
+  }
+
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp01((x - edge0) / ((edge1 - edge0) || 1e-6));
+    return t * t * (3 - 2 * t);
+  }
+
+  function normalize01(src) {
+    const n = src.length;
+    const out = new Float32Array(n);
+    let minV = Infinity, maxV = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (src[i] < minV) minV = src[i];
+      if (src[i] > maxV) maxV = src[i];
+    }
+    const range = maxV - minV || 1;
+    for (let i = 0; i < n; i++) out[i] = (src[i] - minV) / range;
+    return out;
+  }
+
+  function robustNormalize(src, lowQ = 0.01, highQ = 0.99) {
+    const n = src.length;
+    let minV = Infinity, maxV = -Infinity;
+    for (let i = 0; i < n; i++) {
+      if (src[i] < minV) minV = src[i];
+      if (src[i] > maxV) maxV = src[i];
+    }
+    const hist = new Uint32Array(1024);
+    const span = maxV - minV || 1;
+    for (let i = 0; i < n; i++) {
+      const bin = Math.max(0, Math.min(1023, Math.floor(((src[i] - minV) / span) * 1023)));
+      hist[bin]++;
+    }
+    const lowTarget = Math.floor(n * lowQ);
+    const highTarget = Math.floor(n * highQ);
+    let acc = 0;
+    let lowBin = 0;
+    let highBin = 1023;
+    for (let i = 0; i < hist.length; i++) {
+      acc += hist[i];
+      if (acc >= lowTarget) { lowBin = i; break; }
+    }
+    acc = 0;
+    for (let i = 0; i < hist.length; i++) {
+      acc += hist[i];
+      if (acc >= highTarget) { highBin = i; break; }
+    }
+    const low = minV + (lowBin / 1023) * span;
+    const high = minV + (highBin / 1023) * span;
+    const out = new Float32Array(n);
+    const denom = high - low || 1;
+    for (let i = 0; i < n; i++) out[i] = clamp01((src[i] - low) / denom);
+    return out;
+  }
+
+  function gradientMagnitude(src, w, h) {
+    const out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - 1);
+      const y1 = Math.min(h - 1, y + 1);
+      for (let x = 0; x < w; x++) {
+        const x0 = Math.max(0, x - 1);
+        const x1 = Math.min(w - 1, x + 1);
+        const dx = src[y * w + x1] - src[y * w + x0];
+        const dy = src[y1 * w + x] - src[y0 * w + x];
+        out[y * w + x] = Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+    return out;
+  }
+
+  function blurFloat(src, w, h, radius) {
+    const out = new Float32Array(w * h);
+    const tmp = new Float32Array(w * h);
+    boxMeanSep(src, w, h, radius, out, tmp);
+    return out;
+  }
+
+  function floatToCanvas(src, w, h) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(w, h);
+    for (let i = 0; i < w * h; i++) {
+      const v = Math.max(0, Math.min(255, Math.round(clamp01(src[i]) * 255)));
+      imgData.data[i * 4] = v;
+      imgData.data[i * 4 + 1] = v;
+      imgData.data[i * 4 + 2] = v;
+      imgData.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
+
+  function masksToCanvas(backgroundMask, planeMask, windowMask, w, h) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(w, h);
+    for (let i = 0; i < w * h; i++) {
+      imgData.data[i * 4] = Math.round(clamp01(backgroundMask[i]) * 255);
+      imgData.data[i * 4 + 1] = Math.round(clamp01(planeMask[i]) * 255);
+      imgData.data[i * 4 + 2] = Math.round(clamp01(windowMask[i]) * 255);
+      imgData.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
 
   /* ── Separable box-mean filter (O(N), memory-efficient) ── */
   function boxMeanSep(src, w, h, r, out, tmp) {
@@ -904,6 +1113,126 @@
       g[i] = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) / 255;
     }
     return g;
+  }
+
+  function getOrigFeatures() {
+    if (state.origFeatures) return state.origFeatures;
+    const img = state.originalImg;
+    const W = img.naturalWidth;
+    const H = img.naturalHeight;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    const gray = new Float32Array(W * H);
+    const sat = new Float32Array(W * H);
+    const val = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      const r = d[i * 4] / 255;
+      const g = d[i * 4 + 1] / 255;
+      const b = d[i * 4 + 2] / 255;
+      const maxC = Math.max(r, g, b);
+      const minC = Math.min(r, g, b);
+      const delta = maxC - minC;
+      gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+      val[i] = maxC;
+      sat[i] = maxC > 1e-6 ? delta / maxC : 0;
+    }
+    state.origFeatures = { gray, sat, val };
+    return state.origFeatures;
+  }
+
+  function buildBasReliefDepthMap(rawDepth, w, h) {
+    const { gray, sat, val } = getOrigFeatures();
+    const raw = normalize01(rawDepth);
+    const normalized = robustNormalize(rawDepth, 0.01, 0.995);
+    let depth = normalized.slice();
+
+    const grayFine = blurFloat(gray, w, h, Math.max(2, Math.round(Math.min(w, h) / 220)));
+    const grayMed = blurFloat(gray, w, h, Math.max(5, Math.round(Math.min(w, h) / 80)));
+    const imgGrad = gradientMagnitude(gray, w, h);
+    const depthGrad = gradientMagnitude(depth, w, h);
+
+    const n = w * h;
+    const backgroundMask = new Float32Array(n);
+    const planeMask = new Float32Array(n);
+    const windowMask = new Float32Array(n);
+    const entranceMask = new Float32Array(n);
+    const denoiseMask = new Float32Array(n);
+
+    for (let y = 0; y < h; y++) {
+      const yn = y / Math.max(1, h - 1);
+      const topWeight = 1 - smoothstep(0.25, 0.65, yn);
+      const bottomWeight = smoothstep(0.45, 0.95, yn);
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const xn = x / Math.max(1, w - 1);
+        const centerWeight = 1 - smoothstep(0.28, 0.55, Math.abs(xn - 0.5));
+        const lowTexture = 1 - smoothstep(0.025, 0.11, imgGrad[i]);
+        const lowDepthEdge = 1 - smoothstep(0.018, 0.09, depthGrad[i]);
+        const textureResidual = Math.abs(gray[i] - grayFine[i]);
+        const planeLike = lowTexture * lowDepthEdge * (1 - smoothstep(0.03, 0.14, textureResidual));
+
+        const brightLowSat = smoothstep(0.62, 0.98, val[i]) * (1 - smoothstep(0.10, 0.32, sat[i]));
+        const farAlready = 1 - smoothstep(0.18, 0.55, depth[i]);
+        backgroundMask[i] = clamp01(Math.max(
+          brightLowSat * lowTexture * topWeight,
+          farAlready * topWeight * 0.8,
+          farAlready * smoothstep(0.55, 1.0, sat[i]) * 0.45
+        ));
+
+        denoiseMask[i] = clamp01(planeLike * (0.45 + 0.55 * bottomWeight));
+        planeMask[i] = clamp01(Math.max(
+          planeLike * (0.35 + 0.65 * bottomWeight),
+          planeLike * smoothstep(0.14, 0.82, depth[i]) * (1 - backgroundMask[i])
+        ));
+
+        const cavity = clamp01((grayMed[i] - gray[i] - 0.02) / 0.18);
+        const facadeMask = (1 - backgroundMask[i]) * (1 - smoothstep(0.22, 0.65, sat[i]));
+        const regularity = 1 - smoothstep(0.06, 0.22, textureResidual);
+        windowMask[i] = clamp01(cavity * facadeMask * regularity * smoothstep(0.14, 0.85, depth[i]));
+        entranceMask[i] = clamp01(cavity * facadeMask * centerWeight * smoothstep(0.55, 1.0, yn));
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      depth[i] = lerp(depth[i], 0.02, state.backgroundFlatten * backgroundMask[i]);
+    }
+
+    const smallDenoise = blurFloat(depth, w, h, Math.max(2, Math.round(Math.min(w, h) / 260)));
+    for (let i = 0; i < n; i++) {
+      depth[i] = lerp(depth[i], smallDenoise[i], state.edgeDenoise * denoiseMask[i]);
+    }
+
+    const planeSmoothed = blurFloat(depth, w, h, Math.max(6, Math.round(Math.min(w, h) / 46)));
+    for (let i = 0; i < n; i++) {
+      const blend = state.planarSmoothing * planeMask[i] * (1 - 0.65 * windowMask[i]);
+      depth[i] = lerp(depth[i], planeSmoothed[i], blend);
+    }
+    const smoothed = depth.slice();
+
+    for (let i = 0; i < n; i++) {
+      const recess = state.windowRecess * (0.14 * windowMask[i] + 0.22 * entranceMask[i]);
+      depth[i] = clamp01(depth[i] - recess);
+    }
+
+    for (let i = 0; i < n; i++) {
+      const nearMask = smoothstep(0.55, 0.95, depth[i]) * (1 - backgroundMask[i]);
+      depth[i] = clamp01(depth[i] + state.foregroundBoost * nearMask * (1 - depth[i]) * 0.55);
+      depth[i] = clamp01((depth[i] - 0.5) * state.depthContrast + 0.5);
+      depth[i] = lerp(depth[i], 0.02, state.backgroundFlatten * backgroundMask[i] * 0.5);
+    }
+
+    const finalDepth = robustNormalize(depth, 0.003, 0.997);
+    return {
+      raw,
+      normalized,
+      smoothed,
+      final: finalDepth,
+      masksCanvas: masksToCanvas(backgroundMask, planeMask, windowMask, w, h),
+    };
   }
 
   /* ── Multi-scale guided filter — 3 coarse→fine passes for progressive
@@ -1244,25 +1573,13 @@
     hideProgress();
   }
 
-  /* ── Full depth post-processing pipeline ── */
+  /* ── Full geometry-first bas-relief post-processing pipeline ── */
   function processAndDisplayDepth() {
     if (!cachedDepthFloat) return;
     const W = state.originalImg.naturalWidth;
     const H = state.originalImg.naturalHeight;
-    let depth = cachedDepthFloat;
-
-    if (state.guidedFilter) {
-      const guide = getOrigGray();
-
-      // Step 1: Multi-scale guided filter (coarse→fine edge transfer)
-      depth = multiScaleGuidedFilter(guide, depth, W, H);
-
-      // Step 2: Inject high-frequency detail from the original photo
-      depth = injectDetail(depth, guide, W, H, state.detailBoost);
-
-      // Step 3: Adaptive local contrast enhancement
-      depth = depthContrastEnhance(depth, W, H);
-    }
+    const stages = buildBasReliefDepthMap(cachedDepthFloat, W, H);
+    let depth = stages.final;
 
     // Invert if enabled
     if (state.invert) {
@@ -1271,22 +1588,17 @@
       depth = inv;
     }
 
-    // Render to canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(W, H);
-    for (let i = 0; i < W * H; i++) {
-      const v = Math.max(0, Math.min(255, Math.round(depth[i] * 255)));
-      imgData.data[i * 4]     = v;
-      imgData.data[i * 4 + 1] = v;
-      imgData.data[i * 4 + 2] = v;
-      imgData.data[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    state.depthFullCanvas = canvas;
-    state.depthCanvas = canvas;
+    const finalCanvas = floatToCanvas(depth, W, H);
+    state.processedDepthFloat = depth;
+    state.depthCanvas = finalCanvas;
+    state.debugOutputs = {
+      raw: floatToCanvas(stages.raw, W, H),
+      normalized: floatToCanvas(stages.normalized, W, H),
+      masks: stages.masksCanvas,
+      smoothed: floatToCanvas(stages.smoothed, W, H),
+      final: finalCanvas,
+    };
+    state.depthFullCanvas = state.debugOutputs[state.previewStage] || finalCanvas;
 
     // Show in result preview
     showDepthResult();
@@ -1297,9 +1609,11 @@
 
   function showDepthResult() {
     const wrapEl = document.getElementById('dm-result-wrap');
+    const stageCanvas = state.debugOutputs?.[state.previewStage] || state.depthFullCanvas;
+    if (!stageCanvas) return;
 
     // Show depth map as image
-    const dataUrl = state.depthFullCanvas.toDataURL('image/png');
+    const dataUrl = stageCanvas.toDataURL('image/png');
     const img = new Image();
     img.onload = () => {
       wrapEl.innerHTML = '';
@@ -1311,8 +1625,9 @@
 
     document.getElementById('dm-result-empty').style.display = 'none';
     document.getElementById('dm-result-info').textContent =
-      `${state.depthFullCanvas.width} × ${state.depthFullCanvas.height} px`;
+      `${stageCanvas.width} × ${stageCanvas.height} px · ${state.previewStage}`;
     document.getElementById('dm-download-btn').style.display = '';
+    document.getElementById('dm-download-preview-btn').style.display = '';
 
     // Ensure we're in depth view
     setResultView('depth');
@@ -1698,12 +2013,87 @@
   /* ═══════════════════════════════════════════════════════════════════
      DOWNLOAD
      ═══════════════════════════════════════════════════════════════════ */
-  function downloadDepthMap() {
-    if (!state.depthFullCanvas) return;
-    const stem = state.file?.name ? state.file.name.replace(/\.[^.]+$/, '') : 'image';
-    const filename = `${stem}_depthmap_${state.modelSize}${state.invert ? '_inv' : ''}.png`;
+  function crc32(bytes) {
+    let crc = -1;
+    for (let i = 0; i < bytes.length; i++) {
+      crc ^= bytes[i];
+      for (let j = 0; j < 8; j++) crc = (crc >>> 1) ^ (0xEDB88320 & -(crc & 1));
+    }
+    return (crc ^ -1) >>> 0;
+  }
 
-    state.depthFullCanvas.toBlob((blob) => {
+  function pngChunk(type, data) {
+    const typeBytes = new TextEncoder().encode(type);
+    const chunk = new Uint8Array(12 + data.length);
+    const view = new DataView(chunk.buffer);
+    view.setUint32(0, data.length);
+    chunk.set(typeBytes, 4);
+    chunk.set(data, 8);
+    const crc = crc32(chunk.subarray(4, 8 + data.length));
+    view.setUint32(8 + data.length, crc);
+    return chunk;
+  }
+
+  async function encodeGrayscale16PNG(src, w, h) {
+    const stride = 1 + w * 2;
+    const raw = new Uint8Array(stride * h);
+    for (let y = 0; y < h; y++) {
+      const row = y * stride;
+      raw[row] = 0;
+      for (let x = 0; x < w; x++) {
+        const v16 = Math.max(0, Math.min(65535, Math.round(clamp01(src[y * w + x]) * 65535)));
+        raw[row + 1 + x * 2] = (v16 >> 8) & 255;
+        raw[row + 2 + x * 2] = v16 & 255;
+      }
+    }
+    const compressed = await new Response(
+      new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate'))
+    ).arrayBuffer();
+    const signature = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const ihdr = new Uint8Array(13);
+    const ihdrView = new DataView(ihdr.buffer);
+    ihdrView.setUint32(0, w);
+    ihdrView.setUint32(4, h);
+    ihdr[8] = 16;
+    ihdr[9] = 0;
+    ihdr[10] = 0;
+    ihdr[11] = 0;
+    ihdr[12] = 0;
+    return new Blob([
+      signature,
+      pngChunk('IHDR', ihdr),
+      pngChunk('IDAT', new Uint8Array(compressed)),
+      pngChunk('IEND', new Uint8Array(0)),
+    ], { type: 'image/png' });
+  }
+
+  async function downloadDepthMap() {
+    if (!state.processedDepthFloat || !state.originalImg) return;
+    const stem = state.file?.name ? state.file.name.replace(/\.[^.]+$/, '') : 'image';
+    const filename = `${stem}_heightmap16_${state.modelSize}${state.invert ? '_inv' : ''}.png`;
+    let blob;
+    try {
+      blob = await encodeGrayscale16PNG(
+        state.processedDepthFloat,
+        state.originalImg.naturalWidth,
+        state.originalImg.naturalHeight,
+      );
+    } catch {
+      blob = await new Promise((resolve) => state.depthCanvas.toBlob(resolve, 'image/png'));
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
+  function downloadPreviewStage() {
+    const canvas = state.debugOutputs?.[state.previewStage];
+    if (!canvas) return;
+    const stem = state.file?.name ? state.file.name.replace(/\.[^.]+$/, '') : 'image';
+    const filename = `${stem}_${state.previewStage}.png`;
+    canvas.toBlob((blob) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
       a.download = filename;
