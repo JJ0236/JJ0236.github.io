@@ -12,8 +12,8 @@
   <script>
     function checkMobile() {
       if (window.innerWidth < 768) {
-        if (!location.pathname.endsWith("mobile.html")) {
-          window.location.href = "mobile.html";
+        if (!location.pathname.startsWith("/mobile")) {
+          window.location.href = "/mobile/";
         }
       }
     }
@@ -240,16 +240,16 @@
     <h1>Josh Hicks<br><span class="subtitle">Information Systems</span></h1>
 
     <!-- Navigation Boxes with Nested Inner Elements -->
-    <a href="contact.html" class="nav-box">
+    <a href="/contact/" class="nav-box">
       <div class="nav-inner">Contact Me</div>
     </a>
-    <a href="about.html" class="nav-box">
+    <a href="/about/" class="nav-box">
       <div class="nav-inner">About Me</div>
     </a>
-    <a href="experience.html" class="nav-box">
+    <a href="/experience/" class="nav-box">
       <div class="nav-inner">Experience</div>
     </a>
-    <a href="projects.html" class="nav-box">
+    <a href="/projects/" class="nav-box">
       <div class="nav-inner">Projects</div>
     </a>
     <a href="lazar/" class="nav-box">
