@@ -31,14 +31,14 @@
      STATE
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
-    modelSize: 'base',
-    tileGrid: 2,
+    modelSize: 'large',
+    tileGrid: 3,
     ablationMode: 'full',
     sceneOverride: 'auto',
-    globalDepthWeight: 0.62,
-    localDetailWeight: 0.38,
-    tileSize: 896,
-    tileOverlap: 0.33,
+    globalDepthWeight: 0.56,
+    localDetailWeight: 0.44,
+    tileSize: 640,
+    tileOverlap: 0.42,
     segmentationStrength: 0.55,
     edgePreservationStrength: 0.62,
     backgroundFlattenStrength: 0.70,
@@ -440,10 +440,10 @@
             Base<span class="desc">~100 MB · balanced</span>
           </button>
           <button class="dm-opt-btn ${state.modelSize==='large'?'active':''}" data-val="large">
-            Large<span class="desc">~350 MB · best</span>
+            Large<span class="desc">~350 MB · best available</span>
           </button>
         </div>
-        <div class="dm-field-hint">Model downloads on first use, then cached</div>
+        <div class="dm-field-hint">Uses the largest practical browser model by default</div>
       </div>
 
       <hr class="dm-divider">
@@ -478,16 +478,16 @@
         <label>Detail Level</label>
         <div class="dm-opt-group" id="dm-tile-group">
           <button class="dm-opt-btn ${state.tileGrid===1?'active':''}" data-val="1">
-            Standard<span class="desc">2 passes · fast</span>
+            Standard<span class="desc">fine tiles · slower</span>
           </button>
           <button class="dm-opt-btn ${state.tileGrid===2?'active':''}" data-val="2">
-            High<span class="desc">10 passes · detailed</span>
+            High<span class="desc">denser stitching</span>
           </button>
           <button class="dm-opt-btn ${state.tileGrid===3?'active':''}" data-val="3">
-            Ultra<span class="desc">20 passes · maximum</span>
+            Ultra<span class="desc">fine-tooth coverage</span>
           </button>
         </div>
-        <div class="dm-field-hint">Global + medium + high-resolution tiled refinement</div>
+        <div class="dm-field-hint">Smaller overlapping tiles sweep the image and stitch local detail together</div>
       </div>
 
       <div class="dm-field">
@@ -513,7 +513,7 @@
           tile_size
           <span class="dm-slider-val" id="dm-tile-size-val">${Math.round(state.tileSize)}px</span>
         </label>
-        <input type="range" id="dm-tile-size" min="512" max="1408" step="32"
+        <input type="range" id="dm-tile-size" min="384" max="1408" step="32"
           value="${state.tileSize}" class="dm-range" />
       </div>
 
@@ -1801,9 +1801,10 @@
     }
 
     const overlapFrac = clamp01(state.tileOverlap);
-    const mediumGrid = Math.max(2, quickGrid);
-    const tileBySizeGrid = Math.max(2, Math.ceil(Math.max(W, H) / Math.max(256, Math.round(state.tileSize))));
-    const fineGrid = Math.max(mediumGrid, tileBySizeGrid);
+    const densityBoost = Math.max(0, quickGrid - 1);
+    const mediumGrid = Math.max(2, quickGrid + 1);
+    const tileBySizeGrid = Math.max(2, Math.ceil(Math.max(W, H) / Math.max(192, Math.round(state.tileSize))));
+    const fineGrid = Math.max(mediumGrid + densityBoost, tileBySizeGrid + densityBoost);
 
     const mediumDepth = await inferGridTiles(mediumGrid, Math.max(0.18, overlapFrac * 0.8), 'Medium tile');
     const fineDepth = fineGrid > mediumGrid
