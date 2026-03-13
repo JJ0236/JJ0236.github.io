@@ -11,12 +11,19 @@
      ═══════════════════════════════════════════════════════════════════ */
   const MODELS = {
     marigold: {
-      id: 'Xenova/marigold-depth-lcm-v1-onnx',
+      ids: [
+        'Xenova/marigold-depth-lcm-v1-onnx',
+        'onnx-community/marigold-depth-lcm-v1-int8',
+      ],
       label: 'Marigold',
       desc: 'Diffusion depth · max detail (~420 MB)',
     },
     zoedepth: {
-      id: 'Xenova/zoedepth-m12-nk-nyu-kitti-onnx',
+      ids: [
+        'Xenova/zoedepth-m12-nk-nyu-kitti-onnx',
+        'onnx-community/zoedepth-m12-nk-nyu-kitti-onnx',
+        'Xenova/zoedepth-m12-nk-nyu-kitti-int8',
+      ],
       label: 'ZoeDepth',
       desc: 'Strong edges/structure (~190 MB)',
     },
@@ -421,20 +428,29 @@
     );
 
     async function tryLoad(key) {
-      const pipe = await tfModule.pipeline('depth-estimation', MODELS[key].id, {
-        device,
-        dtype,
-        progress_callback: progressCb || (() => {}),
-      });
-      state.pipeline = pipe;
-      state.pipelineModel = key;
-      state.modelSize = key;
-      const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="${key}"]`);
-      if (btn) {
-        document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+      const candidates = MODELS[key].ids || [MODELS[key].id];
+      for (const repo of candidates) {
+        try {
+          const pipe = await tfModule.pipeline('depth-estimation', repo, {
+            device,
+            dtype,
+            progress_callback: progressCb || (() => {}),
+          });
+          state.pipeline = pipe;
+          state.pipelineModel = key;
+          state.modelSize = key;
+          const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="${key}"]`);
+          if (btn) {
+            document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+          }
+          return pipe;
+        } catch (err) {
+          console.warn(`Repo ${repo} failed, trying next`, err);
+          showProgress(5, `Model ${MODELS[key].label}: trying alternate mirror/quant...`);
+        }
       }
-      return pipe;
+      throw new Error(`All repos failed for model ${key}`);
     }
 
     const order = [preferred, fallback];
