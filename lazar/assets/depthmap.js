@@ -33,12 +33,26 @@
   const state = {
     modelSize: 'base',
     tileGrid: 2,
-    depthContrast: 1.1,
-    foregroundBoost: 0.2,
-    backgroundFlatten: 0.7,
-    planarSmoothing: 0.58,
-    windowRecess: 0.32,
-    edgeDenoise: 0.45,
+    ablationMode: 'full',
+    sceneOverride: 'auto',
+    globalDepthWeight: 0.62,
+    localDetailWeight: 0.38,
+    tileSize: 896,
+    tileOverlap: 0.33,
+    segmentationStrength: 0.55,
+    edgePreservationStrength: 0.62,
+    backgroundFlattenStrength: 0.70,
+    foregroundBoost: 0.20,
+    depthContrast: 1.10,
+    reliefSafeCompression: 0.35,
+    planeSmoothingStrength: 0.58,
+    textureSuppressionStrength: 0.50,
+    portraitFeaturePreservation: 0.66,
+    hairSilhouetteStrength: 0.55,
+    facialRecessBias: 0.34,
+    architectureRecessBias: 0.34,
+    objectEdgeHardness: 0.64,
+    landscapeLayerPreservation: 0.62,
     displacement: 0.12,
     autoSway: true,
     invert: false,
@@ -85,6 +99,8 @@
     processedDepthFloat: null,
     debugOutputs: null,
     origFeatures: null,
+    sceneCategory: 'mixed',
+    classificationScores: null,
     forceDepthPreview: false,
     needs3DRefresh: false,
   };
@@ -434,6 +450,31 @@
 
       <!-- Quality settings -->
       <div class="dm-field">
+        <label>Ablation Mode</label>
+        <select id="dm-ablation-mode" class="dm-select">
+          <option value="global" ${state.ablationMode === 'global' ? 'selected' : ''}>Global only</option>
+          <option value="global_local" ${state.ablationMode === 'global_local' ? 'selected' : ''}>Global + local tiles</option>
+          <option value="global_local_seg" ${state.ablationMode === 'global_local_seg' ? 'selected' : ''}>Global + local + segmentation</option>
+          <option value="full" ${state.ablationMode === 'full' ? 'selected' : ''}>Scene-aware full pipeline</option>
+        </select>
+      </div>
+
+      <div class="dm-field">
+        <label>Scene Routing</label>
+        <select id="dm-scene-override" class="dm-select">
+          <option value="auto" ${state.sceneOverride === 'auto' ? 'selected' : ''}>Auto detect</option>
+          <option value="portrait" ${state.sceneOverride === 'portrait' ? 'selected' : ''}>Portrait / people</option>
+          <option value="animal" ${state.sceneOverride === 'animal' ? 'selected' : ''}>Animal</option>
+          <option value="object" ${state.sceneOverride === 'object' ? 'selected' : ''}>Object / product</option>
+          <option value="architecture" ${state.sceneOverride === 'architecture' ? 'selected' : ''}>Architecture</option>
+          <option value="landscape" ${state.sceneOverride === 'landscape' ? 'selected' : ''}>Landscape</option>
+          <option value="indoor" ${state.sceneOverride === 'indoor' ? 'selected' : ''}>Indoor</option>
+          <option value="mixed" ${state.sceneOverride === 'mixed' ? 'selected' : ''}>Mixed</option>
+        </select>
+        <div class="dm-field-hint" id="dm-scene-info">Detected scene: ${state.sceneCategory}</div>
+      </div>
+
+      <div class="dm-field">
         <label>Detail Level</label>
         <div class="dm-opt-group" id="dm-tile-group">
           <button class="dm-opt-btn ${state.tileGrid===1?'active':''}" data-val="1">
@@ -446,79 +487,184 @@
             Ultra<span class="desc">20 passes · maximum</span>
           </button>
         </div>
-        <div class="dm-field-hint">Uses tiling + flip augmentation + affine alignment for accuracy</div>
+        <div class="dm-field-hint">Global + medium + high-resolution tiled refinement</div>
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Depth Contrast
+          global_depth_weight
+          <span class="dm-slider-val" id="dm-global-depth-weight-val">${state.globalDepthWeight.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-global-depth-weight" min="0" max="1" step="0.02"
+          value="${state.globalDepthWeight}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          local_detail_weight
+          <span class="dm-slider-val" id="dm-local-detail-weight-val">${state.localDetailWeight.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-local-detail-weight" min="0" max="1" step="0.02"
+          value="${state.localDetailWeight}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          tile_size
+          <span class="dm-slider-val" id="dm-tile-size-val">${Math.round(state.tileSize)}px</span>
+        </label>
+        <input type="range" id="dm-tile-size" min="512" max="1408" step="32"
+          value="${state.tileSize}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          tile_overlap
+          <span class="dm-slider-val" id="dm-tile-overlap-val">${(state.tileOverlap * 100).toFixed(0)}%</span>
+        </label>
+        <input type="range" id="dm-tile-overlap" min="0.15" max="0.6" step="0.01"
+          value="${state.tileOverlap}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          segmentation_strength
+          <span class="dm-slider-val" id="dm-segmentation-strength-val">${state.segmentationStrength.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-segmentation-strength" min="0" max="1" step="0.02"
+          value="${state.segmentationStrength}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          edge_preservation_strength
+          <span class="dm-slider-val" id="dm-edge-preservation-strength-val">${state.edgePreservationStrength.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-edge-preservation-strength" min="0" max="1" step="0.02"
+          value="${state.edgePreservationStrength}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          background_flatten_strength
+          <span class="dm-slider-val" id="dm-background-flatten-strength-val">${state.backgroundFlattenStrength.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-background-flatten-strength" min="0" max="1" step="0.02"
+          value="${state.backgroundFlattenStrength}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          foreground_boost
+          <span class="dm-slider-val" id="dm-foreground-boost-val">${state.foregroundBoost.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-foreground-boost" min="0" max="1" step="0.02"
+          value="${state.foregroundBoost}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          depth_contrast
           <span class="dm-slider-val" id="dm-depth-contrast-val">${state.depthContrast.toFixed(2)}</span>
         </label>
         <input type="range" id="dm-depth-contrast" min="0.7" max="1.8" step="0.05"
           value="${state.depthContrast}" class="dm-range" />
-        <div class="dm-field-hint">Overall relief separation between near and far geometry</div>
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Foreground Boost
-          <span class="dm-slider-val" id="dm-foreground-boost-val">${(state.foregroundBoost * 100).toFixed(0)}%</span>
+          relief_safe_compression
+          <span class="dm-slider-val" id="dm-relief-safe-compression-val">${state.reliefSafeCompression.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-foreground-boost" min="0" max="1" step="0.05"
-          value="${state.foregroundBoost}" class="dm-range" />
-        <div class="dm-field-hint">Pushes columns, roof edges, and front-most structure higher</div>
+        <input type="range" id="dm-relief-safe-compression" min="0" max="1" step="0.02"
+          value="${state.reliefSafeCompression}" class="dm-range" />
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Background Flattening
-          <span class="dm-slider-val" id="dm-background-flatten-val">${(state.backgroundFlatten * 100).toFixed(0)}%</span>
+          plane_smoothing_strength
+          <span class="dm-slider-val" id="dm-plane-smoothing-strength-val">${state.planeSmoothingStrength.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-background-flatten" min="0" max="1" step="0.05"
-          value="${state.backgroundFlatten}" class="dm-range" />
-        <div class="dm-field-hint">Forces sky and distant clutter to a clean far-depth plane</div>
+        <input type="range" id="dm-plane-smoothing-strength" min="0" max="1" step="0.02"
+          value="${state.planeSmoothingStrength}" class="dm-range" />
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Planar Smoothing
-          <span class="dm-slider-val" id="dm-planar-smoothing-val">${(state.planarSmoothing * 100).toFixed(0)}%</span>
+          texture_suppression_strength
+          <span class="dm-slider-val" id="dm-texture-suppression-strength-val">${state.textureSuppressionStrength.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-planar-smoothing" min="0" max="1" step="0.05"
-          value="${state.planarSmoothing}" class="dm-range" />
-        <div class="dm-field-hint">Smooths pavement, walls, and glass into believable planes</div>
+        <input type="range" id="dm-texture-suppression-strength" min="0" max="1" step="0.02"
+          value="${state.textureSuppressionStrength}" class="dm-range" />
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Window Recess Depth
-          <span class="dm-slider-val" id="dm-window-recess-val">${(state.windowRecess * 100).toFixed(0)}%</span>
+          portrait_feature_preservation
+          <span class="dm-slider-val" id="dm-portrait-feature-preservation-val">${state.portraitFeaturePreservation.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-window-recess" min="0" max="1" step="0.05"
-          value="${state.windowRecess}" class="dm-range" />
-        <div class="dm-field-hint">Biases glazing, doors, and dark vestibules deeper than outer framing</div>
+        <input type="range" id="dm-portrait-feature-preservation" min="0" max="1" step="0.02"
+          value="${state.portraitFeaturePreservation}" class="dm-range" />
       </div>
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Edge-Preserving Denoise
-          <span class="dm-slider-val" id="dm-edge-denoise-val">${(state.edgeDenoise * 100).toFixed(0)}%</span>
+          hair_silhouette_strength
+          <span class="dm-slider-val" id="dm-hair-silhouette-strength-val">${state.hairSilhouetteStrength.toFixed(2)}</span>
         </label>
-        <input type="range" id="dm-edge-denoise" min="0" max="1" step="0.05"
-          value="${state.edgeDenoise}" class="dm-range" />
-        <div class="dm-field-hint">Removes relief noise without creating glowing outline halos</div>
+        <input type="range" id="dm-hair-silhouette-strength" min="0" max="1" step="0.02"
+          value="${state.hairSilhouetteStrength}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          facial_recess_bias
+          <span class="dm-slider-val" id="dm-facial-recess-bias-val">${state.facialRecessBias.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-facial-recess-bias" min="0" max="1" step="0.02"
+          value="${state.facialRecessBias}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          architecture_recess_bias
+          <span class="dm-slider-val" id="dm-architecture-recess-bias-val">${state.architectureRecessBias.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-architecture-recess-bias" min="0" max="1" step="0.02"
+          value="${state.architectureRecessBias}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          object_edge_hardness
+          <span class="dm-slider-val" id="dm-object-edge-hardness-val">${state.objectEdgeHardness.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-object-edge-hardness" min="0" max="1" step="0.02"
+          value="${state.objectEdgeHardness}" class="dm-range" />
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          landscape_layer_preservation
+          <span class="dm-slider-val" id="dm-landscape-layer-preservation-val">${state.landscapeLayerPreservation.toFixed(2)}</span>
+        </label>
+        <input type="range" id="dm-landscape-layer-preservation" min="0" max="1" step="0.02"
+          value="${state.landscapeLayerPreservation}" class="dm-range" />
+        <div class="dm-field-hint">Scene-aware settings apply by auto-classified category (override optional)</div>
       </div>
 
       <div class="dm-field">
         <label>Preview Stage</label>
         <select id="dm-stage-select" class="dm-select">
           <option value="final" ${state.previewStage === 'final' ? 'selected' : ''}>Final height map</option>
-          <option value="raw" ${state.previewStage === 'raw' ? 'selected' : ''}>Raw model depth</option>
-          <option value="normalized" ${state.previewStage === 'normalized' ? 'selected' : ''}>Normalized depth</option>
+          <option value="global" ${state.previewStage === 'global' ? 'selected' : ''}>Global depth</option>
+          <option value="local" ${state.previewStage === 'local' ? 'selected' : ''}>Local/tiled depth</option>
+          <option value="fused" ${state.previewStage === 'fused' ? 'selected' : ''}>Fused depth</option>
           <option value="masks" ${state.previewStage === 'masks' ? 'selected' : ''}>Segmentation masks</option>
-          <option value="smoothed" ${state.previewStage === 'smoothed' ? 'selected' : ''}>Planar-smoothed depth</option>
+          <option value="post" ${state.previewStage === 'post' ? 'selected' : ''}>Post-correction depth</option>
+          <option value="raw" ${state.previewStage === 'raw' ? 'selected' : ''}>Raw normalized depth</option>
         </select>
-        <div class="dm-field-hint">Deterministic debug stages for tuning the bas-relief pipeline</div>
+        <div class="dm-field-hint">Debug outputs: global, local, fused, segmentation, post-correction, final</div>
       </div>
 
       <div class="dm-field">
@@ -804,12 +950,24 @@
       if (cachedDepthFloat) processAndDisplayDepth();
     };
     const sliderBindings = [
+      ['dm-global-depth-weight', 'globalDepthWeight', 'dm-global-depth-weight-val', (v) => v.toFixed(2)],
+      ['dm-local-detail-weight', 'localDetailWeight', 'dm-local-detail-weight-val', (v) => v.toFixed(2)],
+      ['dm-tile-size', 'tileSize', 'dm-tile-size-val', (v) => `${Math.round(v)}px`],
+      ['dm-tile-overlap', 'tileOverlap', 'dm-tile-overlap-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-segmentation-strength', 'segmentationStrength', 'dm-segmentation-strength-val', (v) => v.toFixed(2)],
+      ['dm-edge-preservation-strength', 'edgePreservationStrength', 'dm-edge-preservation-strength-val', (v) => v.toFixed(2)],
+      ['dm-background-flatten-strength', 'backgroundFlattenStrength', 'dm-background-flatten-strength-val', (v) => v.toFixed(2)],
+      ['dm-foreground-boost', 'foregroundBoost', 'dm-foreground-boost-val', (v) => v.toFixed(2)],
       ['dm-depth-contrast', 'depthContrast', 'dm-depth-contrast-val', (v) => v.toFixed(2)],
-      ['dm-foreground-boost', 'foregroundBoost', 'dm-foreground-boost-val', (v) => `${(v * 100).toFixed(0)}%`],
-      ['dm-background-flatten', 'backgroundFlatten', 'dm-background-flatten-val', (v) => `${(v * 100).toFixed(0)}%`],
-      ['dm-planar-smoothing', 'planarSmoothing', 'dm-planar-smoothing-val', (v) => `${(v * 100).toFixed(0)}%`],
-      ['dm-window-recess', 'windowRecess', 'dm-window-recess-val', (v) => `${(v * 100).toFixed(0)}%`],
-      ['dm-edge-denoise', 'edgeDenoise', 'dm-edge-denoise-val', (v) => `${(v * 100).toFixed(0)}%`],
+      ['dm-relief-safe-compression', 'reliefSafeCompression', 'dm-relief-safe-compression-val', (v) => v.toFixed(2)],
+      ['dm-plane-smoothing-strength', 'planeSmoothingStrength', 'dm-plane-smoothing-strength-val', (v) => v.toFixed(2)],
+      ['dm-texture-suppression-strength', 'textureSuppressionStrength', 'dm-texture-suppression-strength-val', (v) => v.toFixed(2)],
+      ['dm-portrait-feature-preservation', 'portraitFeaturePreservation', 'dm-portrait-feature-preservation-val', (v) => v.toFixed(2)],
+      ['dm-hair-silhouette-strength', 'hairSilhouetteStrength', 'dm-hair-silhouette-strength-val', (v) => v.toFixed(2)],
+      ['dm-facial-recess-bias', 'facialRecessBias', 'dm-facial-recess-bias-val', (v) => v.toFixed(2)],
+      ['dm-architecture-recess-bias', 'architectureRecessBias', 'dm-architecture-recess-bias-val', (v) => v.toFixed(2)],
+      ['dm-object-edge-hardness', 'objectEdgeHardness', 'dm-object-edge-hardness-val', (v) => v.toFixed(2)],
+      ['dm-landscape-layer-preservation', 'landscapeLayerPreservation', 'dm-landscape-layer-preservation-val', (v) => v.toFixed(2)],
     ];
     sliderBindings.forEach(([id, key, outId, format]) => {
       const el = document.getElementById(id);
@@ -822,6 +980,14 @@
     document.getElementById('dm-stage-select').addEventListener('change', (e) => {
       state.previewStage = e.target.value;
       if (state.debugOutputs) showDepthResult();
+    });
+    document.getElementById('dm-ablation-mode').addEventListener('change', (e) => {
+      state.ablationMode = e.target.value;
+      rerenderIfReady();
+    });
+    document.getElementById('dm-scene-override').addEventListener('change', (e) => {
+      state.sceneOverride = e.target.value;
+      rerenderIfReady();
     });
 
     /* ── Toggles ── */
@@ -853,6 +1019,8 @@
     state.origFeatures = null;
     state.debugOutputs = null;
     state.processedDepthFloat = null;
+    state.sceneCategory = 'mixed';
+    state.classificationScores = null;
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -923,7 +1091,7 @@
      DEPTH MAP GENERATION
      ═══════════════════════════════════════════════════════════════════ */
 
-  // Cache depth as Float32Array (0-1 range, original image resolution)
+  // Cache depth inference stages (global/local/fused)
   let cachedDepthFloat = null;
 
   function clamp01(v) {
@@ -1027,21 +1195,6 @@
     return canvas;
   }
 
-  function masksToCanvas(backgroundMask, planeMask, windowMask, w, h) {
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    const imgData = ctx.createImageData(w, h);
-    for (let i = 0; i < w * h; i++) {
-      imgData.data[i * 4] = Math.round(clamp01(backgroundMask[i]) * 255);
-      imgData.data[i * 4 + 1] = Math.round(clamp01(planeMask[i]) * 255);
-      imgData.data[i * 4 + 2] = Math.round(clamp01(windowMask[i]) * 255);
-      imgData.data[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(imgData, 0, 0);
-    return canvas;
-  }
 
   /* ── Separable box-mean filter (O(N), memory-efficient) ── */
   function boxMeanSep(src, w, h, r, out, tmp) {
@@ -1134,6 +1287,9 @@
     const gray = new Float32Array(W * H);
     const sat = new Float32Array(W * H);
     const val = new Float32Array(W * H);
+    const skin = new Float32Array(W * H);
+    const edgeX = new Float32Array(W * H);
+    const edgeY = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) {
       const r = d[i * 4] / 255;
       const g = d[i * 4 + 1] / 255;
@@ -1144,185 +1300,311 @@
       gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
       val[i] = maxC;
       sat[i] = maxC > 1e-6 ? delta / maxC : 0;
+      const r255 = d[i * 4];
+      const g255 = d[i * 4 + 1];
+      const b255 = d[i * 4 + 2];
+      const skinRule = r255 > 95 && g255 > 40 && b255 > 20 &&
+        (Math.max(r255, g255, b255) - Math.min(r255, g255, b255) > 15) &&
+        Math.abs(r255 - g255) > 12 && r255 > g255 && r255 > b255;
+      skin[i] = skinRule ? 1 : 0;
     }
-    state.origFeatures = { gray, sat, val };
+    for (let y = 0; y < H; y++) {
+      const y0 = Math.max(0, y - 1);
+      const y1 = Math.min(H - 1, y + 1);
+      for (let x = 0; x < W; x++) {
+        const x0 = Math.max(0, x - 1);
+        const x1 = Math.min(W - 1, x + 1);
+        const dx = gray[y * W + x1] - gray[y * W + x0];
+        const dy = gray[y1 * W + x] - gray[y0 * W + x];
+        edgeX[y * W + x] = dx;
+        edgeY[y * W + x] = dy;
+      }
+    }
+    state.origFeatures = { gray, sat, val, skin, edgeX, edgeY };
     return state.origFeatures;
   }
 
-  function buildBasReliefDepthMap(rawDepth, w, h) {
-    const { gray, sat, val } = getOrigFeatures();
-    const raw = normalize01(rawDepth);
-    const normalized = robustNormalize(rawDepth, 0.01, 0.995);
-    let depth = normalized.slice();
-
-    const grayFine = blurFloat(gray, w, h, Math.max(2, Math.round(Math.min(w, h) / 220)));
-    const grayMed = blurFloat(gray, w, h, Math.max(5, Math.round(Math.min(w, h) / 80)));
-    const imgGrad = gradientMagnitude(gray, w, h);
-    const depthGrad = gradientMagnitude(depth, w, h);
-
+  function classifySceneType(globalDepth, fusedDepth, features, w, h) {
     const n = w * h;
-    const backgroundMask = new Float32Array(n);
-    const planeMask = new Float32Array(n);
-    const windowMask = new Float32Array(n);
-    const entranceMask = new Float32Array(n);
-    const denoiseMask = new Float32Array(n);
-
+    const imgGrad = gradientMagnitude(features.gray, w, h);
+    const centerMask = new Float32Array(n);
+    let topSkyLike = 0;
+    let textureSum = 0;
+    let skinSum = 0;
+    let edgeHV = 0;
+    let edgeDiag = 0;
+    let centerNear = 0;
+    let centerTotal = 0;
+    let fgCount = 0;
     for (let y = 0; y < h; y++) {
       const yn = y / Math.max(1, h - 1);
-      const topWeight = 1 - smoothstep(0.25, 0.65, yn);
-      const bottomWeight = smoothstep(0.45, 0.95, yn);
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         const xn = x / Math.max(1, w - 1);
-        const centerWeight = 1 - smoothstep(0.28, 0.55, Math.abs(xn - 0.5));
-        const lowTexture = 1 - smoothstep(0.025, 0.11, imgGrad[i]);
-        const lowDepthEdge = 1 - smoothstep(0.018, 0.09, depthGrad[i]);
-        const textureResidual = Math.abs(gray[i] - grayFine[i]);
-        const planeLike = lowTexture * lowDepthEdge * (1 - smoothstep(0.03, 0.14, textureResidual));
-
-        const brightLowSat = smoothstep(0.62, 0.98, val[i]) * (1 - smoothstep(0.10, 0.32, sat[i]));
-        const farAlready = 1 - smoothstep(0.18, 0.55, depth[i]);
-        backgroundMask[i] = clamp01(Math.max(
-          brightLowSat * lowTexture * topWeight,
-          farAlready * topWeight * 0.8,
-          farAlready * smoothstep(0.55, 1.0, sat[i]) * 0.45
-        ));
-
-        denoiseMask[i] = clamp01(planeLike * (0.45 + 0.55 * bottomWeight));
-        planeMask[i] = clamp01(Math.max(
-          planeLike * (0.35 + 0.65 * bottomWeight),
-          planeLike * smoothstep(0.14, 0.82, depth[i]) * (1 - backgroundMask[i])
-        ));
-
-        const cavity = clamp01((grayMed[i] - gray[i] - 0.02) / 0.18);
-        const facadeMask = (1 - backgroundMask[i]) * (1 - smoothstep(0.22, 0.65, sat[i]));
-        const regularity = 1 - smoothstep(0.06, 0.22, textureResidual);
-        windowMask[i] = clamp01(cavity * facadeMask * regularity * smoothstep(0.14, 0.85, depth[i]));
-        entranceMask[i] = clamp01(cavity * facadeMask * centerWeight * smoothstep(0.55, 1.0, yn));
+        const cx = 1 - smoothstep(0.25, 0.52, Math.abs(xn - 0.5));
+        const cy = 1 - smoothstep(0.22, 0.6, Math.abs(yn - 0.52));
+        centerMask[i] = cx * cy;
+        textureSum += imgGrad[i];
+        skinSum += features.skin[i] * centerMask[i];
+        const absDx = Math.abs(features.edgeX[i]);
+        const absDy = Math.abs(features.edgeY[i]);
+        edgeHV += Math.max(absDx, absDy);
+        edgeDiag += Math.abs(absDx - absDy);
+        if (fusedDepth[i] > 0.58) fgCount++;
+        if (centerMask[i] > 0.25) {
+          centerTotal += centerMask[i];
+          centerNear += centerMask[i] * smoothstep(0.54, 0.92, fusedDepth[i]);
+        }
+        const skyLike = smoothstep(0.62, 0.98, features.val[i]) *
+          (1 - smoothstep(0.12, 0.34, features.sat[i])) *
+          (1 - smoothstep(0.03, 0.12, imgGrad[i])) *
+          (1 - smoothstep(0.22, 0.55, fusedDepth[i])) *
+          (1 - smoothstep(0.33, 0.75, yn));
+        topSkyLike += skyLike;
       }
     }
 
-    for (let i = 0; i < n; i++) {
-      depth[i] = lerp(depth[i], 0.02, state.backgroundFlatten * backgroundMask[i]);
+    const texMean = textureSum / n;
+    const skinCenter = skinSum / Math.max(1e-6, centerTotal);
+    const centerNearRatio = centerNear / Math.max(1e-6, centerTotal);
+    const fgRatio = fgCount / n;
+    const skyRatio = topSkyLike / n;
+    const edgeAniso = edgeDiag / Math.max(1e-6, edgeHV);
+
+    const scores = {
+      portrait: clamp01(0.95 * skinCenter + 0.55 * centerNearRatio + 0.15 * fgRatio - 0.2 * skyRatio),
+      animal: clamp01(0.55 * centerNearRatio + 0.35 * fgRatio + 0.3 * texMean - 0.35 * skinCenter),
+      object: clamp01(0.5 * fgRatio + 0.35 * edgeAniso + 0.2 * centerNearRatio - 0.15 * skyRatio),
+      architecture: clamp01(0.55 * (1 - edgeAniso) + 0.25 * fgRatio + 0.25 * (1 - skyRatio)),
+      landscape: clamp01(0.8 * skyRatio + 0.3 * texMean + 0.2 * (1 - fgRatio)),
+      indoor: clamp01(0.45 * (1 - skyRatio) + 0.35 * (1 - edgeAniso) + 0.2 * texMean),
+      mixed: 0.35,
+    };
+
+    let scene = 'mixed';
+    let best = -1;
+    Object.entries(scores).forEach(([k, v]) => {
+      if (v > best) {
+        best = v;
+        scene = k;
+      }
+    });
+    if (state.sceneOverride !== 'auto') scene = state.sceneOverride;
+    return { scene, scores };
+  }
+
+  function buildSegmentationMasks(depth, features, scene, w, h) {
+    const n = w * h;
+    const imgGrad = gradientMagnitude(features.gray, w, h);
+    const depthGrad = gradientMagnitude(depth, w, h);
+    const graySmooth = blurFloat(features.gray, w, h, Math.max(3, Math.round(Math.min(w, h) / 110)));
+    const planeMask = new Float32Array(n);
+    const backgroundMask = new Float32Array(n);
+    const subjectMask = new Float32Array(n);
+    const faceMask = new Float32Array(n);
+    const hairMask = new Float32Array(n);
+    const recessMask = new Float32Array(n);
+
+    for (let y = 0; y < h; y++) {
+      const yn = y / Math.max(1, h - 1);
+      const topWeight = 1 - smoothstep(0.28, 0.72, yn);
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        const xn = x / Math.max(1, w - 1);
+        const centerWeight = 1 - smoothstep(0.28, 0.58, Math.abs(xn - 0.5));
+        const skyLike = smoothstep(0.64, 0.98, features.val[i]) *
+          (1 - smoothstep(0.10, 0.35, features.sat[i])) *
+          (1 - smoothstep(0.03, 0.13, imgGrad[i])) * topWeight;
+        const farLike = 1 - smoothstep(0.2, 0.55, depth[i]);
+        backgroundMask[i] = clamp01(Math.max(skyLike, farLike * topWeight * 0.7));
+
+        const lowTex = 1 - smoothstep(0.03, 0.11, imgGrad[i]);
+        const lowDepthEdge = 1 - smoothstep(0.015, 0.08, depthGrad[i]);
+        planeMask[i] = clamp01(lowTex * lowDepthEdge * (1 - backgroundMask[i]));
+
+        subjectMask[i] = clamp01(smoothstep(0.45, 0.9, depth[i]) * (1 - backgroundMask[i]));
+
+        const skinLike = features.skin[i] * centerWeight * smoothstep(0.35, 0.95, depth[i]);
+        const hairLike = (1 - smoothstep(0.18, 0.6, features.val[i])) *
+          smoothstep(0.22, 0.88, subjectMask[i]) *
+          smoothstep(0.18, 0.85, features.sat[i]);
+        faceMask[i] = clamp01(skinLike);
+        hairMask[i] = clamp01(hairLike);
+
+        const cavity = clamp01((graySmooth[i] - features.gray[i] - 0.015) / 0.17);
+        recessMask[i] = clamp01(cavity * (1 - backgroundMask[i]) * smoothstep(0.2, 0.95, depth[i]));
+      }
     }
 
-    const smallDenoise = blurFloat(depth, w, h, Math.max(2, Math.round(Math.min(w, h) / 260)));
-    for (let i = 0; i < n; i++) {
-      depth[i] = lerp(depth[i], smallDenoise[i], state.edgeDenoise * denoiseMask[i]);
+    if (scene === 'architecture') {
+      for (let i = 0; i < n; i++) {
+        recessMask[i] = clamp01(recessMask[i] * (1 - smoothstep(0.22, 0.62, features.sat[i])));
+      }
     }
 
-    const planeSmoothed = blurFloat(depth, w, h, Math.max(6, Math.round(Math.min(w, h) / 46)));
-    for (let i = 0; i < n; i++) {
-      const blend = state.planarSmoothing * planeMask[i] * (1 - 0.65 * windowMask[i]);
-      depth[i] = lerp(depth[i], planeSmoothed[i], blend);
+    return { backgroundMask, planeMask, subjectMask, faceMask, hairMask, recessMask };
+  }
+
+  function masksToGeneralCanvas(masks, w, h) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(w, h);
+    const { backgroundMask, subjectMask, recessMask } = masks;
+    for (let i = 0; i < w * h; i++) {
+      imgData.data[i * 4] = Math.round(clamp01(backgroundMask[i]) * 255);
+      imgData.data[i * 4 + 1] = Math.round(clamp01(subjectMask[i]) * 255);
+      imgData.data[i * 4 + 2] = Math.round(clamp01(recessMask[i]) * 255);
+      imgData.data[i * 4 + 3] = 255;
     }
-    const smoothed = depth.slice();
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  }
+
+  function fuseDepthMaps(globalDepth, localDepth, features, w, h) {
+    const n = w * h;
+    const globalN = robustNormalize(globalDepth, 0.01, 0.99);
+    const localN = robustNormalize(localDepth, 0.01, 0.99);
+    const out = new Float32Array(n);
+    const confidence = new Float32Array(n);
+    const globalGrad = gradientMagnitude(globalN, w, h);
+    const localGrad = gradientMagnitude(localN, w, h);
+    const imgGrad = gradientMagnitude(features.gray, w, h);
 
     for (let i = 0; i < n; i++) {
-      const recess = state.windowRecess * (0.14 * windowMask[i] + 0.22 * entranceMask[i]);
-      depth[i] = clamp01(depth[i] - recess);
+      const agreement = 1 - smoothstep(0.02, 0.25, Math.abs(localN[i] - globalN[i]));
+      const localStructure = smoothstep(0.02, 0.22, localGrad[i]);
+      const imgStructure = smoothstep(0.02, 0.2, imgGrad[i]);
+      confidence[i] = clamp01(0.45 * agreement + 0.35 * localStructure + 0.2 * imgStructure);
+
+      const wGlobal = Math.max(0.0001, state.globalDepthWeight);
+      const wLocal = Math.max(0, state.localDetailWeight) * confidence[i];
+      out[i] = (globalN[i] * wGlobal + localN[i] * wLocal) / (wGlobal + wLocal);
     }
+
+    return { fused: out, confidence, globalN, localN, globalGrad };
+  }
+
+  function applySceneCorrections(depthInput, masks, scene, features, confidence, w, h) {
+    const depth = depthInput.slice();
+    const n = w * h;
+    const {
+      backgroundMask, planeMask, subjectMask,
+      faceMask, hairMask, recessMask,
+    } = masks;
+
+    const sceneParams = {
+      portrait: { face: 1.0, hair: 1.0, recess: 0.95, plane: 0.5, bg: 0.7, texture: 0.45 },
+      animal: { face: 0.75, hair: 1.0, recess: 0.65, plane: 0.48, bg: 0.65, texture: 0.62 },
+      object: { face: 0.25, hair: 0.25, recess: 0.55, plane: 0.75, bg: 0.62, texture: 0.35 },
+      architecture: { face: 0.1, hair: 0.15, recess: 1.0, plane: 0.88, bg: 0.85, texture: 0.78 },
+      landscape: { face: 0.12, hair: 0.12, recess: 0.4, plane: 0.58, bg: 0.92, texture: 0.85 },
+      indoor: { face: 0.4, hair: 0.3, recess: 0.7, plane: 0.7, bg: 0.55, texture: 0.55 },
+      mixed: { face: 0.45, hair: 0.4, recess: 0.65, plane: 0.65, bg: 0.7, texture: 0.62 },
+    }[scene] || { face: 0.45, hair: 0.4, recess: 0.65, plane: 0.65, bg: 0.7, texture: 0.62 };
+
+    const planeSmooth = blurFloat(depth, w, h, Math.max(4, Math.round(Math.min(w, h) / 60)));
+    const textureSmooth = blurFloat(depth, w, h, Math.max(2, Math.round(Math.min(w, h) / 180)));
 
     for (let i = 0; i < n; i++) {
-      const nearMask = smoothstep(0.55, 0.95, depth[i]) * (1 - backgroundMask[i]);
-      depth[i] = clamp01(depth[i] + state.foregroundBoost * nearMask * (1 - depth[i]) * 0.55);
-      depth[i] = clamp01((depth[i] - 0.5) * state.depthContrast + 0.5);
-      depth[i] = lerp(depth[i], 0.02, state.backgroundFlatten * backgroundMask[i] * 0.5);
+      const bgT = state.backgroundFlattenStrength * sceneParams.bg * backgroundMask[i] * state.segmentationStrength;
+      depth[i] = lerp(depth[i], 0.02, bgT);
+
+      const planeBlend = state.planeSmoothingStrength * sceneParams.plane * planeMask[i] * state.segmentationStrength;
+      depth[i] = lerp(depth[i], planeSmooth[i], planeBlend);
+
+      const texBlend = state.textureSuppressionStrength * sceneParams.texture * (1 - confidence[i]) * (1 - backgroundMask[i]);
+      depth[i] = lerp(depth[i], textureSmooth[i], texBlend);
+
+      const fgLift = state.foregroundBoost * smoothstep(0.55, 0.98, depth[i]) * subjectMask[i];
+      depth[i] = clamp01(depth[i] + fgLift * (1 - depth[i]) * 0.5);
+
+      const recessGain = scene === 'architecture' ? state.architectureRecessBias : state.facialRecessBias;
+      const recess = recessGain * sceneParams.recess * recessMask[i] * state.segmentationStrength;
+      depth[i] = clamp01(depth[i] - recess * 0.3);
+
+      if (scene === 'portrait' || scene === 'animal') {
+        const faceKeep = state.portraitFeaturePreservation * sceneParams.face * faceMask[i];
+        depth[i] = clamp01(depth[i] + faceKeep * 0.08 * smoothstep(0.25, 0.95, depth[i]));
+        const hairKeep = state.hairSilhouetteStrength * sceneParams.hair * hairMask[i];
+        depth[i] = clamp01(depth[i] + hairKeep * 0.06 * smoothstep(0.2, 0.95, depth[i]));
+      }
+
+      if (scene === 'object') {
+        const hard = state.objectEdgeHardness * smoothstep(0.02, 0.2, Math.abs(features.edgeX[i]) + Math.abs(features.edgeY[i]));
+        depth[i] = clamp01(depth[i] + hard * 0.04 * smoothstep(0.35, 0.95, depth[i]));
+      }
+
+      if (scene === 'landscape') {
+        const layer = state.landscapeLayerPreservation;
+        depth[i] = clamp01((depth[i] - 0.5) * (1 + 0.25 * layer) + 0.5);
+      }
+    }
+    return depth;
+  }
+
+  function reliefCompress(depth, amount) {
+    if (amount <= 0) return depth;
+    const n = depth.length;
+    const out = new Float32Array(n);
+    const k = 1 + amount * 4.5;
+    const denom = Math.tanh(0.5 * k);
+    for (let i = 0; i < n; i++) {
+      const centered = depth[i] - 0.5;
+      out[i] = clamp01(0.5 + (Math.tanh(centered * k) / (2 * denom)));
+    }
+    return out;
+  }
+
+  function runEdgeAwareRefine(depth, guide, w, h) {
+    const radius = Math.max(2, Math.round(Math.min(w, h) / 170));
+    const eps = 0.001 + (1 - state.edgePreservationStrength) * 0.04;
+    return guidedFilterApply(guide, depth, w, h, radius, eps);
+  }
+
+  function buildGeneralDepthPipeline(stagesInput, w, h) {
+    const { globalDepth, localDepth } = stagesInput;
+    const features = getOrigFeatures();
+    const fusedPack = fuseDepthMaps(globalDepth, localDepth, features, w, h);
+    let fused = fusedPack.fused;
+
+    if (state.ablationMode === 'global') {
+      fused = fusedPack.globalN;
+    } else if (state.ablationMode === 'global_local') {
+      fused = fusedPack.fused;
     }
 
-    const finalDepth = robustNormalize(depth, 0.003, 0.997);
+    const cls = classifySceneType(fusedPack.globalN, fused, features, w, h);
+    state.sceneCategory = cls.scene;
+    state.classificationScores = cls.scores;
+
+    const masks = buildSegmentationMasks(fused, features, cls.scene, w, h);
+    let post = fused.slice();
+    if (state.ablationMode === 'full' || state.ablationMode === 'global_local_seg') {
+      post = applySceneCorrections(post, masks, cls.scene, features, fusedPack.confidence, w, h);
+    }
+
+    const edgeRefined = runEdgeAwareRefine(post, features.gray, w, h);
+    let final = reliefCompress(edgeRefined, state.reliefSafeCompression);
+    final = robustNormalize(final, 0.004, 0.996);
+    final = final.map ? final : new Float32Array(final);
+    for (let i = 0; i < final.length; i++) {
+      final[i] = clamp01((final[i] - 0.5) * state.depthContrast + 0.5);
+    }
+
     return {
-      raw,
-      normalized,
-      smoothed,
-      final: finalDepth,
-      masksCanvas: masksToCanvas(backgroundMask, planeMask, windowMask, w, h),
+      scene: cls.scene,
+      global: fusedPack.globalN,
+      local: fusedPack.localN,
+      fused: fused,
+      post,
+      final,
+      masksCanvas: masksToGeneralCanvas(masks, w, h),
+      raw: normalize01(globalDepth),
     };
   }
 
-  /* ── Multi-scale guided filter — 3 coarse→fine passes for progressive
-       edge-detail transfer from the original image into the depth map ── */
-  function multiScaleGuidedFilter(guide, src, w, h) {
-    const dim = Math.min(w, h);
-    const scales = [
-      { radius: Math.max(8,  Math.round(dim / 20)),  eps: 0.02   },
-      { radius: Math.max(4,  Math.round(dim / 60)),  eps: 0.004  },
-      { radius: Math.max(2,  Math.round(dim / 160)), eps: 0.0008 }
-    ];
-    let result = src;
-    for (const { radius, eps } of scales) {
-      result = guidedFilterApply(guide, result, w, h, radius, eps);
-    }
-    return result;
-  }
-
-  /* ── Detail injection — extract high-frequency texture from original
-       image at two scales and blend it into the depth map ── */
-  function injectDetail(depth, guide, w, h, strength) {
-    if (strength <= 0) return depth;
-    const n = w * h;
-    const blur1 = new Float32Array(n);
-    const blur2 = new Float32Array(n);
-    const tmp   = new Float32Array(n);
-    const r1 = Math.max(2, Math.round(Math.min(w, h) / 150)); // fine texture
-    const r2 = Math.max(5, Math.round(Math.min(w, h) / 50));  // medium features
-
-    boxMeanSep(guide, w, h, r1, blur1, tmp);
-    boxMeanSep(guide, w, h, r2, blur2, tmp);
-
-    const result = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const fineDetail = guide[i] - blur1[i];    // fine edges & texture
-      const medDetail  = blur1[i] - blur2[i];    // medium features
-      result[i] = depth[i] + strength * (0.65 * fineDetail + 0.35 * medDetail);
-    }
-
-    // Renormalize to 0-1
-    let mn = Infinity, mx = -Infinity;
-    for (let i = 0; i < n; i++) {
-      if (result[i] < mn) mn = result[i];
-      if (result[i] > mx) mx = result[i];
-    }
-    const range = mx - mn || 1;
-    for (let i = 0; i < n; i++) result[i] = (result[i] - mn) / range;
-    return result;
-  }
-
-  /* ── Adaptive local contrast enhancement on depth ── */
-  function depthContrastEnhance(depth, w, h) {
-    const n = w * h;
-    const blurred = new Float32Array(n);
-    const tmp     = new Float32Array(n);
-    const radius  = Math.max(6, Math.round(Math.min(w, h) / 30));
-    boxMeanSep(depth, w, h, radius, blurred, tmp);
-
-    // Compute local standard deviation for adaptive gain
-    const sq = new Float32Array(n);
-    for (let i = 0; i < n; i++) sq[i] = depth[i] * depth[i];
-    const meanSq = new Float32Array(n);
-    boxMeanSep(sq, w, h, radius, meanSq, tmp);
-
-    // Global statistics
-    let gMean = 0;
-    for (let i = 0; i < n; i++) gMean += depth[i];
-    gMean /= n;
-    let gVar = 0;
-    for (let i = 0; i < n; i++) gVar += (depth[i] - gMean) * (depth[i] - gMean);
-    const gStd = Math.sqrt(gVar / n) || 0.01;
-
-    const result = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const localVar = Math.max(0, meanSq[i] - blurred[i] * blurred[i]);
-      const localStd = Math.sqrt(localVar) || 0.001;
-      // Adaptive gain: stretch local contrast toward global contrast
-      const gain = Math.min(3.0, gStd / localStd);
-      result[i] = gMean + gain * (depth[i] - blurred[i]);
-    }
-
-    // Clip to 0-1
-    for (let i = 0; i < n; i++) result[i] = Math.max(0, Math.min(1, result[i]));
-    return result;
-  }
 
   /* ── Helper: extract raw depth Float32Array from pipeline result,
        bilinearly upsampled to target (tw × th) ── */
@@ -1390,12 +1672,11 @@
     return aligned;
   }
 
-  /* ── Tiled depth inference with flip-TTA, affine alignment, and
-       global reference pass for maximum accuracy ── */
+  /* ── Multi-scale depth inference: global + medium + fine tiled passes ── */
   async function tiledDepthInference(pipe) {
     const img = state.originalImg;
     const W = img.naturalWidth, H = img.naturalHeight;
-    const grid = state.tileGrid;
+    const quickGrid = state.tileGrid;
 
     // ── Step 0: Global reference pass (full image at model's native 518px) ──
     showProgress(100, '<span class="pulse">Running global depth pass…</span>');
@@ -1428,110 +1709,118 @@
     const gRange = gMax - gMin || 1;
     for (let i = 0; i < W * H; i++) globalRef[i] = (globalRef[i] - gMin) / gRange;
 
-    if (grid <= 1) {
-      // No tiling — just return the TTA'd global pass
-      return globalRef;
-    }
+    async function inferGridTiles(grid, overlapFrac, label) {
+      if (grid <= 1) return globalRef;
+      const stepX = Math.ceil(W / grid);
+      const stepY = Math.ceil(H / grid);
+      const padX = Math.round(stepX * overlapFrac);
+      const padY = Math.round(stepY * overlapFrac);
+      const depthAccum = new Float32Array(W * H);
+      const weightAccum = new Float32Array(W * H);
+      let tileIdx = 0;
+      const total = grid * grid;
 
-    // ── Step 1: Tiled inference with flip-TTA and affine alignment ──
-    const stepX = Math.ceil(W / grid);
-    const stepY = Math.ceil(H / grid);
-    const padX = Math.round(stepX * 0.33);  // 33% overlap
-    const padY = Math.round(stepY * 0.33);
+      for (let gy = 0; gy < grid; gy++) {
+        for (let gx = 0; gx < grid; gx++) {
+          tileIdx++;
+          let x0 = gx * stepX - padX;
+          let y0 = gy * stepY - padY;
+          let x1 = (gx + 1) * stepX + padX;
+          let y1 = (gy + 1) * stepY + padY;
+          x0 = Math.max(0, x0); y0 = Math.max(0, y0);
+          x1 = Math.min(W, x1); y1 = Math.min(H, y1);
+          const tw = x1 - x0, th = y1 - y0;
 
-    const depthAccum  = new Float32Array(W * H);
-    const weightAccum = new Float32Array(W * H);
-    let tileIdx = 0;
-    const total = grid * grid;
+          const tc = document.createElement('canvas');
+          tc.width = tw; tc.height = th;
+          const tCtx = tc.getContext('2d');
+          tCtx.imageSmoothingQuality = 'high';
+          tCtx.drawImage(srcCanvas, x0, y0, tw, th, 0, 0, tw, th);
 
-    for (let gy = 0; gy < grid; gy++) {
-      for (let gx = 0; gx < grid; gx++) {
-        tileIdx++;
+          showProgress(100, `<span class="pulse">${label} ${tileIdx}/${total} (normal)…</span>`);
+          const tileResult = await pipe(tc.toDataURL('image/png'));
+          const tileDepthNormal = extractDepthTile(tileResult, tw, th);
 
-        let x0 = gx * stepX - padX;
-        let y0 = gy * stepY - padY;
-        let x1 = (gx + 1) * stepX + padX;
-        let y1 = (gy + 1) * stepY + padY;
-        x0 = Math.max(0, x0); y0 = Math.max(0, y0);
-        x1 = Math.min(W, x1); y1 = Math.min(H, y1);
-        const tw = x1 - x0, th = y1 - y0;
+          showProgress(100, `<span class="pulse">${label} ${tileIdx}/${total} (flipped)…</span>`);
+          const flipUrl = flipCanvasH(tc);
+          const flipResult = await pipe(flipUrl);
+          const tileDepthFlip = flipDepthH(extractDepthTile(flipResult, tw, th), tw, th);
 
-        // Extract tile with bicubic quality
-        const tc = document.createElement('canvas');
-        tc.width = tw; tc.height = th;
-        const tCtx = tc.getContext('2d');
-        tCtx.imageSmoothingQuality = 'high';
-        tCtx.drawImage(srcCanvas, x0, y0, tw, th, 0, 0, tw, th);
+          const tileDepthTTA = new Float32Array(tw * th);
+          for (let i = 0; i < tw * th; i++) {
+            tileDepthTTA[i] = (tileDepthNormal[i] + tileDepthFlip[i]) * 0.5;
+          }
 
-        // ── Normal inference ──
-        showProgress(100,
-          `<span class="pulse">Tile ${tileIdx}/${total} (normal)…</span>`);
-        const tileResult = await pipe(tc.toDataURL('image/png'));
-        const tileDepthNormal = extractDepthTile(tileResult, tw, th);
-
-        // ── Flipped inference (TTA) ──
-        showProgress(100,
-          `<span class="pulse">Tile ${tileIdx}/${total} (flipped)…</span>`);
-        const flipUrl = flipCanvasH(tc);
-        const flipResult = await pipe(flipUrl);
-        const tileDepthFlipRaw = extractDepthTile(flipResult, tw, th);
-        const tileDepthFlip = flipDepthH(tileDepthFlipRaw, tw, th);
-
-        // ── Average normal + flipped (TTA) ──
-        const tileDepthTTA = new Float32Array(tw * th);
-        for (let i = 0; i < tw * th; i++) {
-          tileDepthTTA[i] = (tileDepthNormal[i] + tileDepthFlip[i]) * 0.5;
-        }
-
-        // ── Affine-align tile to global reference in this region ──
-        // Build overlap mask from global reference
-        const refPatch = new Float32Array(tw * th);
-        const overlapMask = new Float32Array(tw * th);
-        for (let ly = 0; ly < th; ly++) {
-          for (let lx = 0; lx < tw; lx++) {
-            const gxPos = x0 + lx, gyPos = y0 + ly;
-            if (gxPos < W && gyPos < H) {
-              refPatch[ly * tw + lx] = globalRef[gyPos * W + gxPos];
-              overlapMask[ly * tw + lx] = 1;
+          const refPatch = new Float32Array(tw * th);
+          const overlapMask = new Float32Array(tw * th);
+          for (let ly = 0; ly < th; ly++) {
+            for (let lx = 0; lx < tw; lx++) {
+              const gxPos = x0 + lx, gyPos = y0 + ly;
+              if (gxPos < W && gyPos < H) {
+                refPatch[ly * tw + lx] = globalRef[gyPos * W + gxPos];
+                overlapMask[ly * tw + lx] = 1;
+              }
             }
           }
-        }
-        const alignedTile = affineAlignTile(tileDepthTTA, refPatch, overlapMask, tw * th);
+          const alignedTile = affineAlignTile(tileDepthTTA, refPatch, overlapMask, tw * th);
 
-        // ── Blend into accumulator with cosine-ramp weights ──
-        const ramp = Math.min(padX, padY);
-        for (let ly = 0; ly < th; ly++) {
-          const gyPos = y0 + ly;
-          if (gyPos >= H) continue;
-          for (let lx = 0; lx < tw; lx++) {
-            const gxPos = x0 + lx;
-            if (gxPos >= W) continue;
-
-            const edgeDist = Math.min(lx, tw - 1 - lx, ly, th - 1 - ly);
-            let wt = 1;
-            if (ramp > 0 && edgeDist < ramp) {
-              wt = 0.5 * (1 - Math.cos(Math.PI * edgeDist / ramp));
+          const ramp = Math.min(padX, padY);
+          for (let ly = 0; ly < th; ly++) {
+            const gyPos = y0 + ly;
+            if (gyPos >= H) continue;
+            for (let lx = 0; lx < tw; lx++) {
+              const gxPos = x0 + lx;
+              if (gxPos >= W) continue;
+              const edgeDist = Math.min(lx, tw - 1 - lx, ly, th - 1 - ly);
+              let wt = 1;
+              if (ramp > 0 && edgeDist < ramp) {
+                wt = 0.5 * (1 - Math.cos(Math.PI * edgeDist / ramp));
+              }
+              const idx = gyPos * W + gxPos;
+              depthAccum[idx] += alignedTile[ly * tw + lx] * wt;
+              weightAccum[idx] += wt;
             }
-
-            const idx = gyPos * W + gxPos;
-            depthAccum[idx]  += alignedTile[ly * tw + lx] * wt;
-            weightAccum[idx] += wt;
           }
         }
       }
+
+      const out = new Float32Array(W * H);
+      let minD = Infinity, maxD = -Infinity;
+      for (let i = 0; i < W * H; i++) {
+        out[i] = weightAccum[i] > 0 ? depthAccum[i] / weightAccum[i] : globalRef[i];
+        if (out[i] < minD) minD = out[i];
+        if (out[i] > maxD) maxD = out[i];
+      }
+      const range = maxD - minD || 1;
+      for (let i = 0; i < W * H; i++) out[i] = (out[i] - minD) / range;
+      return out;
     }
 
-    // ── Step 2: Merge tiles and normalize to 0-1 ──
-    const depth = new Float32Array(W * H);
-    let minD = Infinity, maxD = -Infinity;
-    for (let i = 0; i < W * H; i++) {
-      depth[i] = weightAccum[i] > 0 ? depthAccum[i] / weightAccum[i] : globalRef[i];
-      if (depth[i] < minD) minD = depth[i];
-      if (depth[i] > maxD) maxD = depth[i];
+    if (quickGrid <= 1) {
+      return { globalDepth: globalRef, localDepth: globalRef, fusedDepth: globalRef };
     }
-    const range = maxD - minD || 1;
-    for (let i = 0; i < W * H; i++) depth[i] = (depth[i] - minD) / range;
-    return depth;
+
+    const overlapFrac = clamp01(state.tileOverlap);
+    const mediumGrid = Math.max(2, quickGrid);
+    const tileBySizeGrid = Math.max(2, Math.ceil(Math.max(W, H) / Math.max(256, Math.round(state.tileSize))));
+    const fineGrid = Math.max(mediumGrid, tileBySizeGrid);
+
+    const mediumDepth = await inferGridTiles(mediumGrid, Math.max(0.18, overlapFrac * 0.8), 'Medium tile');
+    const fineDepth = fineGrid > mediumGrid
+      ? await inferGridTiles(fineGrid, overlapFrac, 'Fine tile')
+      : mediumDepth;
+
+    const localDepth = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      localDepth[i] = clamp01(mediumDepth[i] * 0.4 + fineDepth[i] * 0.6);
+    }
+
+    const fusedDepth = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      fusedDepth[i] = clamp01(globalRef[i] * state.globalDepthWeight + localDepth[i] * state.localDetailWeight);
+    }
+
+    return { globalDepth: globalRef, localDepth, fusedDepth };
   }
 
   async function generateDepthMap() {
@@ -1557,7 +1846,7 @@
         else if (info.status === 'ready') { showProgress(100, 'Model ready'); }
       });
 
-      // ── 2. Run tiled or single-pass inference ──
+      // ── 2. Run multi-scale inference ──
       cachedDepthFloat = await tiledDepthInference(pipe);
 
       // ── 3. Post-process and display ──
@@ -1585,7 +1874,7 @@
     const H = state.originalImg.naturalHeight;
     const forceDepthPreview = state.forceDepthPreview;
     state.forceDepthPreview = false;
-    const stages = buildBasReliefDepthMap(cachedDepthFloat, W, H);
+    const stages = buildGeneralDepthPipeline(cachedDepthFloat, W, H);
     let depth = stages.final;
 
     // Invert if enabled
@@ -1601,12 +1890,17 @@
     state.needs3DRefresh = true;
     state.debugOutputs = {
       raw: floatToCanvas(stages.raw, W, H),
-      normalized: floatToCanvas(stages.normalized, W, H),
+      global: floatToCanvas(stages.global, W, H),
+      local: floatToCanvas(stages.local, W, H),
+      fused: floatToCanvas(stages.fused, W, H),
       masks: stages.masksCanvas,
-      smoothed: floatToCanvas(stages.smoothed, W, H),
+      post: floatToCanvas(stages.post, W, H),
       final: finalCanvas,
     };
     state.depthFullCanvas = state.debugOutputs[state.previewStage] || finalCanvas;
+
+    const sceneInfoEl = document.getElementById('dm-scene-info');
+    if (sceneInfoEl) sceneInfoEl.textContent = `Detected scene: ${stages.scene}`;
 
     // Show in result preview
     showDepthResult();
@@ -1637,7 +1931,7 @@
 
     document.getElementById('dm-result-empty').style.display = 'none';
     document.getElementById('dm-result-info').textContent =
-      `${stageCanvas.width} × ${stageCanvas.height} px · ${state.previewStage}`;
+      `${stageCanvas.width} × ${stageCanvas.height} px · ${state.previewStage} · ${state.sceneCategory}`;
     document.getElementById('dm-download-btn').style.display = '';
     document.getElementById('dm-download-preview-btn').style.display = '';
 
