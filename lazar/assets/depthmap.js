@@ -486,6 +486,9 @@
           <button class="dm-opt-btn ${state.tileGrid===3?'active':''}" data-val="3">
             Ultra<span class="desc">fine-tooth coverage</span>
           </button>
+          <button class="dm-opt-btn ${state.tileGrid===4?'active':''}" data-val="4">
+            Extreme<span class="desc">micro-tiles · max</span>
+          </button>
         </div>
         <div class="dm-field-hint">Smaller overlapping tiles sweep the image and stitch local detail together</div>
       </div>
@@ -931,6 +934,28 @@
         document.querySelectorAll('#dm-tile-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.tileGrid = parseInt(btn.dataset.val, 10);
+        if (state.tileGrid >= 4) {
+          state.tileSize = Math.min(state.tileSize, 480);
+          state.tileOverlap = Math.max(state.tileOverlap, 0.50);
+          state.localDetailWeight = Math.max(state.localDetailWeight, 0.52);
+          state.globalDepthWeight = Math.min(state.globalDepthWeight, 0.52);
+          const tileSizeEl = document.getElementById('dm-tile-size');
+          const tileOverlapEl = document.getElementById('dm-tile-overlap');
+          const localWtEl = document.getElementById('dm-local-detail-weight');
+          const globalWtEl = document.getElementById('dm-global-depth-weight');
+          if (tileSizeEl) tileSizeEl.value = String(state.tileSize);
+          if (tileOverlapEl) tileOverlapEl.value = String(state.tileOverlap);
+          if (localWtEl) localWtEl.value = String(state.localDetailWeight);
+          if (globalWtEl) globalWtEl.value = String(state.globalDepthWeight);
+          const tileSizeVal = document.getElementById('dm-tile-size-val');
+          const tileOverlapVal = document.getElementById('dm-tile-overlap-val');
+          const localWtVal = document.getElementById('dm-local-detail-weight-val');
+          const globalWtVal = document.getElementById('dm-global-depth-weight-val');
+          if (tileSizeVal) tileSizeVal.textContent = `${Math.round(state.tileSize)}px`;
+          if (tileOverlapVal) tileOverlapVal.textContent = `${(state.tileOverlap * 100).toFixed(0)}%`;
+          if (localWtVal) localWtVal.textContent = state.localDetailWeight.toFixed(2);
+          if (globalWtVal) globalWtVal.textContent = state.globalDepthWeight.toFixed(2);
+        }
       });
     });
 
@@ -1805,15 +1830,22 @@
     const mediumGrid = Math.max(2, quickGrid + 1);
     const tileBySizeGrid = Math.max(2, Math.ceil(Math.max(W, H) / Math.max(192, Math.round(state.tileSize))));
     const fineGrid = Math.max(mediumGrid + densityBoost, tileBySizeGrid + densityBoost);
+    const extremeMode = quickGrid >= 4;
 
     const mediumDepth = await inferGridTiles(mediumGrid, Math.max(0.18, overlapFrac * 0.8), 'Medium tile');
     const fineDepth = fineGrid > mediumGrid
       ? await inferGridTiles(fineGrid, overlapFrac, 'Fine tile')
       : mediumDepth;
+    const ultraGrid = extremeMode ? Math.min(14, fineGrid + 2) : fineGrid;
+    const ultraDepth = extremeMode && ultraGrid > fineGrid
+      ? await inferGridTiles(ultraGrid, Math.min(0.62, overlapFrac + 0.08), 'Extreme tile')
+      : fineDepth;
 
     const localDepth = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) {
-      localDepth[i] = clamp01(mediumDepth[i] * 0.4 + fineDepth[i] * 0.6);
+      localDepth[i] = extremeMode
+        ? clamp01(mediumDepth[i] * 0.20 + fineDepth[i] * 0.35 + ultraDepth[i] * 0.45)
+        : clamp01(mediumDepth[i] * 0.4 + fineDepth[i] * 0.6);
     }
 
     const fusedDepth = new Float32Array(W * H);
