@@ -27,6 +27,14 @@
       label: 'ZoeDepth',
       desc: 'Strong edges/structure (~190 MB)',
     },
+    da2large: {
+      ids: [
+        'onnx-community/depth-anything-v2-large',
+        'Xenova/depth-anything-large-onnx',
+      ],
+      label: 'DA2 Large (fallback)',
+      desc: 'Fast open fallback (~350 MB)',
+    },
   };
 
   const MODEL_ORDER = ['marigold', 'zoedepth'];
@@ -36,6 +44,7 @@
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
     modelSize: 'marigold',
+    hfToken: '',
     tileGrid: 2,
     guidedFilter: true,
     detailBoost: 0.35,
@@ -409,6 +418,7 @@
   async function getOrCreatePipeline(progressCb) {
     const preferred = state.modelSize;
     const fallback = preferred === 'marigold' ? 'zoedepth' : 'marigold';
+    const lastResort = 'da2large';
     const tried = new Set();
 
     if (state.pipeline && state.pipelineModel === preferred) return state.pipeline;
@@ -434,6 +444,7 @@
           const pipe = await tfModule.pipeline('depth-estimation', repo, {
             device,
             dtype,
+            token: state.hfToken || undefined,
             progress_callback: progressCb || (() => {}),
           });
           state.pipeline = pipe;
@@ -453,7 +464,7 @@
       throw new Error(`All repos failed for model ${key}`);
     }
 
-    const order = [preferred, fallback];
+    const order = [preferred, fallback, lastResort];
     for (const key of order) {
       if (tried.has(key)) continue;
       try {
@@ -496,6 +507,14 @@
           ${modelButtons}
         </div>
         <div class="dm-field-hint">Model downloads on first use, then cached</div>
+      </div>
+
+      <div class="dm-field">
+        <label class="dm-slider-label">
+          HF Access Token (optional)
+        </label>
+        <input type="password" id="dm-hf-token" placeholder="hf_..." style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border, #2a2a4a);background:var(--bg-input, #0f0f23);color:var(--text-primary, #e0e0e0);font-size:12px;" />
+        <div class="dm-field-hint">Only needed if your region requires a token for model downloads. Stored in memory only.</div>
       </div>
 
       <hr class="dm-divider">
@@ -757,6 +776,7 @@
     const generateBtn = document.getElementById('dm-generate-btn');
     const downloadBtn = document.getElementById('dm-download-btn');
     const origBody    = document.getElementById('dm-orig-body');
+    const hfTokenInput = document.getElementById('dm-hf-token');
 
     /* ── Upload ── */
     origBody.addEventListener('click', () => {
@@ -837,6 +857,10 @@
     document.getElementById('dm-invert').addEventListener('change', (e) => {
       state.invert = e.target.checked;
       if (cachedDepthFloat) processAndDisplayDepth();
+    });
+
+    hfTokenInput.addEventListener('input', () => {
+      state.hfToken = hfTokenInput.value.trim();
     });
 
     /* ── Portrait mode picker ── */
