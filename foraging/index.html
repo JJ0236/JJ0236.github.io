@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fayetteville Food Foraging Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --green-dark: #1f3c29;
+      --green-mid: #2f7d57;
+      --green-light: #5ac38a;
+      --green-pale: #1b2a22;
+      --orange: #d89b38;
+      --orange-light: #2a2418;
+      --brown: #8a6b41;
+      --bg: #0f1418;
+      --panel: #171e24;
+      --panel-2: #1d262d;
+      --border: #2c3740;
+      --text: #e6edf3;
+      --muted: #9eb0bf;
+      --shadow: 0 8px 20px rgba(0,0,0,0.35);
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, #1a2a20, #223126);
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    header h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .header-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .header-stats span {
+      background: rgba(255,255,255,0.15);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    /* Main layout */
+    .app-container {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 340px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.35);
+      z-index: 500;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+    }
+
+    /* Filter section */
+    .filter-section {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-section h3 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* Toggle for currently producing */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 0;
+    }
+    .toggle-row label {
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      cursor: pointer;
+    }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #4a5863;
+      border-radius: 26px;
+      transition: 0.3s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: #eef6f0;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--green-mid);
+    }
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(22px);
+    }
+
+    /* Season indicator */
+    .current-season {
+      background: var(--orange-light);
+      border: 1px solid var(--orange);
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      font-size: 0.82rem;
+      display: none;
+    }
+    .current-season.active { display: block; }
+    .season-badge {
+      display: inline-block;
+      background: var(--orange);
+      color: #1a140a;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    /* Search */
+    .search-box {
+      position: relative;
+      margin-bottom: 8px;
+    }
+    .search-box input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--panel-2);
+      color: var(--text);
+    }
+    .search-box input:focus { border-color: var(--green-mid); }
+    .search-box input::placeholder { color: var(--muted); }
+
+    /* Plant list */
+    .plant-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 16px 16px;
+    }
+    .plant-item {
+      display: flex;
+      align-items: center;
+      padding: 10px 12px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 10px;
+    }
+    .plant-item:hover { background: var(--green-pale); }
+    .plant-item.selected { background: #203227; border: 1px solid var(--green-light); }
+    .plant-item .checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #54626f;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .plant-item.selected .checkbox {
+      background: var(--green-mid);
+      border-color: var(--green-mid);
+      color: white;
+    }
+    .plant-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .plant-name {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .plant-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .plant-count {
+      background: #2a343d;
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #d6dee5;
+      flex-shrink: 0;
+    }
+    .producing-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--orange);
+      flex-shrink: 0;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* Select all / none */
+    .select-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .select-actions button {
+      background: none;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .select-actions button:hover {
+      border-color: var(--green-mid);
+      color: var(--green-mid);
+    }
+    .filter-summary {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--panel-2);
+      line-height: 1.35;
+    }
+
+    /* Map */
+    #map {
+      flex: 1;
+      z-index: 1;
+    }
+
+    /* Custom markers */
+    .custom-marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #f3f6f8;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .custom-marker:hover { transform: scale(1.3); }
+
+    /* Popup */
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px !important;
+      box-shadow: var(--shadow) !important;
+    }
+    .popup-content {
+      padding: 4px;
+      min-width: 200px;
+    }
+    .popup-content h3 {
+      margin: 0 0 6px;
+      font-size: 1rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .popup-detail {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin: 4px 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .popup-season {
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+    }
+    .popup-season.in-season {
+      background: #1b2f23;
+      color: #b7f5cf;
+      border: 1px solid var(--green-light);
+    }
+    .popup-season.off-season {
+      background: #242c33;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .leaflet-popup-content-wrapper,
+    .leaflet-popup-tip {
+      background: var(--panel-2) !important;
+      color: var(--text) !important;
+    }
+
+    /* Loading overlay */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,20,24,0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s;
+    }
+    .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #2a343d;
+      border-top: 4px solid var(--green-mid);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-size: 1rem;
+      color: var(--text);
+    }
+
+    /* Sidebar toggle for mobile */
+    .sidebar-toggle {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background: var(--green-mid);
+      color: white;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+    }
+
+    /* Legend */
+    .legend {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--panel-2);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      box-shadow: var(--shadow);
+      z-index: 1000;
+      font-size: 0.8rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .legend h4 {
+      margin-bottom: 6px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 0;
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.45);
+    }
+    .legend-item span { color: var(--text); }
+    .no-results {
+      padding: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-align: center;
+      margin-top: 8px;
+      background: var(--panel-2);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed;
+        left: -340px;
+        top: 0;
+        bottom: 0;
+        z-index: 2000;
+        transition: left 0.3s ease;
+      }
+      .sidebar.open { left: 0; }
+      .sidebar-toggle { display: block; }
+      .sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 1500;
+        display: none;
+      }
+      .sidebar-overlay.active { display: block; }
+      .header-stats { display: none; }
+      header h1 { font-size: 1.1rem; }
+      .legend { bottom: 80px; right: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Loading -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Loading foraging data...</div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <h1>Fayetteville Foraging Map</h1>
+    <div class="header-stats">
+      <span id="totalTrees">Loading...</span>
+      <span id="producingNow">—</span>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div class="app-container">
+    <!-- Mobile overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <!-- Producing toggle -->
+      <div class="filter-section">
+        <h3>Season Filter</h3>
+        <div class="toggle-row">
+          <label for="producingToggle">
+            Show only in-season plants
+          </label>
+          <div class="toggle-switch">
+            <input type="checkbox" id="producingToggle">
+            <span class="toggle-slider"></span>
+          </div>
+        </div>
+        <div class="current-season" id="seasonInfo"></div>
+      </div>
+
+      <!-- Plant filter -->
+      <div class="filter-section">
+        <h3>Filter by Plant</h3>
+        <div class="search-box">
+          <input type="text" id="plantSearch" placeholder="Search plants...">
+        </div>
+        <div class="select-actions">
+          <button onclick="selectAll()">Select All</button>
+          <button onclick="selectNone()">Select None</button>
+          <button onclick="selectProducing()">In Season</button>
+        </div>
+        <div class="filter-summary" id="filterSummary">Loading filters...</div>
+      </div>
+
+      <!-- Plant list -->
+      <div class="plant-list" id="plantList"></div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+  </div>
+
+  <!-- Mobile toggle -->
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">Filters</button>
+
+  <!-- Legend -->
+  <div class="legend" id="legend"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
