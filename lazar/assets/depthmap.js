@@ -86,6 +86,7 @@
     debugOutputs: null,
     origFeatures: null,
     forceDepthPreview: false,
+    needs3DRefresh: false,
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -797,7 +798,9 @@
     });
 
     const rerenderIfReady = () => {
+      state.resultView = 'depth';
       state.forceDepthPreview = true;
+      setResultView('depth');
       if (cachedDepthFloat) processAndDisplayDepth();
     };
     const sliderBindings = [
@@ -1595,6 +1598,7 @@
     const finalCanvas = floatToCanvas(depth, W, H);
     state.processedDepthFloat = depth;
     state.depthCanvas = finalCanvas;
+    state.needs3DRefresh = true;
     state.debugOutputs = {
       raw: floatToCanvas(stages.raw, W, H),
       normalized: floatToCanvas(stages.normalized, W, H),
@@ -1607,9 +1611,10 @@
     // Show in result preview
     showDepthResult();
 
-    // Setup or update 3D preview
-    setup3DPreview();
-    if (forceDepthPreview) {
+    // Only rebuild 3D when the user is actually on the 3D view.
+    if (!forceDepthPreview && state.resultView === '3d') {
+      setup3DPreview();
+    } else if (forceDepthPreview) {
       setResultView('depth');
     }
   }
@@ -1645,6 +1650,11 @@
      ═══════════════════════════════════════════════════════════════════ */
   function setResultView(view) {
     state.resultView = view;
+
+    if (view === '3d' && state.needs3DRefresh && state.depthCanvas) {
+      state.needs3DRefresh = false;
+      setup3DPreview();
+    }
 
     const wrap    = document.getElementById('dm-result-wrap');
     const canvas  = document.getElementById('dm-3d-canvas');
