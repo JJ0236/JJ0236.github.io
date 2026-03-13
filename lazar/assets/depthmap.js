@@ -493,12 +493,12 @@
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Edge Sharpness
+          Detail
           <span class="dm-slider-val" id="dm-detail-val">${(state.detailBoost * 100).toFixed(0)}%</span>
         </label>
         <input type="range" id="dm-detail-boost" min="0" max="1" step="0.05"
           value="${state.detailBoost}" class="dm-range" />
-        <div class="dm-field-hint">Sharpens depth transitions where the model detected real depth changes</div>
+        <div class="dm-field-hint">Boosts structural depth detail and edge separation (without injecting free texture noise)</div>
       </div>
 
       <div class="dm-field">
@@ -1122,6 +1122,51 @@
     return out;
   }
 
+  /* ── Legacy-style crisp detail, but safety-gated:
+       inject guide-image high-frequency ONLY where depth already has edges.
+       This recovers architecture/window detail while avoiding hair/skin spikes. ── */
+  function photoGuidedDetailInject(depth, guide, w, h, strength) {
+    if (strength <= 0) return depth;
+    const n = w * h;
+
+    // High-frequency component from guide image
+    const r = Math.max(2, Math.round(Math.min(w, h) / (170 - 70 * strength)));
+    const tmp = new Float32Array(n);
+    const guideBase = new Float32Array(n);
+    boxMeanSep(guide, w, h, r, guideBase, tmp);
+
+    // Depth gradient gate
+    const depthGrad = new Float32Array(n);
+    let gMax = 0;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = y * w + x;
+        const gx = depth[i + 1] - depth[i - 1];
+        const gy = depth[i + w] - depth[i - w];
+        const g = Math.sqrt(gx * gx + gy * gy);
+        depthGrad[i] = g;
+        if (g > gMax) gMax = g;
+      }
+    }
+    if (gMax > 0) {
+      for (let i = 0; i < n; i++) depthGrad[i] /= gMax;
+    }
+
+    const out = new Float32Array(n);
+    const injectGain = 0.04 + strength * 0.18;
+    for (let i = 0; i < n; i++) {
+      // Guide high-pass, clipped hard to avoid runaway texture spikes
+      let hi = guide[i] - guideBase[i];
+      if (hi > 0.20) hi = 0.20;
+      if (hi < -0.20) hi = -0.20;
+
+      // Gate strongly by existing depth edge evidence
+      const gate = Math.min(1, Math.max(0, (depthGrad[i] - 0.05) * 4.5));
+      out[i] = Math.max(0, Math.min(1, depth[i] + hi * injectGain * gate));
+    }
+    return out;
+  }
+
   /* ── Helper: extract raw depth Float32Array from pipeline result,
        bilinearly upsampled to target (tw × th) ── */
   function extractDepthTile(result, tw, th) {
@@ -1721,23 +1766,24 @@
     const W = state.originalImg.naturalWidth;
     const H = state.originalImg.naturalHeight;
     let depth = cachedDepthFloat;
+    const guide = getOrigGray();
 
     const strength = Math.max(0, Math.min(1, state.detailBoost));
 
     if (state.guidedFilter) {
-      const guide = getOrigGray();
-
       // Step 1: Multi-scale guided filter — snap depth edges to photo
       // edges, but only structural ones (high eps prevents texture leak)
       depth = multiScaleGuidedFilter(guide, depth, W, H);
+    }
 
-      // Step 2: Depth-aware edge refinement — sharpen depth boundaries
-      // only where the MODEL detected a depth transition, not where
-      // arbitrary photo texture exists
-      if (strength > 0) {
-        depth = depthEdgeRefine(depth, guide, W, H, strength);
-        depth = depthMicroDetail(depth, W, H, strength);
-      }
+    // Step 2: Detail enhancement chain controlled by Detail slider
+    if (strength > 0) {
+      // Depth-aware edge snap
+      depth = depthEdgeRefine(depth, guide, W, H, strength);
+      // Depth-only micro enhancement
+      depth = depthMicroDetail(depth, W, H, strength);
+      // Legacy-style crisp detail, safety-gated by depth edges
+      depth = photoGuidedDetailInject(depth, guide, W, H, strength);
     }
 
     // Step 3: Gentle contrast stretch with S-curve tuned by strength
