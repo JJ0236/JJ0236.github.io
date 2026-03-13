@@ -1870,8 +1870,8 @@
     const btn3d = document.getElementById('dm-3d-toggle-btn');
     if (btn3d) { btn3d.disabled = false; btn3d.title = ''; }
 
-    // Auto-switch to 3D view
-    setResultView('3d');
+    // Preserve the current preview mode so parameter tweaks can be watched live
+    setResultView(state.resultView || 'depth');
   }
 
   function on3DMouseDown(e) {
