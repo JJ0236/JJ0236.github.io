@@ -85,6 +85,7 @@
     processedDepthFloat: null,
     debugOutputs: null,
     origFeatures: null,
+    forceDepthPreview: false,
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -796,6 +797,7 @@
     });
 
     const rerenderIfReady = () => {
+      state.forceDepthPreview = true;
       if (cachedDepthFloat) processAndDisplayDepth();
     };
     const sliderBindings = [
@@ -1578,6 +1580,8 @@
     if (!cachedDepthFloat) return;
     const W = state.originalImg.naturalWidth;
     const H = state.originalImg.naturalHeight;
+    const forceDepthPreview = state.forceDepthPreview;
+    state.forceDepthPreview = false;
     const stages = buildBasReliefDepthMap(cachedDepthFloat, W, H);
     let depth = stages.final;
 
@@ -1605,6 +1609,9 @@
 
     // Setup or update 3D preview
     setup3DPreview();
+    if (forceDepthPreview) {
+      setResultView('depth');
+    }
   }
 
   function showDepthResult() {
