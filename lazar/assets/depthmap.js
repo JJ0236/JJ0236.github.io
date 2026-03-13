@@ -43,7 +43,7 @@
     dptSwinV2: {
       id: 'onnx-community/dpt-swinv2-large-384',
       label: 'DPT SwinV2',
-      desc: '~500 MB · max quality (open)',
+      desc: '~500 MB · max quality (open mirror)',
     },
   };
 
@@ -427,7 +427,7 @@
   }
 
   async function getOrCreatePipeline(progressCb) {
-    const modelKey = state.modelSize;
+    let modelKey = state.modelSize;
 
     if (state.pipeline && state.pipelineModel === modelKey) {
       return state.pipeline;
@@ -446,15 +446,38 @@
       'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3'
     );
 
-    const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
-      device,
-      dtype: device === 'webgpu' ? 'fp32' : 'fp32',
-      progress_callback: progressCb || (() => {}),
-    });
-
-    state.pipeline = pipe;
-    state.pipelineModel = modelKey;
-    return pipe;
+    try {
+      const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
+        device,
+        dtype: device === 'webgpu' ? 'fp32' : 'fp32',
+        progress_callback: progressCb || (() => {}),
+      });
+      state.pipeline = pipe;
+      state.pipelineModel = modelKey;
+      return pipe;
+    } catch (err) {
+      // If SwinV2 mirror is gated in the user region, fall back to DA2 Large automatically
+      if (modelKey === 'dptSwinV2') {
+        console.warn('DPT SwinV2 failed, falling back to DA2 Large', err);
+        showProgress(5, 'SwinV2 unavailable here — falling back to DA2 Large');
+        modelKey = 'large';
+        state.modelSize = 'large';
+        const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="large"]`);
+        if (btn) {
+          document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+        const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
+          device,
+          dtype: device === 'webgpu' ? 'fp32' : 'fp32',
+          progress_callback: progressCb || (() => {}),
+        });
+        state.pipeline = pipe;
+        state.pipelineModel = modelKey;
+        return pipe;
+      }
+      throw err;
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════════════
