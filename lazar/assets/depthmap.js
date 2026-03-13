@@ -41,9 +41,9 @@
       desc: '~300 MB · legacy strong',
     },
     dptSwinV2: {
-      id: 'Xenova/dpt-swinv2-large-384',
+      id: 'onnx-community/dpt-swinv2-large-384',
       label: 'DPT SwinV2',
-      desc: '~500 MB · max quality',
+      desc: '~500 MB · max quality (open)',
     },
   };
 
