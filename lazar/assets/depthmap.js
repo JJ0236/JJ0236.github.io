@@ -10,41 +10,28 @@
      MODEL CONFIGS
      ═══════════════════════════════════════════════════════════════════ */
   const MODELS = {
-    marigold: {
-      ids: [
-        'Xenova/marigold-depth-lcm-v1-onnx',
-        'onnx-community/marigold-depth-lcm-v1-int8',
-      ],
-      label: 'Marigold',
-      desc: 'Diffusion depth · max detail (~420 MB)',
+    small: {
+      id: 'onnx-community/depth-anything-v2-small',
+      label: 'Small',
+      desc: '~25 MB · fastest',
     },
-    zoedepth: {
-      ids: [
-        'Xenova/zoedepth-m12-nk-nyu-kitti-onnx',
-        'onnx-community/zoedepth-m12-nk-nyu-kitti-onnx',
-        'Xenova/zoedepth-m12-nk-nyu-kitti-int8',
-      ],
-      label: 'ZoeDepth',
-      desc: 'Strong edges/structure (~190 MB)',
+    base: {
+      id: 'onnx-community/depth-anything-v2-base',
+      label: 'Base',
+      desc: '~100 MB · balanced',
     },
-    da2large: {
-      ids: [
-        'onnx-community/depth-anything-v2-large',
-        'Xenova/depth-anything-large-onnx',
-      ],
-      label: 'DA2 Large (fallback)',
-      desc: 'Fast open fallback (~350 MB)',
+    large: {
+      id: 'onnx-community/depth-anything-v2-large',
+      label: 'Large',
+      desc: '~350 MB · best detail',
     },
   };
-
-  const MODEL_ORDER = ['marigold', 'zoedepth'];
 
   /* ═══════════════════════════════════════════════════════════════════
      STATE
      ═══════════════════════════════════════════════════════════════════ */
   const state = {
-    modelSize: 'marigold',
-    hfToken: '',
+    modelSize: 'base',
     tileGrid: 2,
     guidedFilter: true,
     detailBoost: 0.35,
@@ -90,12 +77,6 @@
     currentMX: 0, currentMY: 0,
 
     resultView: 'depth', // 'depth' | '3d'
-
-    // Portrait mode
-    portraitMode: 'auto',  // 'auto' | 'on' | 'off'
-    portraitDetected: false,
-    faceBox: null,         // { x, y, w, h } in original image pixels
-    faceLandmarks: null,   // 478×{x,y,z} normalized landmarks
   };
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -319,27 +300,6 @@
     .dm-3d-canvas.visible { display: block; }
     .dm-3d-canvas:active { cursor: grabbing; }
 
-    /* ── Portrait badge ── */
-    .dm-portrait-badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      font-size: 10px; font-weight: 600;
-      padding: 2px 8px; border-radius: 10px;
-      background: rgba(100,180,255,.12); color: #60b8ff;
-      text-transform: uppercase; letter-spacing: .5px;
-      margin-left: 4px; vertical-align: middle;
-      opacity: 0; transition: opacity .3s;
-    }
-    .dm-portrait-badge.visible { opacity: 1; }
-
-    /* ── Portrait mode toggle ── */
-    .dm-portrait-row {
-      display: flex; align-items: center; gap: 6px;
-      flex-wrap: wrap;
-    }
-    .dm-portrait-row .dm-opt-btn {
-      flex: none; min-width: 0; padding: 4px 10px; font-size: 11px;
-    }
-
     /* ── Fallback launcher ── */
     .dm-launcher {
       position: fixed;
@@ -416,12 +376,11 @@
   }
 
   async function getOrCreatePipeline(progressCb) {
-    const preferred = state.modelSize;
-    const fallback = preferred === 'marigold' ? 'zoedepth' : 'marigold';
-    const lastResort = 'da2large';
-    const tried = new Set();
+    const modelKey = state.modelSize;
 
-    if (state.pipeline && state.pipelineModel === preferred) return state.pipeline;
+    if (state.pipeline && state.pipelineModel === modelKey) {
+      return state.pipeline;
+    }
 
     // Dispose previous pipeline
     if (state.pipeline) {
@@ -431,51 +390,20 @@
 
     const device = await getDevice();
     updateDeviceBadge(device);
-    const dtype = device === 'webgpu' ? 'fp16' : 'fp32';
 
     const tfModule = await import(
       'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3'
     );
 
-    async function tryLoad(key) {
-      const candidates = MODELS[key].ids || [MODELS[key].id];
-      for (const repo of candidates) {
-        try {
-          const pipe = await tfModule.pipeline('depth-estimation', repo, {
-            device,
-            dtype,
-            token: state.hfToken || undefined,
-            progress_callback: progressCb || (() => {}),
-          });
-          state.pipeline = pipe;
-          state.pipelineModel = key;
-          state.modelSize = key;
-          const btn = document.querySelector(`#dm-model-group .dm-opt-btn[data-val="${key}"]`);
-          if (btn) {
-            document.querySelectorAll('#dm-model-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-          }
-          return pipe;
-        } catch (err) {
-          console.warn(`Repo ${repo} failed, trying next`, err);
-          showProgress(5, `Model ${MODELS[key].label}: trying alternate mirror/quant...`);
-        }
-      }
-      throw new Error(`All repos failed for model ${key}`);
-    }
+    const pipe = await tfModule.pipeline('depth-estimation', MODELS[modelKey].id, {
+      device,
+      dtype: device === 'webgpu' ? 'fp32' : 'fp32',
+      progress_callback: progressCb || (() => {}),
+    });
 
-    const order = [preferred, fallback, lastResort];
-    for (const key of order) {
-      if (tried.has(key)) continue;
-      try {
-        return await tryLoad(key);
-      } catch (err) {
-        console.warn(`Model ${key} failed, trying fallback`, err);
-        tried.add(key);
-        showProgress(5, `Model ${MODELS[key].label} unavailable — trying fallback...`);
-      }
-    }
-    throw new Error('All depth models failed to load');
+    state.pipeline = pipe;
+    state.pipelineModel = modelKey;
+    return pipe;
   }
 
   /* ═══════════════════════════════════════════════════════════════════
@@ -483,14 +411,6 @@
      ═══════════════════════════════════════════════════════════════════ */
   function buildUI(container) {
     container.innerHTML = '';
-
-    const modelButtons = MODEL_ORDER.map(key => {
-      const m = MODELS[key];
-      return `
-          <button class="dm-opt-btn ${state.modelSize===key?'active':''}" data-val="${key}">
-            ${m.label}<span class="desc">${m.desc}</span>
-          </button>`;
-    }).join('');
 
     /* ── Left panel ── */
     const panel = el('div', 'dm-panel');
@@ -504,17 +424,17 @@
           <span class="dm-device-badge" id="dm-device-badge" style="display:none"></span>
         </label>
         <div class="dm-opt-group" id="dm-model-group">
-          ${modelButtons}
+          <button class="dm-opt-btn ${state.modelSize==='small'?'active':''}" data-val="small">
+            Small<span class="desc">~25 MB · fastest</span>
+          </button>
+          <button class="dm-opt-btn ${state.modelSize==='base'?'active':''}" data-val="base">
+            Base<span class="desc">~100 MB · balanced</span>
+          </button>
+          <button class="dm-opt-btn ${state.modelSize==='large'?'active':''}" data-val="large">
+            Large<span class="desc">~350 MB · best</span>
+          </button>
         </div>
         <div class="dm-field-hint">Model downloads on first use, then cached</div>
-      </div>
-
-      <div class="dm-field">
-        <label class="dm-slider-label">
-          HF Access Token (optional)
-        </label>
-        <input type="password" id="dm-hf-token" placeholder="hf_..." style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border, #2a2a4a);background:var(--bg-input, #0f0f23);color:var(--text-primary, #e0e0e0);font-size:12px;" />
-        <div class="dm-field-hint">Only needed if your region requires a token for model downloads. Stored in memory only.</div>
       </div>
 
       <hr class="dm-divider">
@@ -546,25 +466,12 @@
 
       <div class="dm-field">
         <label class="dm-slider-label">
-          Detail
+          Edge Sharpness
           <span class="dm-slider-val" id="dm-detail-val">${(state.detailBoost * 100).toFixed(0)}%</span>
         </label>
         <input type="range" id="dm-detail-boost" min="0" max="1" step="0.05"
           value="${state.detailBoost}" class="dm-range" />
-        <div class="dm-field-hint">Boosts structural depth detail and edge separation (without injecting free texture noise)</div>
-      </div>
-
-      <div class="dm-field">
-        <label>
-          Portrait Mode
-          <span class="dm-portrait-badge" id="dm-portrait-badge">Face Detected</span>
-        </label>
-        <div class="dm-portrait-row" id="dm-portrait-group">
-          <button class="dm-opt-btn ${state.portraitMode==='auto'?'active':''}" data-val="auto">Auto</button>
-          <button class="dm-opt-btn ${state.portraitMode==='on'?'active':''}" data-val="on">Always On</button>
-          <button class="dm-opt-btn ${state.portraitMode==='off'?'active':''}" data-val="off">Off</button>
-        </div>
-        <div class="dm-field-hint">Auto-enhances face geometry when a large face is detected. Uses face crop re-inference + landmark priors for nose, eyes, and lips.</div>
+        <div class="dm-field-hint">Sharpens depth transitions where the model detected real depth changes</div>
       </div>
 
       <div class="dm-field">
@@ -776,7 +683,6 @@
     const generateBtn = document.getElementById('dm-generate-btn');
     const downloadBtn = document.getElementById('dm-download-btn');
     const origBody    = document.getElementById('dm-orig-body');
-    const hfTokenInput = document.getElementById('dm-hf-token');
 
     /* ── Upload ── */
     origBody.addEventListener('click', () => {
@@ -859,19 +765,6 @@
       if (cachedDepthFloat) processAndDisplayDepth();
     });
 
-    hfTokenInput.addEventListener('input', () => {
-      state.hfToken = hfTokenInput.value.trim();
-    });
-
-    /* ── Portrait mode picker ── */
-    document.querySelectorAll('#dm-portrait-group .dm-opt-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#dm-portrait-group .dm-opt-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        state.portraitMode = btn.dataset.val;
-      });
-    });
-
     /* ── View toggle (Depth / 3D) ── */
     document.querySelectorAll('#dm-view-toggle button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -900,12 +793,6 @@
         state.originalImg = img;
         state.depthCanvas = null;
         state.depthFullCanvas = null;
-
-        // Reset portrait state
-        state.portraitDetected = false;
-        state.faceBox = null;
-        state.faceLandmarks = null;
-        updatePortraitBadge();
 
         // Show original
         const origWrap = document.getElementById('dm-orig-wrap');
@@ -1066,7 +953,7 @@
   /* ── Depth-aware edge refinement — only sharpen edges that actually
        exist in the MODEL's depth output, not arbitrary photo edges.
        Uses the depth map's own gradients to decide where to sharpen. ── */
-  function depthEdgeRefine(depth, guide, w, h, strength) {
+  function depthEdgeRefine(depth, guide, w, h) {
     const n = w * h;
 
     // Compute depth gradient magnitude (Sobel-like)
@@ -1088,61 +975,22 @@
     // At pixels where depth has an edge (gradient > threshold), use a tight
     // guided filter to snap the depth boundary to the nearest photo edge.
     // At flat-depth regions, leave depth untouched (photo texture ≠ depth).
-    const tightRadius = Math.max(1, Math.round(Math.min(w, h) / (180 - 80 * strength)));
-    const refined = guidedFilterApply(guide, depth, w, h, tightRadius, 0.0045);
+    const tightRadius = Math.max(2, Math.round(Math.min(w, h) / 120));
+    const refined = guidedFilterApply(guide, depth, w, h, tightRadius, 0.005);
 
     // Blend: use refined only where depth gradient exists
     const output = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       // Sigmoid blending weight based on depth gradient
-      const edgeWeight = Math.min(1, depthGrad[i] * (2.5 + 7.5 * strength));
+      const edgeWeight = Math.min(1, depthGrad[i] * 5);
       output[i] = depth[i] * (1 - edgeWeight) + refined[i] * edgeWeight;
     }
     return output;
   }
 
-  /* ── Depth-only micro-detail enhancement.
-       Uses high-pass from the depth map itself (NOT photo texture), so it
-       restores structural depth detail without reintroducing hair/skin spikes. ── */
-  function depthMicroDetail(depth, w, h, strength) {
-    if (strength <= 0) return depth;
-
-    const n = w * h;
-    const radius = Math.max(1, Math.round(Math.min(w, h) / 220));
-    const tmp = new Float32Array(n);
-    const base = new Float32Array(n);
-    boxMeanSep(depth, w, h, radius, base, tmp);
-
-    // Gradient gate from depth itself: prioritize real depth transitions
-    const depthGrad = new Float32Array(n);
-    let gMax = 0;
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const idx = y * w + x;
-        const gx = depth[idx + 1] - depth[idx - 1];
-        const gy = depth[idx + w] - depth[idx - w];
-        const g = Math.sqrt(gx * gx + gy * gy);
-        depthGrad[idx] = g;
-        if (g > gMax) gMax = g;
-      }
-    }
-    if (gMax > 0) {
-      for (let i = 0; i < n; i++) depthGrad[i] /= gMax;
-    }
-
-    const out = new Float32Array(n);
-    const gain = 0.35 + strength * 1.25;
-    for (let i = 0; i < n; i++) {
-      const high = depth[i] - base[i];
-      const gate = Math.min(1, depthGrad[i] * (1.2 + 2.8 * strength));
-      out[i] = Math.max(0, Math.min(1, depth[i] + high * gain * gate));
-    }
-    return out;
-  }
-
   /* ── Gentle depth contrast: stretch histogram to use full 0-1 range
        without amplifying noise or creating artifacts ── */
-  function depthContrastStretch(depth, w, h, strength = 0) {
+  function depthContrastStretch(depth, w, h) {
     const n = w * h;
 
     // Compute percentile-based min/max (1st and 99th percentile)
@@ -1153,76 +1001,10 @@
     const range = hi - lo || 1;
 
     const result = new Float32Array(n);
-    // Mild S-curve based on strength to lift midtones without crushing extremes
-    const gamma = Math.max(0.55, 1 - strength * 0.35); // stronger detail -> lower gamma (more pop)
     for (let i = 0; i < n; i++) {
-      const norm = Math.max(0, Math.min(1, (depth[i] - lo) / range));
-      result[i] = Math.pow(norm, gamma);
+      result[i] = Math.max(0, Math.min(1, (depth[i] - lo) / range));
     }
     return result;
-  }
-
-  /* ── Depth local contrast: unsharp mask on depth itself (no RGB texture) ── */
-  function depthLocalContrast(depth, w, h, strength) {
-    if (strength <= 0) return depth;
-    const n = w * h;
-    const radius = Math.max(2, Math.round(Math.min(w, h) / (140 - 60 * strength)));
-    const tmp = new Float32Array(n);
-    const blur = new Float32Array(n);
-    boxMeanSep(depth, w, h, radius, blur, tmp);
-
-    const out = new Float32Array(n);
-    const gain = 0.4 + strength * 1.6;
-    for (let i = 0; i < n; i++) {
-      const high = depth[i] - blur[i];
-      out[i] = Math.max(0, Math.min(1, depth[i] + high * gain));
-    }
-    return out;
-  }
-
-  /* ── Legacy-style crisp detail, but safety-gated:
-       inject guide-image high-frequency ONLY where depth already has edges.
-       This recovers architecture/window detail while avoiding hair/skin spikes. ── */
-  function photoGuidedDetailInject(depth, guide, w, h, strength) {
-    if (strength <= 0) return depth;
-    const n = w * h;
-
-    // High-frequency component from guide image
-    const r = Math.max(2, Math.round(Math.min(w, h) / (170 - 70 * strength)));
-    const tmp = new Float32Array(n);
-    const guideBase = new Float32Array(n);
-    boxMeanSep(guide, w, h, r, guideBase, tmp);
-
-    // Depth gradient gate
-    const depthGrad = new Float32Array(n);
-    let gMax = 0;
-    for (let y = 1; y < h - 1; y++) {
-      for (let x = 1; x < w - 1; x++) {
-        const i = y * w + x;
-        const gx = depth[i + 1] - depth[i - 1];
-        const gy = depth[i + w] - depth[i - w];
-        const g = Math.sqrt(gx * gx + gy * gy);
-        depthGrad[i] = g;
-        if (g > gMax) gMax = g;
-      }
-    }
-    if (gMax > 0) {
-      for (let i = 0; i < n; i++) depthGrad[i] /= gMax;
-    }
-
-    const out = new Float32Array(n);
-    const injectGain = 0.04 + strength * 0.18;
-    for (let i = 0; i < n; i++) {
-      // Guide high-pass, clipped hard to avoid runaway texture spikes
-      let hi = guide[i] - guideBase[i];
-      if (hi > 0.20) hi = 0.20;
-      if (hi < -0.20) hi = -0.20;
-
-      // Gate strongly by existing depth edge evidence
-      const gate = Math.min(1, Math.max(0, (depthGrad[i] - 0.05) * 4.5));
-      out[i] = Math.max(0, Math.min(1, depth[i] + hi * injectGain * gate));
-    }
-    return out;
   }
 
   /* ── Helper: extract raw depth Float32Array from pipeline result,
@@ -1289,312 +1071,6 @@
       aligned[i] = scale * tileDepth[i] + shift;
     }
     return aligned;
-  }
-
-  /* ═══════════════════════════════════════════════════════════════════
-     FACE DETECTION FOR PORTRAIT MODE
-     Primary:  browser's built-in FaceDetector (Chrome/Edge, no download)
-     Optional: MediaPipe Face Landmarker loaded in background for 478-pt
-               landmarks — never blocks the main inference pipeline
-     ═══════════════════════════════════════════════════════════════════ */
-
-  // Optional MediaPipe state — loaded in background, never blocks depth gen
-  let mpFaceLandmarker = null;
-  let mpLoadPromise    = null;
-
-  function loadMediaPipeBackground() {
-    if (mpFaceLandmarker || mpLoadPromise) return;
-    // Loads asynchronously in the background — never blocks the main flow.
-    // Used only to optionally refine landmark positions after detection.
-    mpLoadPromise = (async () => {
-      try {
-        const mod = await import(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs'
-        );
-        const { FaceLandmarker, FilesetResolver } = mod;
-        if (!FaceLandmarker || !FilesetResolver) return null;
-
-        const vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
-        );
-        mpFaceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-            delegate: 'GPU',
-          },
-          outputFaceBlendshapes: false,
-          runningMode: 'IMAGE',
-          numFaces: 1,
-        });
-        return mpFaceLandmarker;
-      } catch (err) {
-        console.info('[DepthMap] MediaPipe optional landmark refinement unavailable:', err.message || err);
-        return null;
-      }
-    })();
-  }
-
-  /* ── Primary face detection: browser-native FaceDetector API.
-       Available in Chrome/Edge without any downloads.
-       Returns {x,y,w,h,coverage} bbox in image pixels, or null. ── */
-  async function detectFaceNative(imgEl) {
-    if (!('FaceDetector' in window)) return null;
-    try {
-      const fd = new window.FaceDetector({ maxDetectedFaces: 1, fastMode: false });
-      const faces = await fd.detect(imgEl);
-      if (!faces || faces.length === 0) return null;
-
-      const face = faces[0];
-      const bbox = face.boundingBox;
-      const W = imgEl.naturalWidth, H = imgEl.naturalHeight;
-      const coverage = (bbox.width * bbox.height) / (W * H);
-
-      if (coverage < 0.08) return null; // not a portrait
-
-      return { x: bbox.x, y: bbox.y, w: bbox.width, h: bbox.height, coverage };
-    } catch (err) {
-      console.info('[DepthMap] FaceDetector unavailable:', err.message);
-      return null;
-    }
-  }
-
-  /* ── Derive approximate landmark positions from bounding box using
-       standard facial proportion rules (the "thirds" rule).
-       Returns an object matching the named positions expected by
-       buildAnatomicalPriors(), all in crop-normalized [0,1] coords. ── */
-  function deriveLandmarksFromBox(faceBoxInCrop, cw, ch) {
-    // faceBoxInCrop: {x,y,w,h} in crop pixel coords
-    const {x: fx, y: fy, w: fw, h: fh} = faceBoxInCrop;
-
-    // Normalize to [0,1] within the crop
-    const l = fx / cw, r = (fx + fw) / cw;
-    const t = fy / ch, b = (fy + fh) / ch;
-    const cx = (l + r) * 0.5;
-
-    // Vertical proportions (of face height):
-    // forehead ~15%, eyes ~35%, nose ~50%, mouth ~65%, chin ~100%
-    return {
-      forehead:   { x: cx,          y: t + fh/ch * 0.12 },
-      leftEye:    { x: cx - fw/cw * 0.175, y: t + fh/ch * 0.35 },
-      rightEye:   { x: cx + fw/cw * 0.175, y: t + fh/ch * 0.35 },
-      noseBridge: { x: cx,          y: t + fh/ch * 0.43 },
-      noseTip:    { x: cx,          y: t + fh/ch * 0.52 },
-      mouth:      { x: cx,          y: t + fh/ch * 0.65 },
-      leftCheek:  { x: cx - fw/cw * 0.22, y: t + fh/ch * 0.55 },
-      rightCheek: { x: cx + fw/cw * 0.22, y: t + fh/ch * 0.55 },
-    };
-  }
-
-  /* ── Build depth priors from anatomical landmark positions.
-       Works with either MediaPipe 478-pt landmarks or bbox-derived estimates.
-       All values are small (≤ 0.08) residual offsets. ── */
-  function buildAnatomicalPriors(lmPositions, tw, th, faceW, faceH) {
-    const prior = new Float32Array(tw * th);
-
-    // Gaussian blob helper
-    function addG(cx, cy, sigX, sigY, amp) {
-      const px = cx * tw, py = cy * th;
-      const sx2 = (sigX * tw) ** 2, sy2 = (sigY * th) ** 2;
-      for (let y = 0; y < th; y++) {
-        const dy2 = (y - py) ** 2;
-        if (sy2 > 0 && dy2 / sy2 > 9) continue;
-        for (let x = 0; x < tw; x++) {
-          const dx2 = (x - px) ** 2;
-          if (sx2 > 0 && dx2 / sx2 > 9) continue;
-          prior[y * tw + x] += amp * Math.exp(-0.5 * (dx2 / sx2 + dy2 / sy2));
-        }
-      }
-    }
-
-    const {noseTip, noseBridge, leftEye, rightEye, mouth, leftCheek, rightCheek, forehead} = lmPositions;
-
-    // Scale sigma based on relative face size in crop (larger face = broader features)
-    const relFaceW = (faceW / tw) || 0.5;
-    const s = relFaceW; // scale factor for feature sizes
-
-    addG(noseTip.x,    noseTip.y,    0.07*s, 0.07*s,  0.044); // nose protrusion
-    addG(noseBridge.x, noseBridge.y, 0.06*s, 0.10*s,  0.025); // nose bridge
-    addG(leftEye.x,    leftEye.y,    0.05*s, 0.04*s, -0.020); // left eye socket
-    addG(rightEye.x,   rightEye.y,   0.05*s, 0.04*s, -0.020); // right eye socket
-    addG(mouth.x,      mouth.y,      0.10*s, 0.04*s,  0.014); // lip ridge
-    addG(leftCheek.x,  leftCheek.y,  0.10*s, 0.10*s,  0.013); // left cheek
-    addG(rightCheek.x, rightCheek.y, 0.10*s, 0.10*s,  0.013); // right cheek
-    addG(forehead.x,   forehead.y,   0.12*s, 0.08*s,  0.010); // forehead
-
-    for (let i = 0; i < prior.length; i++) {
-      prior[i] = Math.max(-0.08, Math.min(0.08, prior[i]));
-    }
-    return prior;
-  }
-
-  /* ── Convert MediaPipe 478-point landmarks to the named positions
-       expected by buildAnatomicalPriors() ── */
-  function mpLandmarksToNamed(mpLandmarks, W, H, cx0, cy0, cw, ch) {
-    function toLandmark(idx) {
-      const pt = mpLandmarks[idx] || { x:0.5, y:0.5 };
-      return {
-        x: (pt.x * W - cx0) / cw,
-        y: (pt.y * H - cy0) / ch,
-      };
-    }
-    const upperLip = toLandmark(13), lowerLip = toLandmark(14);
-    return {
-      noseTip:    toLandmark(4),
-      noseBridge: toLandmark(6),
-      leftEye:    toLandmark(159),
-      rightEye:   toLandmark(386),
-      mouth:      { x: (upperLip.x + lowerLip.x)*0.5, y: (upperLip.y + lowerLip.y)*0.5 },
-      leftCheek:  { x: (toLandmark(159).x + toLandmark(61).x)*0.5,
-                    y: (toLandmark(159).y + toLandmark(61).y)*0.5 },
-      rightCheek: { x: (toLandmark(386).x + toLandmark(291).x)*0.5,
-                    y: (toLandmark(386).y + toLandmark(291).y)*0.5 },
-      forehead:   toLandmark(10),
-    };
-  }
-
-  /* ── Detect face: try native FaceDetector, with MediaPipe as optional
-       background enhancement. Hard 4s timeout — never blocks inference. ── */
-  async function detectFace(imgEl) {
-    const detectPromise = detectFaceNative(imgEl);
-    const timeout = new Promise(r => setTimeout(() => r(null), 4000));
-    return Promise.race([detectPromise, timeout]);
-  }
-
-  /* ── Portrait enhancement pipeline ── */
-  async function portraitEnhance(pipe, globalDepth) {
-    const img  = state.originalImg;
-    const W    = img.naturalWidth, H = img.naturalHeight;
-    const fb   = state.faceBox;
-    if (!fb) return globalDepth;
-
-    showProgress(100, '<span class="pulse">Portrait: running face depth pass…</span>');
-
-    // Expand face bbox by 40% padding
-    const padFrac = 0.40;
-    const pxPad = Math.round(fb.w * padFrac), pyPad = Math.round(fb.h * padFrac);
-    const cx0 = Math.max(0, Math.round(fb.x - pxPad));
-    const cy0 = Math.max(0, Math.round(fb.y - pyPad));
-    const cx1 = Math.min(W, Math.round(fb.x + fb.w + pxPad));
-    const cy1 = Math.min(H, Math.round(fb.y + fb.h + pyPad));
-    const cw  = cx1 - cx0, ch = cy1 - cy0;
-
-    if (cw < 32 || ch < 32) return globalDepth;
-
-    // Extract crop canvas
-    const cropCanvas = document.createElement('canvas');
-    cropCanvas.width = cw; cropCanvas.height = ch;
-    const cCtx = cropCanvas.getContext('2d');
-    cCtx.imageSmoothingQuality = 'high';
-    cCtx.drawImage(img, cx0, cy0, cw, ch, 0, 0, cw, ch);
-
-    // Crop inference + TTA
-    const cropRes  = await pipe(cropCanvas.toDataURL('image/png'));
-    const cropNorm = extractDepthTile(cropRes, cw, ch);
-    const flipRes  = await pipe(flipCanvasH(cropCanvas));
-    const cropFlip = flipDepthH(extractDepthTile(flipRes, cw, ch), cw, ch);
-
-    const cropTTA = new Float32Array(cw * ch);
-    for (let i = 0; i < cw * ch; i++) cropTTA[i] = (cropNorm[i] + cropFlip[i]) * 0.5;
-
-    // Reference patch from global depth
-    const refPatch = new Float32Array(cw * ch);
-    const mask     = new Float32Array(cw * ch);
-    for (let ly = 0; ly < ch; ly++) {
-      for (let lx = 0; lx < cw; lx++) {
-        if (cx0 + lx < W && cy0 + ly < H) {
-          refPatch[ly * cw + lx] = globalDepth[(cy0 + ly) * W + (cx0 + lx)];
-          mask[ly * cw + lx] = 1;
-        }
-      }
-    }
-
-    // Affine-align crop → global range, then rescale to match global patch range
-    const aligned = affineAlignTile(cropTTA, refPatch, mask, cw * ch);
-    let sMin = Infinity, sMax = -Infinity, rMin = Infinity, rMax = -Infinity;
-    for (let i = 0; i < cw * ch; i++) {
-      if (aligned[i] < sMin) sMin = aligned[i];
-      if (aligned[i] > sMax) sMax = aligned[i];
-      if (refPatch[i] < rMin) rMin = refPatch[i];
-      if (refPatch[i] > rMax) rMax = refPatch[i];
-    }
-    const sRange = sMax - sMin || 1, rRange = rMax - rMin || 1;
-    const scaledCrop = new Float32Array(cw * ch);
-    for (let i = 0; i < cw * ch; i++) {
-      scaledCrop[i] = rMin + ((aligned[i] - sMin) / sRange) * rRange;
-    }
-
-    // Landmark priors — use MediaPipe 478-pt if available, else bbox anatomy
-    const faceBoxInCrop = { x: fb.x - cx0, y: fb.y - cy0, w: fb.w, h: fb.h };
-    let lmPositions;
-    if (state.faceLandmarks && state.faceLandmarks.length > 0) {
-      lmPositions = mpLandmarksToNamed(state.faceLandmarks, W, H, cx0, cy0, cw, ch);
-    } else {
-      lmPositions = deriveLandmarksFromBox(faceBoxInCrop, cw, ch);
-    }
-    const priorCrop = buildAnatomicalPriors(lmPositions, cw, ch, fb.w, fb.h);
-
-    const enhancedCrop = new Float32Array(cw * ch);
-    for (let i = 0; i < cw * ch; i++) {
-      enhancedCrop[i] = scaledCrop[i] + priorCrop[i];
-    }
-
-    // Soft blend mask: full weight inside face bbox, cosine taper in padding
-    const fxOff = fb.x - cx0, fyOff = fb.y - cy0;
-    const fxEnd = fxOff + fb.w, fyEnd = fyOff + fb.h;
-    const blendMask = new Float32Array(cw * ch);
-    for (let ly = 0; ly < ch; ly++) {
-      const dy = ly < fyOff ? (fyOff - ly) / Math.max(1, fyOff) :
-                 ly > fyEnd ? (ly - fyEnd) / Math.max(1, ch - fyEnd) : 0;
-      for (let lx = 0; lx < cw; lx++) {
-        const dx = lx < fxOff ? (fxOff - lx) / Math.max(1, fxOff) :
-                   lx > fxEnd ? (lx - fxEnd) / Math.max(1, cw - fxEnd) : 0;
-        blendMask[ly * cw + lx] = Math.max(0,
-          Math.cos(Math.min(1, Math.sqrt(dx*dx + dy*dy)) * Math.PI * 0.5));
-      }
-    }
-
-    // Fuse back into global depth at 65% blend strength
-    const BLEND = 0.65;
-    const result = Float32Array.from(globalDepth);
-    for (let ly = 0; ly < ch; ly++) {
-      const gy = cy0 + ly;
-      if (gy >= H) continue;
-      for (let lx = 0; lx < cw; lx++) {
-        const gx = cx0 + lx;
-        if (gx >= W) continue;
-        const bw = blendMask[ly * cw + lx] * BLEND;
-        const gi = gy * W + gx;
-        result[gi] = globalDepth[gi] * (1 - bw) + enhancedCrop[ly * cw + lx] * bw;
-      }
-    }
-
-    // If MediaPipe is now available (loaded in background since detect started),
-    // use it to refine the face landmarks for any future re-runs
-    if (mpFaceLandmarker && !state.faceLandmarks) {
-      try {
-        const mpRes = mpFaceLandmarker.detect(img);
-        if (mpRes && mpRes.faceLandmarks && mpRes.faceLandmarks.length > 0) {
-          state.faceLandmarks = mpRes.faceLandmarks[0];
-        }
-      } catch { /* ignore */ }
-    }
-
-    return result;
-  }
-
-  /* ── Should portrait mode run for the current image? ── */
-  function shouldRunPortrait() {
-    if (state.portraitMode === 'off') return false;
-    if (state.portraitMode === 'on')  return true;
-    return state.portraitDetected; // auto
-  }
-
-  /* ── Update portrait badge visibility ── */
-  function updatePortraitBadge() {
-    const badge = document.getElementById('dm-portrait-badge');
-    if (!badge) return;
-    const show = state.portraitDetected || state.portraitMode === 'on';
-    badge.classList.toggle('visible', show);
   }
 
   /* ── Tiled depth inference with flip-TTA, affine alignment, and
@@ -1764,43 +1240,10 @@
         else if (info.status === 'ready') { showProgress(100, 'Model ready'); }
       });
 
-      // ── 2. Face detection for portrait mode (parallel with inference start) ──
-      // Reset portrait state
-      state.portraitDetected = false;
-      state.faceBox = null;
-      state.faceLandmarks = null;
-
-      // Kick off face detection concurrently with model load completing
-      // Only run if portrait mode isn't disabled
-      const isMaybePortrait = state.portraitMode !== 'off';
-      let faceDetectPromise = Promise.resolve(null);
-      if (isMaybePortrait) {
-        // Start loading MediaPipe in the background (non-blocking, for landmark refinement)
-        loadMediaPipeBackground();
-        showProgress(100, '<span class="pulse">Detecting faces…</span>');
-        faceDetectPromise = detectFace(state.originalImg).then(fb => {
-          if (fb) {
-            state.portraitDetected = true;
-            state.faceBox = fb;
-            state.faceLandmarks = fb.landmarks || null;
-          }
-          updatePortraitBadge();
-          return fb;
-        }).catch(() => null);
-      }
-
-      // ── 3. Run tiled or single-pass inference ──
+      // ── 2. Run tiled or single-pass inference ──
       cachedDepthFloat = await tiledDepthInference(pipe);
 
-      // Wait for face detection to complete (usually already done by now)
-      await faceDetectPromise;
-
-      // ── 4. Portrait enhancement (if portrait mode is active) ──
-      if (shouldRunPortrait() && state.faceBox) {
-        cachedDepthFloat = await portraitEnhance(pipe, cachedDepthFloat);
-      }
-
-      // ── 5. Post-process and display ──
+      // ── 3. Post-process and display ──
       showProgress(100, '<span class="pulse">Post-processing…</span>');
       processAndDisplayDepth();
 
@@ -1824,31 +1267,24 @@
     const W = state.originalImg.naturalWidth;
     const H = state.originalImg.naturalHeight;
     let depth = cachedDepthFloat;
-    const guide = getOrigGray();
-
-    const strength = Math.max(0, Math.min(1, state.detailBoost));
 
     if (state.guidedFilter) {
+      const guide = getOrigGray();
+
       // Step 1: Multi-scale guided filter — snap depth edges to photo
       // edges, but only structural ones (high eps prevents texture leak)
       depth = multiScaleGuidedFilter(guide, depth, W, H);
+
+      // Step 2: Depth-aware edge refinement — sharpen depth boundaries
+      // only where the MODEL detected a depth transition, not where
+      // arbitrary photo texture exists
+      if (state.detailBoost > 0) {
+        depth = depthEdgeRefine(depth, guide, W, H);
+      }
     }
 
-    // Step 2: Detail enhancement chain controlled by Detail slider
-    if (strength > 0) {
-      // Depth-aware edge snap
-      depth = depthEdgeRefine(depth, guide, W, H, strength);
-      // Depth-only micro enhancement
-      depth = depthMicroDetail(depth, W, H, strength);
-      // Legacy-style crisp detail, safety-gated by depth edges
-      depth = photoGuidedDetailInject(depth, guide, W, H, strength);
-    }
-
-    // Step 3: Gentle contrast stretch with S-curve tuned by strength
-    depth = depthContrastStretch(depth, W, H, strength);
-
-    // Step 4: Depth-only local contrast (unsharp on depth)
-    depth = depthLocalContrast(depth, W, H, strength);
+    // Step 3: Gentle contrast stretch (percentile-based, no amplification)
+    depth = depthContrastStretch(depth, W, H);
 
     // Invert if enabled
     if (state.invert) {
