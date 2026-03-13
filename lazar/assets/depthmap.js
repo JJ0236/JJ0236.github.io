@@ -1008,7 +1008,7 @@
   /* ── Depth-aware edge refinement — only sharpen edges that actually
        exist in the MODEL's depth output, not arbitrary photo edges.
        Uses the depth map's own gradients to decide where to sharpen. ── */
-  function depthEdgeRefine(depth, guide, w, h) {
+  function depthEdgeRefine(depth, guide, w, h, strength) {
     const n = w * h;
 
     // Compute depth gradient magnitude (Sobel-like)
@@ -1030,17 +1030,56 @@
     // At pixels where depth has an edge (gradient > threshold), use a tight
     // guided filter to snap the depth boundary to the nearest photo edge.
     // At flat-depth regions, leave depth untouched (photo texture ≠ depth).
-    const tightRadius = Math.max(2, Math.round(Math.min(w, h) / 120));
-    const refined = guidedFilterApply(guide, depth, w, h, tightRadius, 0.005);
+    const tightRadius = Math.max(1, Math.round(Math.min(w, h) / (180 - 80 * strength)));
+    const refined = guidedFilterApply(guide, depth, w, h, tightRadius, 0.0045);
 
     // Blend: use refined only where depth gradient exists
     const output = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       // Sigmoid blending weight based on depth gradient
-      const edgeWeight = Math.min(1, depthGrad[i] * 5);
+      const edgeWeight = Math.min(1, depthGrad[i] * (2.5 + 7.5 * strength));
       output[i] = depth[i] * (1 - edgeWeight) + refined[i] * edgeWeight;
     }
     return output;
+  }
+
+  /* ── Depth-only micro-detail enhancement.
+       Uses high-pass from the depth map itself (NOT photo texture), so it
+       restores structural depth detail without reintroducing hair/skin spikes. ── */
+  function depthMicroDetail(depth, w, h, strength) {
+    if (strength <= 0) return depth;
+
+    const n = w * h;
+    const radius = Math.max(1, Math.round(Math.min(w, h) / 220));
+    const tmp = new Float32Array(n);
+    const base = new Float32Array(n);
+    boxMeanSep(depth, w, h, radius, base, tmp);
+
+    // Gradient gate from depth itself: prioritize real depth transitions
+    const depthGrad = new Float32Array(n);
+    let gMax = 0;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        const gx = depth[idx + 1] - depth[idx - 1];
+        const gy = depth[idx + w] - depth[idx - w];
+        const g = Math.sqrt(gx * gx + gy * gy);
+        depthGrad[idx] = g;
+        if (g > gMax) gMax = g;
+      }
+    }
+    if (gMax > 0) {
+      for (let i = 0; i < n; i++) depthGrad[i] /= gMax;
+    }
+
+    const out = new Float32Array(n);
+    const gain = 0.35 + strength * 1.25;
+    for (let i = 0; i < n; i++) {
+      const high = depth[i] - base[i];
+      const gate = Math.min(1, depthGrad[i] * (1.2 + 2.8 * strength));
+      out[i] = Math.max(0, Math.min(1, depth[i] + high * gain * gate));
+    }
+    return out;
   }
 
   /* ── Gentle depth contrast: stretch histogram to use full 0-1 range
@@ -1673,7 +1712,8 @@
       // only where the MODEL detected a depth transition, not where
       // arbitrary photo texture exists
       if (state.detailBoost > 0) {
-        depth = depthEdgeRefine(depth, guide, W, H);
+        depth = depthEdgeRefine(depth, guide, W, H, state.detailBoost);
+        depth = depthMicroDetail(depth, W, H, state.detailBoost);
       }
     }
 
