@@ -196,6 +196,19 @@
       line-height: 1.45;
     }
 
+    .transcript-head {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .transcript-head label {
+      margin: 0;
+    }
+
     @media (max-width: 640px) {
       body { padding: 14px; }
       .panel { padding: 18px; }
@@ -248,7 +261,10 @@
 
       <div id="status" class="status" role="status" aria-live="polite"></div>
 
-      <label for="transcriptOutput" style="margin-top: 16px;">Transcript</label>
+      <div class="transcript-head">
+        <label for="transcriptOutput">Transcript</label>
+        <button id="copyTopBtn" class="btn-secondary" type="button" disabled>Copy Transcript</button>
+      </div>
       <textarea id="transcriptOutput" placeholder="Transcript will appear here..."></textarea>
 
       <p class="footnote">Note: no speech model can guarantee a mathematically perfect transcript on every recording. For best results, use clear audio and minimal background noise.</p>
@@ -264,6 +280,7 @@
     const transcribeBtn = document.getElementById('transcribeBtn');
     const downloadBtn = document.getElementById('downloadBtn');
     const copyBtn = document.getElementById('copyBtn');
+    const copyTopBtn = document.getElementById('copyTopBtn');
     const output = document.getElementById('transcriptOutput');
     const statusBox = document.getElementById('status');
 
@@ -376,6 +393,7 @@
         output.value = transcript;
         downloadBtn.disabled = false;
         copyBtn.disabled = false;
+        copyTopBtn.disabled = false;
         setStatus('Transcript completed locally in your browser.', 'ok');
       } catch (err) {
         console.error(err);
@@ -421,6 +439,7 @@
     transcribeBtn.addEventListener('click', transcribeFile);
     downloadBtn.addEventListener('click', downloadTranscript);
     copyBtn.addEventListener('click', copyTranscript);
+    copyTopBtn.addEventListener('click', copyTranscript);
   </script>
 </body>
 </html>
