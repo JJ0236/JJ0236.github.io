@@ -66,7 +66,9 @@ export default {
         return json({ error: 'Could not load profile. Account may be private or not exist.' }, 404, request);
       }
       data.userId = data._userId || null;
+      data.next_max_id = data._nextMaxId || null;
       delete data._userId;
+      delete data._nextMaxId;
       return json(data, 200, request);
     } catch (e) {
       return json({ error: e.message || 'Request failed.' }, 502, request);
@@ -155,10 +157,21 @@ function parseProfileUser(user) {
   const edges = media?.edges ?? [];
   const posts = edges.map(({ node: p }) => parseGraphPost(p));
 
+  // Build the next_max_id so the feed API can continue from here
+  // Format: {last_post_id}_{user_id}
+  const userId = user.id ?? user.pk ?? null;
+  const hasNext = media?.page_info?.has_next_page ?? false;
+  let nextMaxId = null;
+  if (hasNext && edges.length > 0 && userId) {
+    const lastId = edges[edges.length - 1]?.node?.id;
+    if (lastId) nextMaxId = `${lastId}_${userId}`;
+  }
+
   return {
     profile,
     posts,
-    _userId: user.id ?? user.pk ?? null,
+    _userId: userId,
+    _nextMaxId: nextMaxId,
   };
 }
 

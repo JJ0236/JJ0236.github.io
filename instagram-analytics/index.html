@@ -516,25 +516,25 @@
     if (onProgress) onProgress(allPosts.length, total);
 
     // 2) Paginate ALL remaining posts via the worker's page endpoint
-    if (userId && allPosts.length < total) {
-      let maxId = '';
+    // Must start with next_max_id from the profile response (feed API 401s without it)
+    if (userId && allPosts.length < total && body.next_max_id) {
+      let maxId = body.next_max_id;
       let failures = 0;
 
       for (let page = 0; page < 500; page++) {
         try {
-          let pageUrl = `${WORKER_URL}/?userId=${userId}`;
-          if (maxId) pageUrl += `&max_id=${encodeURIComponent(maxId)}`;
+          const pageUrl = `${WORKER_URL}/?userId=${userId}&max_id=${encodeURIComponent(maxId)}`;
 
           const pRes = await fetch(pageUrl);
           if (!pRes.ok) {
-            if (++failures >= 3) break;
+            if (++failures >= 5) break;
             await sleep(2000);
             continue;
           }
 
           const pBody = await pRes.json();
           if (pBody.error) {
-            if (++failures >= 3) break;
+            if (++failures >= 5) break;
             await sleep(2000);
             continue;
           }
@@ -554,7 +554,7 @@
 
           await sleep(350);
         } catch {
-          if (++failures >= 3) break;
+          if (++failures >= 5) break;
           await sleep(2000);
         }
       }
