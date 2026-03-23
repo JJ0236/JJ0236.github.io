@@ -262,7 +262,7 @@
 <!-- ── Search ───────────────────────────────────────── -->
 <div class="search-wrap">
   <h1 class="ig-text">Instagram Analytics</h1>
-  <p class="sub">Enter any public handle to generate a dashboard — no account or API key needed.</p>
+  <p class="sub">Enter any public handle to generate a dashboard — runs entirely on your site, no third-party API or key needed.</p>
   <div class="search-row">
     <input id="handleInput" type="text" placeholder="@username or username" maxlength="60" autocomplete="off"/>
     <button id="analyzeBtn">Analyze</button>
@@ -442,73 +442,32 @@
     el.className = cls;
   }
 
-  // ── CORS Proxies ───────────────────────────────────────
-  const PROXIES = [
-    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
-
-  function endpoints(handle) {
-    return [
-      `https://www.instagram.com/${handle}/?__a=1&__d=dis`,
-      `https://www.instagram.com/api/v1/users/web_profile_info/?username=${handle}`,
-    ];
-  }
+  // ── Worker URL (your Cloudflare Worker) ─────────────────
+  // Replace this with your deployed worker URL
+  const WORKER_URL = 'https://ig-proxy.jj0236.workers.dev';
 
   async function fetchProfileData(handle) {
     const clean = handle.replace(/^@/, '').trim().toLowerCase();
-    for (const proxy of PROXIES) {
-      for (const ep of endpoints(clean)) {
-        try {
-          const res = await fetch(proxy(ep));
-          if (!res.ok) continue;
-          const json = await res.json();
-          const parsed = parseIG(json);
-          if (parsed?.profile?.username) return parsed;
-        } catch (_) { /* try next */ }
-      }
+    if (!clean) throw new Error('Please enter a username.');
+
+    const res = await fetch(`${WORKER_URL}/?username=${encodeURIComponent(clean)}`);
+    const body = await res.json();
+
+    if (!res.ok || body.error) {
+      throw new Error(body.error || `Request failed (${res.status})`);
     }
-    throw new Error(
-      'Could not load data for this handle. The account may be private, or Instagram is rate-limiting right now. Try again in a few seconds.'
-    );
-  }
 
-  function parseIG(json) {
-    const user = json?.graphql?.user ?? json?.data?.user ?? null;
-    if (!user) return null;
+    if (!body.profile?.username) {
+      throw new Error('Could not parse profile data. The account may be private or does not exist.');
+    }
 
-    const profile = {
-      username:   user.username,
-      fullName:   user.full_name || user.username,
-      bio:        user.biography || '',
-      followers:  user.edge_followed_by?.count ?? 0,
-      following:  user.edge_follow?.count ?? 0,
-      totalPosts: user.edge_owner_to_timeline_media?.count ?? 0,
-      isVerified: user.is_verified ?? false,
-      isPrivate:  user.is_private ?? false,
-      profilePic: user.profile_pic_url_hd || user.profile_pic_url || '',
-    };
+    // Normalize post dates
+    body.posts = (body.posts || []).map(p => ({
+      ...p,
+      date: new Date((p.timestamp || 0) * 1000),
+    }));
 
-    const edges = user.edge_owner_to_timeline_media?.edges ?? [];
-    const posts = edges.map(({ node: p }) => {
-      const cap = p.edge_media_to_caption?.edges?.[0]?.node?.text ?? '';
-      const ts  = p.timestamp ?? 0;
-      return {
-        shortcode: p.shortcode,
-        url:       `https://www.instagram.com/p/${p.shortcode}/`,
-        caption:   cap,
-        timestamp: ts,
-        date:      new Date(ts * 1000),
-        type:      p.__typename === 'GraphVideo'   ? 'reel'
-                 : p.__typename === 'GraphSidecar' ? 'carousel'
-                 : 'image',
-        thumbnail: p.thumbnail_src ?? p.display_url ?? '',
-        likes:     p.edge_media_preview_like?.count ?? p.edge_liked_by?.count ?? 0,
-        comments:  p.edge_media_to_comment?.count ?? 0,
-      };
-    });
-
-    return { profile, posts };
+    return body;
   }
 
   // ── Analytics ──────────────────────────────────────────
@@ -671,7 +630,7 @@
     pfpEl.onerror = () => { pfpEl.style.display = 'none'; };
     document.getElementById('pfp-name').textContent =
       (profile.isVerified ? '✔ ' : '') + (profile.fullName || profile.username) + ` (@${profile.username})`;
-    document.getElementById('pfp-bio').textContent = profile.bio;
+    document.getElementById('pfp-bio').textContent = profile.biography || profile.bio || '';
     document.getElementById('ps-followers').textContent = fmt(profile.followers);
     document.getElementById('ps-following').textContent = fmt(profile.following);
     document.getElementById('ps-posts').textContent = fmt(profile.totalPosts);
