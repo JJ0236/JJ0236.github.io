@@ -54,6 +54,7 @@ export default {
 
       // Strip internal fields
       delete data._userId;
+      // Keep _debug temporarily for diagnosis
       return json(data, 200, request);
     } catch (e) {
       return json({ error: e.message || 'Request failed.' }, 502, request);
@@ -108,6 +109,7 @@ async function paginateAllPosts(data) {
   // Build a set of shortcodes we already have to avoid duplicates
   const seen = new Set(data.posts.map(p => p.shortcode));
   let maxId = '';
+  data._debug = [];
 
   // Keep paginating until no more posts
   for (let page = 0; page < 200; page++) {
@@ -116,22 +118,30 @@ async function paginateAllPosts(data) {
       if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
 
       const res = await fetch(feedUrl, { headers: IG_HEADERS });
-      if (!res.ok) break;
+      if (!res.ok) {
+        data._debug.push(`page${page}: HTTP ${res.status}`);
+        break;
+      }
 
       const body = await res.json();
       const items = body.items || [];
+      let added = 0;
 
       for (const item of items) {
         const post = parseFeedItem(item);
         if (post && !seen.has(post.shortcode)) {
           seen.add(post.shortcode);
           data.posts.push(post);
+          added++;
         }
       }
 
+      data._debug.push(`page${page}: ${items.length} items, ${added} new, more=${body.more_available}`);
+
       if (!body.more_available || !body.next_max_id) break;
       maxId = body.next_max_id;
-    } catch {
+    } catch (e) {
+      data._debug.push(`page${page}: ERROR ${e.message || e}`);
       break; // return what we have so far
     }
   }
