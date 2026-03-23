@@ -323,6 +323,31 @@
       <canvas id="ch-type-perf" style="max-height:200px;"></canvas>
     </div>
   </div>
+  <div class="charts-grid" id="growth-wrap" style="display:none;">
+    <div class="card col-full">
+      <h3>Monthly Growth Trend</h3>
+      <canvas id="ch-growth" style="max-height:260px;"></canvas>
+    </div>
+  </div>
+  <div class="card" id="top-posts-card" style="display:none; margin-top:4px;">
+    <h3>Top 10 Posts by Engagement Score</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Caption</th>
+            <th>Type</th>
+            <th>Likes</th>
+            <th>Comments</th>
+            <th>Score</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="top-posts-tbody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -341,6 +366,10 @@
     <h3>All Hashtags</h3>
     <div class="tag-grid" id="tag-pills"></div>
   </div>
+  <div class="card" id="content-gaps-card" style="display:none; margin-top:20px;">
+    <h3>Content Gaps — Underexplored High-Performers</h3>
+    <div class="tag-grid" id="content-gaps-pills"></div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -355,6 +384,12 @@
     <div class="card">
       <h3>Hashtags Per Post</h3>
       <canvas id="ch-hcount"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid" id="cap-eng-wrap" style="display:none;">
+    <div class="card col-full">
+      <h3>Caption Length vs Engagement</h3>
+      <canvas id="ch-cap-eng" style="max-height:220px;"></canvas>
     </div>
   </div>
   <div class="charts-grid">
@@ -398,6 +433,16 @@
       <canvas id="ch-hours"></canvas>
     </div>
   </div>
+  <div class="charts-grid" id="timing-eng-wrap" style="display:none;">
+    <div class="card">
+      <h3>Avg Engagement Score by Day</h3>
+      <canvas id="ch-days-eng"></canvas>
+    </div>
+    <div class="card">
+      <h3>Avg Engagement Score by Hour</h3>
+      <canvas id="ch-hours-eng"></canvas>
+    </div>
+  </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════════ -->
@@ -405,7 +450,7 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <div id="page-posts" class="page">
   <div class="card">
-    <h3>Recent Posts</h3>
+    <h3>All Posts</h3>
     <div class="tbl-wrap">
       <table>
         <thead>
@@ -415,6 +460,7 @@
             <th>Type</th>
             <th id="th-likes" style="display:none;">Likes</th>
             <th id="th-comments" style="display:none;">Comments</th>
+            <th id="th-score" style="display:none;">Score</th>
             <th>Date</th>
           </tr>
         </thead>
@@ -473,23 +519,30 @@
   function computeAnalytics({ posts }) {
     const dayFreq  = new Array(7).fill(0);
     const hourFreq = new Array(24).fill(0);
+    const dayEng   = Array.from({ length: 7 }, () => []);
+    const hourEng  = Array.from({ length: 24 }, () => []);
     const monthMap = {};
+    const monthEng = {};
     const typeMap  = { image: 0, reel: 0, carousel: 0 };
     const hashFreq = {};
     const hashEngMap = {};
     const capBuckets = { '0–50': 0, '51–150': 0, '151–300': 0, '301–500': 0, '500+': 0 };
+    const capEngBuckets = { '0–50': [], '51–150': [], '151–300': [], '301–500': [], '500+': [] };
     const hashCounts = [];
     const hookStyles = {};
     const hooks = [];
     const typeEng = {};
-    let totalLikes = 0, totalComments = 0, hasEng = false;
+    let totalLikes = 0, totalComments = 0, totalPlays = 0, videoCount = 0, hasEng = false;
+    const allScores = [];
 
     for (const p of posts) {
       typeMap[p.type] = (typeMap[p.type] || 0) + 1;
 
       const d = p.date;
-      dayFreq[d.getDay()]++;
-      hourFreq[d.getHours()]++;
+      const dow = d.getDay();
+      const hr = d.getHours();
+      dayFreq[dow]++;
+      hourFreq[hr]++;
 
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       monthMap[mk] = (monthMap[mk] || 0) + 1;
@@ -499,20 +552,30 @@
       hashCounts.push(tags.length);
 
       const score = p.likes + p.comments * 3;
+      allScores.push(score);
       for (const t of tags) {
         hashFreq[t]    = (hashFreq[t]    || 0) + 1;
         hashEngMap[t]  = (hashEngMap[t]  || 0) + score;
       }
 
       const len = cap.length;
-      if      (len <=  50) capBuckets['0–50']++;
-      else if (len <= 150) capBuckets['51–150']++;
-      else if (len <= 300) capBuckets['151–300']++;
-      else if (len <= 500) capBuckets['301–500']++;
-      else                 capBuckets['500+']++;
+      const bucket = len <= 50 ? '0–50' : len <= 150 ? '51–150' : len <= 300 ? '151–300' : len <= 500 ? '301–500' : '500+';
+      capBuckets[bucket]++;
+      capEngBuckets[bucket].push(score);
 
       if (p.likes > 0) { totalLikes += p.likes; hasEng = true; }
       totalComments += p.comments;
+      if (p.isVideo || p.type === 'reel') {
+        totalPlays += (p.plays || 0);
+        videoCount++;
+      }
+
+      dayEng[dow].push(score);
+      hourEng[hr].push(score);
+
+      if (!monthEng[mk]) monthEng[mk] = { scores: [], likes: [] };
+      monthEng[mk].scores.push(score);
+      monthEng[mk].likes.push(p.likes);
 
       if (!typeEng[p.type]) typeEng[p.type] = [];
       typeEng[p.type].push(score);
@@ -520,10 +583,12 @@
       const hook = extractHook(cap);
       if (hook) {
         const style = classifyHook(hook);
-        hooks.push({ text: hook.slice(0, 130), date: d, score, style, likes: p.likes });
+        hooks.push({ text: hook.slice(0, 130), date: d, score, style, likes: p.likes, type: p.type, url: p.url });
         hookStyles[style] = (hookStyles[style] || 0) + 1;
       }
     }
+
+    const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
 
     // Build hashtag ranking
     const topHashtags = Object.entries(hashFreq)
@@ -538,15 +603,29 @@
       .slice(0, 25)
       .map(([tag, count]) => ({ tag, count, avgEng: Math.round((hashEngMap[tag] || 0) / count) }));
 
+    // Content gaps: hashtags used ≤2 times with above-median score
+    const medianScore = allScores.length ? [...allScores].sort((a, b) => a - b)[Math.floor(allScores.length / 2)] : 0;
+    const contentGaps = Object.entries(hashFreq)
+      .filter(([tag, count]) => count <= 2 && (hashEngMap[tag] || 0) / count > medianScore)
+      .sort(([ta, ca], [tb, cb]) => (hashEngMap[tb] / cb) - (hashEngMap[ta] / ca))
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count, avgEng: Math.round((hashEngMap[tag] || 0) / count) }));
+
     const monthlyPosts = Object.entries(monthMap)
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-12)
-      .map(([month, count]) => ({ month, count }));
-
-    const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
+      .map(([month, count]) => ({
+        month, count,
+        avgScore: avg(monthEng[month]?.scores ?? []),
+        avgLikes: avg(monthEng[month]?.likes ?? []),
+      }));
 
     const typeAvgEng = Object.fromEntries(
       Object.entries(typeEng).map(([t, vals]) => [t, avg(vals)])
+    );
+
+    const capEngAvg = Object.fromEntries(
+      Object.entries(capEngBuckets).map(([b, vals]) => [b, avg(vals)])
     );
 
     let postsPerWeek = null;
@@ -556,12 +635,23 @@
       postsPerWeek  = spanW > 0 ? (posts.length / spanW).toFixed(1) : null;
     }
 
+    // Top 10 posts by engagement score
+    const topPosts = [...posts]
+      .map(p => ({ ...p, score: p.likes + p.comments * 3 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
     return {
-      typeMap, topHashtags, monthlyPosts, capBuckets, hashCounts,
-      hookStyles, dayFreq, hourFreq, hasEng, typeAvgEng,
+      typeMap, topHashtags, contentGaps, monthlyPosts, capBuckets, capEngAvg, hashCounts,
+      hookStyles, dayFreq, hourFreq, hasEng, typeAvgEng, topPosts,
+      dayEngAvg:  dayEng.map(arr => avg(arr)),
+      hourEngAvg: hourEng.map(arr => avg(arr)),
       hooks: hooks.sort((a, b) => b.score - a.score),
-      avgLikes:   hasEng && posts.length ? Math.round(totalLikes    / posts.length) : null,
-      avgComments: posts.length          ? Math.round(totalComments / posts.length) : null,
+      totalLikes,
+      avgLikes:      hasEng && posts.length ? Math.round(totalLikes    / posts.length) : null,
+      avgComments:   posts.length          ? Math.round(totalComments / posts.length) : null,
+      avgEngagement: hasEng && posts.length ? Math.round((totalLikes + totalComments) / posts.length) : null,
+      avgVideoPlays: videoCount > 0 ? Math.round(totalPlays / videoCount) : null,
       avgCap:     avg(posts.map(p => p.caption?.length ?? 0)),
       avgTags:    posts.length ? (hashCounts.reduce((s, v) => s + v, 0) / posts.length).toFixed(1) : 0,
       postsPerWeek,
@@ -638,14 +728,18 @@
 
     // ── ANALYTICS PAGE ──────────────────────────────────
     const statsRows = [
-      { v: posts.length,          l: 'Posts Loaded'   },
+      { v: posts.length,          l: 'Posts Analyzed'   },
       { v: a.postsPerWeek ?? '—', l: 'Posts / Week'   },
-      { v: a.avgCap,              l: 'Avg Caption Len' },
-      { v: a.avgTags,             l: 'Avg Hashtags'    },
       ...(a.hasEng ? [
-        { v: fmt(a.avgLikes),    l: 'Avg Likes'       },
-        { v: fmt(a.avgComments), l: 'Avg Comments'    },
-      ] : []),
+        { v: fmt(a.totalLikes),       l: 'Total Likes'      },
+        { v: fmt(a.avgLikes),         l: 'Avg Likes'        },
+        { v: fmt(a.avgComments),      l: 'Avg Comments'     },
+        { v: fmt(a.avgEngagement),    l: 'Avg Engagement'   },
+        ...(a.avgVideoPlays != null ? [{ v: fmt(a.avgVideoPlays), l: 'Avg Video Plays' }] : []),
+      ] : [
+        { v: a.avgCap,              l: 'Avg Caption Len' },
+        { v: a.avgTags,             l: 'Avg Hashtags'    },
+      ]),
     ];
     document.getElementById('stats-grid').innerHTML = statsRows
       .map(s => `<div class="stat-card">
@@ -677,6 +771,41 @@
       typePerfWrap.style.display = 'none';
     }
 
+    // Monthly Growth Trend (line chart with avg likes + avg score)
+    const growthWrap = document.getElementById('growth-wrap');
+    if (a.hasEng && a.monthlyPosts.length >= 2) {
+      growthWrap.style.display = '';
+      mkChart('ch-growth', 'line',
+        a.monthlyPosts.map(m => m.month),
+        [
+          { label: 'Avg Likes', data: a.monthlyPosts.map(m => m.avgLikes), borderColor: '#f09433', backgroundColor: 'rgba(240,148,51,0.15)', fill: true, tension: 0.3 },
+          { label: 'Avg Score', data: a.monthlyPosts.map(m => m.avgScore), borderColor: '#dc2743', backgroundColor: 'rgba(220,39,67,0.1)', fill: true, tension: 0.3 },
+        ],
+        { plugins: { legend: { display: true, labels: { color: '#888' } } } }
+      );
+    } else {
+      growthWrap.style.display = 'none';
+    }
+
+    // Top 10 Posts table
+    const topPostsCard = document.getElementById('top-posts-card');
+    if (a.hasEng && a.topPosts.length) {
+      topPostsCard.style.display = '';
+      document.getElementById('top-posts-tbody').innerHTML = a.topPosts
+        .map((p, i) => `<tr>
+            <td style="color:#555;">${i + 1}</td>
+            <td>${(p.caption || '').slice(0, 80) || '(no caption)'}</td>
+            <td><span class="badge badge-${p.type}">${p.type}</span></td>
+            <td style="color:#f09433;">${fmt(p.likes)}</td>
+            <td style="color:#888;">${fmt(p.comments)}</td>
+            <td style="color:#dc2743; font-weight:700;">${fmt(p.score)}</td>
+            <td><a href="${p.url}" target="_blank" rel="noopener noreferrer">View</a></td>
+          </tr>`)
+        .join('');
+    } else {
+      topPostsCard.style.display = 'none';
+    }
+
     // ── HASHTAGS PAGE ────────────────────────────────────
     document.getElementById('post-count-note').textContent = posts.length;
     document.getElementById('eng-note').style.display = a.hasEng ? '' : 'none';
@@ -690,14 +819,38 @@
     );
 
     document.getElementById('tag-pills').innerHTML = a.topHashtags
-      .map(h => `<span class="tag-pill"><span class="tn">${h.tag}</span><span class="tc">×${h.count}</span></span>`)
+      .map(h => `<span class="tag-pill"><span class="tn">${h.tag}</span><span class="tc">×${h.count}${a.hasEng ? ` · score ${h.avgEng}` : ''}</span></span>`)
       .join('');
+
+    // Content Gaps
+    const gapsCard = document.getElementById('content-gaps-card');
+    if (a.hasEng && a.contentGaps.length) {
+      gapsCard.style.display = '';
+      document.getElementById('content-gaps-pills').innerHTML = a.contentGaps
+        .map(h => `<span class="tag-pill"><span class="tn">${h.tag}</span><span class="tc">${h.count}× · score ${h.avgEng}</span></span>`)
+        .join('');
+    } else {
+      gapsCard.style.display = 'none';
+    }
 
     // ── CONTENT PAGE ─────────────────────────────────────
     mkChart('ch-cap', 'doughnut',
       Object.keys(a.capBuckets),
       [{ data: Object.values(a.capBuckets), backgroundColor: IG, borderColor: '#0f0f0f', borderWidth: 3 }]
     );
+
+    // Caption Length vs Engagement (bar chart)
+    const capEngWrap = document.getElementById('cap-eng-wrap');
+    if (a.hasEng) {
+      capEngWrap.style.display = '';
+      mkChart('ch-cap-eng', 'bar',
+        Object.keys(a.capEngAvg),
+        [{ data: Object.values(a.capEngAvg), backgroundColor: IG, borderRadius: 5 }],
+        { plugins: { legend: { display: false } } }
+      );
+    } else {
+      capEngWrap.style.display = 'none';
+    }
 
     const hDist = { '0': 0, '1–5': 0, '6–10': 0, '11–20': 0, '20+': 0 };
     for (const n of a.hashCounts) {
@@ -743,18 +896,41 @@
       { plugins: { legend: { display: false } } }
     );
 
+    // Engagement-weighted timing charts
+    const timingEngWrap = document.getElementById('timing-eng-wrap');
+    if (a.hasEng) {
+      timingEngWrap.style.display = '';
+      mkChart('ch-days-eng', 'bar',
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        barDs(a.dayEngAvg, '#f09433'),
+        { plugins: { legend: { display: false } } }
+      );
+      mkChart('ch-hours-eng', 'line',
+        Array.from({ length: 24 }, (_, i) => `${i}:00`),
+        [{ data: a.hourEngAvg, borderColor: '#dc2743', backgroundColor: 'rgba(220,39,67,0.15)', fill: true, tension: 0.3, pointRadius: 3 }],
+        { plugins: { legend: { display: false } } }
+      );
+    } else {
+      timingEngWrap.style.display = 'none';
+    }
+
     // ── POSTS PAGE ───────────────────────────────────────
     document.getElementById('th-likes').style.display    = a.hasEng ? '' : 'none';
     document.getElementById('th-comments').style.display = a.hasEng ? '' : 'none';
+    document.getElementById('th-score').style.display    = a.hasEng ? '' : 'none';
 
-    document.getElementById('posts-tbody').innerHTML = posts.slice(0, 30)
+    const sortedPosts = a.hasEng
+      ? [...posts].map(p => ({ ...p, score: p.likes + p.comments * 3 })).sort((a, b) => b.score - a.score)
+      : posts;
+
+    document.getElementById('posts-tbody').innerHTML = sortedPosts
       .map(p => `<tr>
           <td>${p.thumbnail
             ? `<img class="thumb" src="${p.thumbnail}" alt="" onerror="this.style.display='none'"/>`
             : ''}</td>
           <td><a href="${p.url}" target="_blank" rel="noopener noreferrer">${(p.caption || '').slice(0, 90) || '(no caption)'}</a></td>
           <td><span class="badge badge-${p.type}">${p.type}</span></td>
-          ${a.hasEng ? `<td style="color:#f09433;">${fmt(p.likes)}</td><td style="color:#888;">${fmt(p.comments)}</td>` : ''}
+          ${a.hasEng ? `<td style="color:#f09433;">${fmt(p.likes)}</td><td style="color:#888;">${fmt(p.comments)}</td><td style="color:#dc2743;">${fmt(p.score)}</td>` : ''}
           <td style="color:#444;white-space:nowrap;">${p.date.toLocaleDateString()}</td>
         </tr>`)
       .join('');
@@ -778,7 +954,7 @@
       const data      = await fetchProfileData(raw);
       const analytics = computeAnalytics(data);
       render(data, analytics);
-      setStatus(`Loaded ${data.posts.length} posts for @${data.profile.username}.`);
+      setStatus(`Loaded ${data.posts.length} of ${data.profile.totalPosts} posts for @${data.profile.username}.`);
     } catch (err) {
       setStatus(err.message, 'err');
     } finally {

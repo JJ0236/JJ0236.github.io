@@ -10,10 +10,12 @@
  *   6. Paste it into the dashboard's WORKER_URL constant
  *
  * Endpoint:  GET /?username=natgeo
- * Returns:   JSON with profile data + recent posts
+ * Returns:   JSON with profile data + recent posts (paginated, up to ~100)
  */
 
 const ALLOWED_ORIGINS = ['*']; // tighten to your domain in production
+const MAX_POSTS = 100;         // stop paginating after this many posts
+const MEDIA_QUERY_HASH = 'e769aa130647d2571c27c44596cb68bd';
 
 const IG_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
@@ -51,6 +53,13 @@ export default {
       try {
         const data = await strategy();
         if (data?.profile?.username) {
+          // Paginate for more posts if possible
+          if (data._userId && data._pageInfo?.has_next_page && data.posts.length < MAX_POSTS) {
+            await paginatePosts(data);
+          }
+          // Clean internal fields before returning
+          delete data._userId;
+          delete data._pageInfo;
           return json(data, 200, request);
         }
       } catch (e) {
@@ -61,6 +70,38 @@ export default {
     return json({ error: lastError }, 502, request);
   },
 };
+
+// ── Pagination via GraphQL ──────────────────────────────
+async function paginatePosts(data) {
+  let cursor = data._pageInfo?.end_cursor;
+  let hasNext = data._pageInfo?.has_next_page;
+  const userId = data._userId;
+
+  while (hasNext && data.posts.length < MAX_POSTS && cursor) {
+    try {
+      const variables = JSON.stringify({
+        id: userId,
+        first: 50,
+        after: cursor,
+      });
+      const gqlUrl = `https://www.instagram.com/graphql/query/?query_hash=${MEDIA_QUERY_HASH}&variables=${encodeURIComponent(variables)}`;
+      const res = await fetch(gqlUrl, { headers: IG_HEADERS });
+      if (!res.ok) break;
+
+      const body = await res.json();
+      const media = body?.data?.user?.edge_owner_to_timeline_media;
+      if (!media) break;
+
+      const newPosts = (media.edges ?? []).map(({ node: p }) => parsePost(p));
+      data.posts.push(...newPosts);
+
+      hasNext = media.page_info?.has_next_page ?? false;
+      cursor  = media.page_info?.end_cursor ?? null;
+    } catch {
+      break; // stop on any error, return what we have
+    }
+  }
+}
 
 // ── Strategy 1: web_profile_info API ────────────────────
 async function fetchWebProfileInfo(username) {
@@ -96,42 +137,52 @@ async function fetchProfilePage(username) {
   return parseUser(user);
 }
 
+// ── Parse single post node ──────────────────────────────
+function parsePost(p) {
+  const cap = p.edge_media_to_caption?.edges?.[0]?.node?.text ?? '';
+  return {
+    shortcode:  p.shortcode,
+    url:        `https://www.instagram.com/p/${p.shortcode}/`,
+    caption:    cap,
+    timestamp:  p.taken_at_timestamp ?? 0,
+    type:       p.__typename === 'GraphVideo'   ? 'reel'
+              : p.__typename === 'GraphSidecar' ? 'carousel'
+              : 'image',
+    thumbnail:  p.thumbnail_src ?? p.display_url ?? '',
+    likes:      p.edge_media_preview_like?.count ?? p.edge_liked_by?.count ?? p.like_count ?? 0,
+    comments:   p.edge_media_to_comment?.count ?? p.comment_count ?? 0,
+    plays:      p.video_view_count ?? 0,
+    isVideo:    p.is_video ?? false,
+  };
+}
+
 // ── Parse Instagram user object ─────────────────────────
 function parseUser(user) {
+  const media = user.edge_owner_to_timeline_media;
+
   const profile = {
     username:    user.username,
     fullName:    user.full_name || user.username,
     biography:   user.biography || '',
     followers:   user.edge_followed_by?.count ?? user.follower_count ?? 0,
     following:   user.edge_follow?.count ?? user.following_count ?? 0,
-    totalPosts:  user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
+    totalPosts:  media?.count ?? user.media_count ?? 0,
     isVerified:  user.is_verified ?? false,
     isPrivate:   user.is_private ?? false,
     profilePic:  user.profile_pic_url_hd || user.profile_pic_url || '',
     externalUrl: user.external_url || '',
   };
 
-  // Posts from edge_owner_to_timeline_media
-  const edges = user.edge_owner_to_timeline_media?.edges ?? [];
-  const posts = edges.map(({ node: p }) => {
-    const cap = p.edge_media_to_caption?.edges?.[0]?.node?.text ?? '';
-    return {
-      shortcode:  p.shortcode,
-      url:        `https://www.instagram.com/p/${p.shortcode}/`,
-      caption:    cap,
-      timestamp:  p.taken_at_timestamp ?? 0,
-      type:       p.__typename === 'GraphVideo'   ? 'reel'
-                : p.__typename === 'GraphSidecar' ? 'carousel'
-                : 'image',
-      thumbnail:  p.thumbnail_src ?? p.display_url ?? '',
-      likes:      p.edge_media_preview_like?.count ?? p.edge_liked_by?.count ?? p.like_count ?? 0,
-      comments:   p.edge_media_to_comment?.count ?? p.comment_count ?? 0,
-      plays:      p.video_view_count ?? 0,
-      isVideo:    p.is_video ?? false,
-    };
-  });
+  const edges = media?.edges ?? [];
+  const posts = edges.map(({ node: p }) => parsePost(p));
 
-  return { profile, posts };
+  return {
+    profile,
+    posts,
+    // Internal: used for pagination, stripped before response
+    _userId:   user.id ?? null,
+    _pageInfo: media?.page_info ?? null,
+  };
 }
 
 // ── Helpers ─────────────────────────────────────────────
