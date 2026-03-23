@@ -497,7 +497,7 @@
     const clean = handle.replace(/^@/, '').trim().toLowerCase();
     if (!clean) throw new Error('Please enter a username.');
 
-    // 1) Fetch profile + first batch of posts
+    // 1) Fetch profile + first 12 posts
     const res = await fetch(`${WORKER_URL}/?username=${encodeURIComponent(clean)}`);
     const body = await res.json();
 
@@ -512,30 +512,32 @@
     const seen = new Set(allPosts.map(p => p.shortcode));
     const userId = body.userId;
     const total = body.profile.totalPosts || 0;
+    let cursor = body.cursor;
+    let hasNext = body.hasNext;
 
     if (onProgress) onProgress(allPosts.length, total);
 
-    // 2) Paginate ALL remaining posts via the worker's page endpoint
-    // Must start with next_max_id from the profile response (feed API 401s without it)
-    if (userId && allPosts.length < total && body.next_max_id) {
-      let maxId = body.next_max_id;
+    // 2) Paginate ALL remaining posts via GraphQL cursor
+    if (userId && hasNext && cursor) {
       let failures = 0;
 
-      for (let page = 0; page < 500; page++) {
+      for (let page = 0; page < 2000; page++) {
         try {
-          const pageUrl = `${WORKER_URL}/?userId=${userId}&max_id=${encodeURIComponent(maxId)}`;
+          await sleep(1500 + Math.random() * 1500); // 1.5–3s delay
 
+          const pageUrl = `${WORKER_URL}/?userId=${userId}&cursor=${encodeURIComponent(cursor)}`;
           const pRes = await fetch(pageUrl);
+
           if (!pRes.ok) {
             if (++failures >= 5) break;
-            await sleep(2000);
+            await sleep(3000 * failures);
             continue;
           }
 
           const pBody = await pRes.json();
           if (pBody.error) {
             if (++failures >= 5) break;
-            await sleep(2000);
+            await sleep(3000 * failures);
             continue;
           }
 
@@ -549,13 +551,11 @@
 
           if (onProgress) onProgress(allPosts.length, total);
 
-          if (!pBody.more_available || !pBody.next_max_id) break;
-          maxId = pBody.next_max_id;
-
-          await sleep(350);
+          if (!pBody.hasNext || !pBody.cursor) break;
+          cursor = pBody.cursor;
         } catch {
           if (++failures >= 5) break;
-          await sleep(2000);
+          await sleep(3000 * failures);
         }
       }
     }
