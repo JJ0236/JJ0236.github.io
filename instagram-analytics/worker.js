@@ -9,9 +9,8 @@
  *   5. Copy your worker URL (e.g. ig-proxy.your-domain.workers.dev)
  *   6. Paste it into the dashboard's WORKER_URL constant
  *
- * Endpoints:
- *   GET /?username=natgeo              → profile + first 12 posts + userId
- *   GET /?userId=123&max_id=abc        → next page of posts (v1 feed API)
+ * Endpoint:  GET /?username=natgeo
+ * Returns:   JSON with profile data + ALL posts (paginated internally)
  */
 
 const ALLOWED_ORIGINS = ['*']; // tighten to your domain in production
@@ -35,23 +34,6 @@ export default {
     }
 
     const url = new URL(request.url);
-
-    // ── Mode 2: Paginate one page of posts ────────────────
-    const userId = url.searchParams.get('userId');
-    const maxId  = url.searchParams.get('max_id') || '';
-    if (userId) {
-      if (!/^\d{1,20}$/.test(userId)) {
-        return json({ error: 'Invalid userId.' }, 400, request);
-      }
-      try {
-        const page = await fetchOnePage(userId, maxId);
-        return json(page, 200, request);
-      } catch (e) {
-        return json({ error: e.message || 'Pagination failed.' }, 502, request);
-      }
-    }
-
-    // ── Mode 1: Profile + initial posts ───────────────────
     const username = (url.searchParams.get('username') || '').replace(/^@/, '').trim().toLowerCase();
 
     if (!username || !/^[a-z0-9._]{1,30}$/.test(username)) {
@@ -63,8 +45,12 @@ export default {
       if (!data?.profile?.username) {
         return json({ error: 'Could not load profile. Account may be private or not exist.' }, 404, request);
       }
-      // Expose userId so client can paginate
-      data.userId = data._userId || null;
+
+      // Paginate ALL remaining posts
+      if (data._userId) {
+        await paginateAllPosts(data);
+      }
+
       delete data._userId;
       return json(data, 200, request);
     } catch (e) {
@@ -114,23 +100,37 @@ async function fetchProfilePage(username) {
   return parseProfileUser(user);
 }
 
-// ── Fetch one page of posts via v1 feed API ─────────────
-async function fetchOnePage(userId, maxId) {
-  let feedUrl = `https://i.instagram.com/api/v1/feed/user/${userId}/?count=33`;
-  if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
+// ── Paginate ALL posts via v1 feed API ──────────────────
+async function paginateAllPosts(data) {
+  const userId = data._userId;
+  const seen = new Set(data.posts.map(p => p.shortcode));
+  let maxId = '';
 
-  const res = await fetch(feedUrl, { headers: IG_HEADERS });
-  if (!res.ok) throw new Error(`Feed API returned ${res.status}`);
+  for (let page = 0; page < 500; page++) {
+    try {
+      let feedUrl = `https://i.instagram.com/api/v1/feed/user/${userId}/?count=33`;
+      if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
 
-  const body = await res.json();
-  const items = body.items || [];
-  const posts = items.map(parseFeedItem).filter(Boolean);
+      const res = await fetch(feedUrl, { headers: IG_HEADERS });
+      if (!res.ok) break;
 
-  return {
-    posts,
-    more_available: !!body.more_available,
-    next_max_id: body.next_max_id || null,
-  };
+      const body = await res.json();
+      const items = body.items || [];
+
+      for (const item of items) {
+        const post = parseFeedItem(item);
+        if (post && !seen.has(post.shortcode)) {
+          seen.add(post.shortcode);
+          data.posts.push(post);
+        }
+      }
+
+      if (!body.more_available || !body.next_max_id) break;
+      maxId = body.next_max_id;
+    } catch {
+      break; // return what we have so far
+    }
+  }
 }
 
 // ── Parse profile user (GraphQL shape) ──────────────────
