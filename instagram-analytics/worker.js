@@ -10,11 +10,10 @@
  *   6. Paste it into the dashboard's WORKER_URL constant
  *
  * Endpoint:  GET /?username=natgeo
- * Returns:   JSON with profile data + recent posts (paginated, up to ~100)
+ * Returns:   JSON with profile data + all posts (paginated via v1 feed API)
  */
 
 const ALLOWED_ORIGINS = ['*']; // tighten to your domain in production
-const MEDIA_QUERY_HASH = 'e769aa130647d2571c27c44596cb68bd';
 
 const IG_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
@@ -41,122 +40,105 @@ export default {
       return json({ error: 'Invalid or missing username parameter.' }, 400, request);
     }
 
-    // Try multiple Instagram endpoints in order
-    const strategies = [
-      () => fetchWebProfileInfo(username),
-      () => fetchProfilePage(username),
-    ];
-
-    let lastError = 'All strategies failed.';
-    for (const strategy of strategies) {
-      try {
-        const data = await strategy();
-        if (data?.profile?.username) {
-          // Paginate for more posts if possible
-          if (data._userId && data._pageInfo?.has_next_page) {
-            await paginatePosts(data);
-          }
-          // Clean internal fields before returning
-          delete data._userId;
-          delete data._pageInfo;
-          return json(data, 200, request);
-        }
-      } catch (e) {
-        lastError = e.message || String(e);
+    try {
+      // Step 1: Get profile info + first 12 posts + user ID
+      const data = await fetchProfile(username);
+      if (!data?.profile?.username) {
+        return json({ error: 'Could not load profile. Account may be private or not exist.' }, 404, request);
       }
-    }
 
-    return json({ error: lastError }, 502, request);
+      // Step 2: Paginate remaining posts via v1 feed API
+      if (data._userId) {
+        await paginateAllPosts(data);
+      }
+
+      // Strip internal fields
+      delete data._userId;
+      return json(data, 200, request);
+    } catch (e) {
+      return json({ error: e.message || 'Request failed.' }, 502, request);
+    }
   },
 };
 
-// ── Pagination via GraphQL ──────────────────────────────
-async function paginatePosts(data) {
-  let cursor = data._pageInfo?.end_cursor;
-  let hasNext = data._pageInfo?.has_next_page;
-  const userId = data._userId;
+// ── Fetch profile + initial posts ───────────────────────
+async function fetchProfile(username) {
+  // Try web_profile_info first (returns GraphQL-shaped data)
+  const strategies = [
+    () => fetchWebProfileInfo(username),
+    () => fetchProfilePage(username),
+  ];
 
-  while (hasNext && cursor) {
+  for (const strategy of strategies) {
     try {
-      const variables = JSON.stringify({
-        id: userId,
-        first: 50,
-        after: cursor,
-      });
-      const gqlUrl = `https://www.instagram.com/graphql/query/?query_hash=${MEDIA_QUERY_HASH}&variables=${encodeURIComponent(variables)}`;
-      const res = await fetch(gqlUrl, { headers: IG_HEADERS });
-      if (!res.ok) break;
-
-      const body = await res.json();
-      const media = body?.data?.user?.edge_owner_to_timeline_media;
-      if (!media) break;
-
-      const newPosts = (media.edges ?? []).map(({ node: p }) => parsePost(p));
-      data.posts.push(...newPosts);
-
-      hasNext = media.page_info?.has_next_page ?? false;
-      cursor  = media.page_info?.end_cursor ?? null;
-    } catch {
-      break; // stop on any error, return what we have
-    }
+      const data = await strategy();
+      if (data?.profile?.username) return data;
+    } catch { /* try next */ }
   }
+  throw new Error('All profile fetch strategies failed.');
 }
 
-// ── Strategy 1: web_profile_info API ────────────────────
 async function fetchWebProfileInfo(username) {
   const res = await fetch(
     `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
     { headers: IG_HEADERS }
   );
-
-  if (!res.ok) throw new Error(`web_profile_info returned ${res.status}`);
-
+  if (!res.ok) throw new Error(`web_profile_info ${res.status}`);
   const body = await res.json();
   const user = body?.data?.user;
-  if (!user) throw new Error('No user in web_profile_info response');
-
-  return parseUser(user);
+  if (!user) throw new Error('No user in response');
+  return parseProfileUser(user);
 }
 
-// ── Strategy 2: Public profile page HTML ────────────────
 async function fetchProfilePage(username) {
-  const res = await fetch(`https://www.instagram.com/${encodeURIComponent(username)}/?__a=1&__d=dis`, {
-    headers: {
-      ...IG_HEADERS,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    },
-  });
-
-  if (!res.ok) throw new Error(`Profile page returned ${res.status}`);
-
+  const res = await fetch(
+    `https://www.instagram.com/${encodeURIComponent(username)}/?__a=1&__d=dis`,
+    { headers: { ...IG_HEADERS, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' } }
+  );
+  if (!res.ok) throw new Error(`Profile page ${res.status}`);
   const body = await res.json();
   const user = body?.graphql?.user || body?.data?.user;
-  if (!user) throw new Error('Could not parse profile page JSON');
-
-  return parseUser(user);
+  if (!user) throw new Error('No user in page response');
+  return parseProfileUser(user);
 }
 
-// ── Parse single post node ──────────────────────────────
-function parsePost(p) {
-  const cap = p.edge_media_to_caption?.edges?.[0]?.node?.text ?? '';
-  return {
-    shortcode:  p.shortcode,
-    url:        `https://www.instagram.com/p/${p.shortcode}/`,
-    caption:    cap,
-    timestamp:  p.taken_at_timestamp ?? 0,
-    type:       p.__typename === 'GraphVideo'   ? 'reel'
-              : p.__typename === 'GraphSidecar' ? 'carousel'
-              : 'image',
-    thumbnail:  p.thumbnail_src ?? p.display_url ?? '',
-    likes:      p.edge_media_preview_like?.count ?? p.edge_liked_by?.count ?? p.like_count ?? 0,
-    comments:   p.edge_media_to_comment?.count ?? p.comment_count ?? 0,
-    plays:      p.video_view_count ?? 0,
-    isVideo:    p.is_video ?? false,
-  };
+// ── Pagination via v1 feed API ──────────────────────────
+async function paginateAllPosts(data) {
+  const userId = data._userId;
+  // Build a set of shortcodes we already have to avoid duplicates
+  const seen = new Set(data.posts.map(p => p.shortcode));
+  let maxId = '';
+
+  // Keep paginating until no more posts
+  for (let page = 0; page < 200; page++) {
+    try {
+      let feedUrl = `https://i.instagram.com/api/v1/feed/user/${userId}/?count=33`;
+      if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
+
+      const res = await fetch(feedUrl, { headers: IG_HEADERS });
+      if (!res.ok) break;
+
+      const body = await res.json();
+      const items = body.items || [];
+
+      for (const item of items) {
+        const post = parseFeedItem(item);
+        if (post && !seen.has(post.shortcode)) {
+          seen.add(post.shortcode);
+          data.posts.push(post);
+        }
+      }
+
+      if (!body.more_available || !body.next_max_id) break;
+      maxId = body.next_max_id;
+    } catch {
+      break; // return what we have so far
+    }
+  }
 }
 
-// ── Parse Instagram user object ─────────────────────────
-function parseUser(user) {
+// ── Parse profile user (GraphQL shape) ──────────────────
+function parseProfileUser(user) {
   const media = user.edge_owner_to_timeline_media;
 
   const profile = {
@@ -172,15 +154,59 @@ function parseUser(user) {
     externalUrl: user.external_url || '',
   };
 
+  // Parse initial posts from GraphQL edges
   const edges = media?.edges ?? [];
-  const posts = edges.map(({ node: p }) => parsePost(p));
+  const posts = edges.map(({ node: p }) => parseGraphPost(p));
 
   return {
     profile,
     posts,
-    // Internal: used for pagination, stripped before response
-    _userId:   user.id ?? user.pk ?? null,
-    _pageInfo: media?.page_info ?? null,
+    _userId: user.id ?? user.pk ?? null,
+  };
+}
+
+// ── Parse a GraphQL post node ───────────────────────────
+function parseGraphPost(p) {
+  const cap = p.edge_media_to_caption?.edges?.[0]?.node?.text ?? '';
+  return {
+    shortcode: p.shortcode,
+    url:       `https://www.instagram.com/p/${p.shortcode}/`,
+    caption:   cap,
+    timestamp: p.taken_at_timestamp ?? 0,
+    type:      p.__typename === 'GraphVideo'   ? 'reel'
+             : p.__typename === 'GraphSidecar' ? 'carousel'
+             : 'image',
+    thumbnail: p.thumbnail_src ?? p.display_url ?? '',
+    likes:     p.edge_media_preview_like?.count ?? p.edge_liked_by?.count ?? p.like_count ?? 0,
+    comments:  p.edge_media_to_comment?.count ?? p.comment_count ?? 0,
+    plays:     p.video_view_count ?? 0,
+    isVideo:   p.is_video ?? false,
+  };
+}
+
+// ── Parse a v1 feed item ────────────────────────────────
+function parseFeedItem(item) {
+  const code = item.code;
+  if (!code) return null;
+
+  const cap = item.caption?.text ?? '';
+  // media_type: 1=image, 2=video, 8=carousel
+  const mt = item.media_type;
+  const type = mt === 2 ? 'reel'
+             : mt === 8 ? 'carousel'
+             : 'image';
+
+  return {
+    shortcode: code,
+    url:       `https://www.instagram.com/p/${code}/`,
+    caption:   cap,
+    timestamp: item.taken_at ?? 0,
+    type,
+    thumbnail: item.image_versions2?.candidates?.[0]?.url ?? '',
+    likes:     item.like_count ?? 0,
+    comments:  item.comment_count ?? 0,
+    plays:     item.play_count ?? item.view_count ?? 0,
+    isVideo:   mt === 2,
   };
 }
 
