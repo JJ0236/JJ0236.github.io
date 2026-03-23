@@ -179,7 +179,7 @@ function parseUser(user) {
     profile,
     posts,
     // Internal: used for pagination, stripped before response
-    _userId:   user.id ?? null,
+    _userId:   user.id ?? user.pk ?? null,
     _pageInfo: media?.page_info ?? null,
   };
 }
