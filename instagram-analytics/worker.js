@@ -14,7 +14,6 @@
  */
 
 const ALLOWED_ORIGINS = ['*']; // tighten to your domain in production
-const MAX_POSTS = 100;         // stop paginating after this many posts
 const MEDIA_QUERY_HASH = 'e769aa130647d2571c27c44596cb68bd';
 
 const IG_HEADERS = {
@@ -54,7 +53,7 @@ export default {
         const data = await strategy();
         if (data?.profile?.username) {
           // Paginate for more posts if possible
-          if (data._userId && data._pageInfo?.has_next_page && data.posts.length < MAX_POSTS) {
+          if (data._userId && data._pageInfo?.has_next_page) {
             await paginatePosts(data);
           }
           // Clean internal fields before returning
@@ -77,7 +76,7 @@ async function paginatePosts(data) {
   let hasNext = data._pageInfo?.has_next_page;
   const userId = data._userId;
 
-  while (hasNext && data.posts.length < MAX_POSTS && cursor) {
+  while (hasNext && cursor) {
     try {
       const variables = JSON.stringify({
         id: userId,
