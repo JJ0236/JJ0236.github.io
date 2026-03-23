@@ -9,8 +9,9 @@
  *   5. Copy your worker URL (e.g. ig-proxy.your-domain.workers.dev)
  *   6. Paste it into the dashboard's WORKER_URL constant
  *
- * Endpoint:  GET /?username=natgeo
- * Returns:   JSON with profile data + all posts (paginated via v1 feed API)
+ * Endpoints:
+ *   GET /?username=natgeo              → profile + first 12 posts + userId
+ *   GET /?userId=123&max_id=abc        → next page of posts (v1 feed API)
  */
 
 const ALLOWED_ORIGINS = ['*']; // tighten to your domain in production
@@ -34,6 +35,23 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // ── Mode 2: Paginate one page of posts ────────────────
+    const userId = url.searchParams.get('userId');
+    const maxId  = url.searchParams.get('max_id') || '';
+    if (userId) {
+      if (!/^\d{1,20}$/.test(userId)) {
+        return json({ error: 'Invalid userId.' }, 400, request);
+      }
+      try {
+        const page = await fetchOnePage(userId, maxId);
+        return json(page, 200, request);
+      } catch (e) {
+        return json({ error: e.message || 'Pagination failed.' }, 502, request);
+      }
+    }
+
+    // ── Mode 1: Profile + initial posts ───────────────────
     const username = (url.searchParams.get('username') || '').replace(/^@/, '').trim().toLowerCase();
 
     if (!username || !/^[a-z0-9._]{1,30}$/.test(username)) {
@@ -41,20 +59,13 @@ export default {
     }
 
     try {
-      // Step 1: Get profile info + first 12 posts + user ID
       const data = await fetchProfile(username);
       if (!data?.profile?.username) {
         return json({ error: 'Could not load profile. Account may be private or not exist.' }, 404, request);
       }
-
-      // Step 2: Paginate remaining posts via v1 feed API
-      if (data._userId) {
-        await paginateAllPosts(data);
-      }
-
-      // Strip internal fields
+      // Expose userId so client can paginate
+      data.userId = data._userId || null;
       delete data._userId;
-      // Keep _debug temporarily for diagnosis
       return json(data, 200, request);
     } catch (e) {
       return json({ error: e.message || 'Request failed.' }, 502, request);
@@ -103,48 +114,23 @@ async function fetchProfilePage(username) {
   return parseProfileUser(user);
 }
 
-// ── Pagination via v1 feed API ──────────────────────────
-async function paginateAllPosts(data) {
-  const userId = data._userId;
-  // Build a set of shortcodes we already have to avoid duplicates
-  const seen = new Set(data.posts.map(p => p.shortcode));
-  let maxId = '';
-  data._debug = [];
+// ── Fetch one page of posts via v1 feed API ─────────────
+async function fetchOnePage(userId, maxId) {
+  let feedUrl = `https://i.instagram.com/api/v1/feed/user/${userId}/?count=33`;
+  if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
 
-  // Keep paginating until no more posts
-  for (let page = 0; page < 200; page++) {
-    try {
-      let feedUrl = `https://i.instagram.com/api/v1/feed/user/${userId}/?count=33`;
-      if (maxId) feedUrl += `&max_id=${encodeURIComponent(maxId)}`;
+  const res = await fetch(feedUrl, { headers: IG_HEADERS });
+  if (!res.ok) throw new Error(`Feed API returned ${res.status}`);
 
-      const res = await fetch(feedUrl, { headers: IG_HEADERS });
-      if (!res.ok) {
-        data._debug.push(`page${page}: HTTP ${res.status}`);
-        break;
-      }
+  const body = await res.json();
+  const items = body.items || [];
+  const posts = items.map(parseFeedItem).filter(Boolean);
 
-      const body = await res.json();
-      const items = body.items || [];
-      let added = 0;
-
-      for (const item of items) {
-        const post = parseFeedItem(item);
-        if (post && !seen.has(post.shortcode)) {
-          seen.add(post.shortcode);
-          data.posts.push(post);
-          added++;
-        }
-      }
-
-      data._debug.push(`page${page}: ${items.length} items, ${added} new, more=${body.more_available}`);
-
-      if (!body.more_available || !body.next_max_id) break;
-      maxId = body.next_max_id;
-    } catch (e) {
-      data._debug.push(`page${page}: ERROR ${e.message || e}`);
-      break; // return what we have so far
-    }
-  }
+  return {
+    posts,
+    more_available: !!body.more_available,
+    next_max_id: body.next_max_id || null,
+  };
 }
 
 // ── Parse profile user (GraphQL shape) ──────────────────

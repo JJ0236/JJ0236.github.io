@@ -491,10 +491,11 @@
   // ── Worker URL (your Cloudflare Worker) ─────────────────
   const WORKER_URL = 'https://ig-proxy.joshua02050236.workers.dev';
 
-  async function fetchProfileData(handle) {
+  async function fetchProfileData(handle, onProgress) {
     const clean = handle.replace(/^@/, '').trim().toLowerCase();
     if (!clean) throw new Error('Please enter a username.');
 
+    // Step 1: Get profile + initial posts + userId
     const res = await fetch(`${WORKER_URL}/?username=${encodeURIComponent(clean)}`);
     const body = await res.json();
 
@@ -506,14 +507,67 @@
       throw new Error('Could not parse profile data. The account may be private or does not exist.');
     }
 
+    const allPosts = body.posts || [];
+    const seen = new Set(allPosts.map(p => p.shortcode));
+    const userId = body.userId;
+    const total = body.profile.totalPosts || 0;
+
+    if (onProgress) onProgress(allPosts.length, total);
+
+    // Step 2: Paginate all remaining posts client-side
+    if (userId && allPosts.length < total) {
+      let maxId = '';
+      let retries = 0;
+      for (let page = 0; page < 500; page++) {
+        try {
+          let pageUrl = `${WORKER_URL}/?userId=${userId}`;
+          if (maxId) pageUrl += `&max_id=${encodeURIComponent(maxId)}`;
+
+          const pRes = await fetch(pageUrl);
+          if (!pRes.ok) {
+            // Retry once on transient errors
+            if (retries < 3) { retries++; await sleep(2000); continue; }
+            break;
+          }
+
+          const pBody = await pRes.json();
+          if (pBody.error) {
+            if (retries < 3) { retries++; await sleep(2000); continue; }
+            break;
+          }
+
+          retries = 0; // reset on success
+          for (const post of (pBody.posts || [])) {
+            if (!seen.has(post.shortcode)) {
+              seen.add(post.shortcode);
+              allPosts.push(post);
+            }
+          }
+
+          if (onProgress) onProgress(allPosts.length, total);
+
+          if (!pBody.more_available || !pBody.next_max_id) break;
+          maxId = pBody.next_max_id;
+
+          // Small delay to avoid rate limiting
+          await sleep(300);
+        } catch (e) {
+          if (retries < 3) { retries++; await sleep(2000); continue; }
+          break; // return what we have
+        }
+      }
+    }
+
     // Normalize post dates
-    body.posts = (body.posts || []).map(p => ({
+    body.posts = allPosts.map(p => ({
       ...p,
       date: new Date((p.timestamp || 0) * 1000),
     }));
 
     return body;
   }
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
   // ── Analytics ──────────────────────────────────────────
   function computeAnalytics({ posts }) {
@@ -948,10 +1002,12 @@
     document.getElementById('profile-bar').classList.remove('show');
     document.getElementById('main-nav').classList.remove('show');
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    setStatus('Fetching data from Instagram…');
+    setStatus('Fetching profile from Instagram…');
 
     try {
-      const data      = await fetchProfileData(raw);
+      const data = await fetchProfileData(raw, (loaded, total) => {
+        setStatus(`Loading posts… ${loaded} of ${total}`);
+      });
       const analytics = computeAnalytics(data);
       render(data, analytics);
       setStatus(`Loaded ${data.posts.length} of ${data.profile.totalPosts} posts for @${data.profile.username}.`);
