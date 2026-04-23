@@ -547,8 +547,12 @@ function startPlaceHole() {
   if (!geometry) return;
   placingHole = true;
   controls.enabled = false;
+  const axis = document.getElementById('sel-axis').value;
+  const faceDir = axis === 'z' ? 'top or bottom' : axis === 'x' ? 'left or right' : 'front or back';
+  document.getElementById('placing-hint').textContent =
+    `Click a ${faceDir} face to place hole — right-click to cancel`;
   document.getElementById('placing-hint').style.display = 'block';
-  document.getElementById('hole-status').textContent = 'Click on the model…';
+  document.getElementById('hole-status').textContent = 'Click a face that faces the slice axis…';
 }
 
 ['btn-place-hole','btn-place-hole2'].forEach(id =>
@@ -589,24 +593,59 @@ renderer.domElement.addEventListener('click', e => {
 
   raycaster.setFromCamera(mouse2, camera);
   const hits = raycaster.intersectObjects(meshGroup.children, true);
-  if (!hits.length) { cancelPlaceHole(); return; }
+  if (!hits.length) { cancelPlaceHole(true); return; }
 
-  const sc   = getScale();
-  const pt   = hits[0].point.clone(); // raw coords (model centred at origin)
   const axis = document.getElementById('sel-axis').value;
+  const ai   = axis === 'x' ? 0 : axis === 'y' ? 1 : 2; // slice axis index
 
-  // Project to mm coordinates on the perpendicular plane
+  // Find first hit whose face normal is sufficiently aligned with the slice axis
+  // (|normal[ai]| >= 0.5 means the face is within 60° of perpendicular to cut direction)
+  const meshObj = meshGroup.children[0];
+  const normalMatrix = new THREE.Matrix3().getNormalMatrix(meshObj.matrixWorld);
+  let validHit = null;
+  for (const hit of hits) {
+    if (!hit.face) continue;
+    const worldNormal = hit.face.normal.clone().applyMatrix3(normalMatrix).normalize();
+    const alignment = Math.abs(worldNormal.getComponent(ai));
+    if (alignment >= 0.5) { validHit = hit; break; }
+  }
+
+  if (!validHit) {
+    // Wrong face — flash a warning but stay in place-hole mode
+    const faceDir = axis === 'z' ? 'top/bottom' : axis === 'x' ? 'left/right' : 'front/back';
+    document.getElementById('hole-status').textContent =
+      `⚠ Click a ${faceDir} face — that face runs parallel to the cuts!`;
+    return;
+  }
+
+  const sc = getScale();
+  const pt = validHit.point.clone();
+
+  // u,v are the two axes perpendicular to the slice axis — these define where the hole runs through
   const newHole = axis === 'z' ? { u: pt.x * sc, v: pt.y * sc }
                 : axis === 'x' ? { u: pt.y * sc, v: pt.z * sc }
                 :                { u: pt.x * sc, v: pt.z * sc };
   holePosArr.push(newHole);
 
-  const holeSize = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  // Cylinder marker that spans the full model along the slice axis, so you can see it runs through
+  const bb = geometry.boundingBox;
+  const span = (axis === 'x' ? bb.max.x - bb.min.x : axis === 'y' ? bb.max.y - bb.min.y : bb.max.z - bb.min.z);
+  const holeSize    = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const cylGeom = new THREE.CylinderGeometry(holeSize * 0.5 / sc, holeSize * 0.5 / sc, span, 16);
+  // Rotate cylinder to align with the slice axis
+  if (axis === 'z')      cylGeom.rotateX(0);   // cylinder is Y by default; need Z
+  if (axis === 'z')      cylGeom.rotateX(Math.PI / 2);
+  else if (axis === 'x') cylGeom.rotateZ(Math.PI / 2);
+  // axis === 'y' already correct (cylinder default is along Y)
+
   const marker = new THREE.Mesh(
-    new THREE.SphereGeometry(holeSize * 0.5 / sc, 16, 16),
-    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.8, transparent: true })
+    cylGeom,
+    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.45, transparent: true, depthWrite: false })
   );
-  marker.position.copy(pt);
+  // Position at the u,v location, centred along the slice axis
+  if (axis === 'z')      marker.position.set(pt.x, pt.y, (bb.min.z + bb.max.z) * 0.5);
+  else if (axis === 'x') marker.position.set((bb.min.x + bb.max.x) * 0.5, pt.y, pt.z);
+  else                   marker.position.set(pt.x, (bb.min.y + bb.max.y) * 0.5, pt.z);
   scene.add(marker);
   holeMarkers.push(marker);
   document.getElementById('btn-clear-holes').disabled = false;
