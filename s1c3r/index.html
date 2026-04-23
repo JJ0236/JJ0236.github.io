@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>s1c3r – STL Sheet Slicer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a1a2e;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    /* ── Home icon ───────────────────────────── */
+    .home-icon {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 28px; height: 28px;
+      color: #aaa;
+      text-decoration: none;
+      z-index: 200;
+      transition: color .2s;
+    }
+    .home-icon:hover { color: #fff; }
+
+    /* ── Top bar ─────────────────────────────── */
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px 8px 60px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #topbar h1 {
+      font-size: 1.2rem;
+      letter-spacing: .12em;
+      color: #e94560;
+      flex-shrink: 0;
+      margin-right: 6px;
+    }
+    #topbar button, #topbar label.btn {
+      background: #0f3460;
+      border: 1px solid #e94560;
+      color: #e0e0e0;
+      padding: 5px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: .82rem;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    #topbar button:hover, #topbar label.btn:hover { background: #e94560; color: #fff; }
+    #topbar input[type=file] { display: none; }
+
+    /* ── Main layout ─────────────────────────── */
+    #main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── 3-D viewport ────────────────────────── */
+    #viewport {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+    }
+    #viewport canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    #drop-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #666;
+      pointer-events: none;
+    }
+    #drop-overlay svg { width: 64px; height: 64px; margin-bottom: 16px; }
+    #drop-overlay p { font-size: 1.1rem; }
+
+    #placing-hint {
+      position: absolute;
+      bottom: 14px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(233,69,96,.85);
+      color: #fff;
+      padding: 6px 18px;
+      border-radius: 20px;
+      font-size: .82rem;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* ── Side panel ──────────────────────────── */
+    #panel {
+      width: 270px;
+      background: #16213e;
+      border-left: 1px solid #0f3460;
+      overflow-y: auto;
+      padding: 14px 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: .7rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: #e94560;
+      margin-bottom: 8px;
+    }
+
+    label.row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .82rem;
+      margin-bottom: 6px;
+    }
+    label.row span { color: #aaa; }
+
+    input[type=number], select {
+      width: 96px;
+      background: #0f3460;
+      border: 1px solid #1e4080;
+      color: #e0e0e0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: .82rem;
+    }
+    input[type=number]:focus, select:focus { outline: 1px solid #e94560; }
+
+    input[type=range] {
+      width: 100%;
+      accent-color: #e94560;
+      margin: 4px 0 0;
+    }
+
+    .full-btn {
+      width: 100%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #e94560;
+      background: #0f3460;
+      color: #e0e0e0;
+      cursor: pointer;
+      font-size: .85rem;
+      transition: background .2s;
+    }
+    .full-btn:hover { background: #e94560; color: #fff; }
+    .full-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .full-btn.accent { background: #e94560; color: #fff; }
+    .full-btn.accent:hover { background: #c73652; }
+
+    #slice-info {
+      font-size: .78rem;
+      color: #aaa;
+      line-height: 1.6;
+    }
+
+    #status {
+      font-size: .75rem;
+      color: #e94560;
+      min-height: 18px;
+    }
+
+    /* colour swatch for hole */
+    .swatch-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .swatch {
+      width: 26px; height: 26px;
+      border-radius: 4px;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .swatch.active { border-color: #e94560; }
+  </style>
+</head>
+<body>
+
+<!-- Home icon -->
+<a href="/" class="home-icon" title="Home">
+  <svg viewBox="0 0 24 24" fill="currentColor">
+    <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+    <path d="M9 21V12H15V21"/>
+  </svg>
+</a>
+
+<!-- Top bar -->
+<div id="topbar">
+  <h1>s1c3r</h1>
+  <label class="btn" for="stl-input">📂 Load STL</label>
+  <input type="file" id="stl-input" accept=".stl"/>
+  <button id="btn-place-hole" disabled>📍 Place Hole</button>
+  <button id="btn-slice" disabled>⚡ Slice</button>
+  <button id="btn-export" disabled>💾 Export SVG</button>
+</div>
+
+<!-- Main area -->
+<div id="main">
+  <!-- Viewport -->
+  <div id="viewport">
+    <div id="drop-overlay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p>Load an STL to get started</p>
+    </div>
+    <div id="placing-hint">Click on the model to place alignment hole — right-click to cancel</div>
+  </div>
+
+  <!-- Side panel -->
+  <div id="panel">
+
+    <!-- Slice settings -->
+    <div>
+      <div class="section-title">Slice Settings</div>
+
+      <label class="row">
+        <span>Slice axis</span>
+        <select id="sel-axis">
+          <option value="z">Z (horizontal)</option>
+          <option value="x">X (left→right)</option>
+          <option value="y">Y (front→back)</option>
+        </select>
+      </label>
+
+      <label class="row">
+        <span>Sheet thickness (mm)</span>
+        <input id="inp-thickness" type="number" min="0.1" max="200" step="0.1" value="3.175"/>
+      </label>
+
+      <label class="row">
+        <span>Gap between sheets (mm)</span>
+        <input id="inp-gap" type="number" min="0" max="50" step="0.1" value="0"/>
+      </label>
+      <div style="font-size:.72rem;color:#666;margin-bottom:4px">Set 0 for no gap (flush assembly)</div>
+    </div>
+
+    <!-- Alignment hole -->
+    <div>
+      <div class="section-title">Alignment Hole</div>
+
+      <label class="row">
+        <span>Hole shape</span>
+        <select id="sel-hole-shape">
+          <option value="circle">Circle</option>
+          <option value="square">Square</option>
+          <option value="triangle">Triangle</option>
+          <option value="hex">Hexagon</option>
+        </select>
+      </label>
+
+      <label class="row">
+        <span>Hole size (mm)</span>
+        <input id="inp-hole-size" type="number" min="1" max="50" step="0.5" value="6"/>
+      </label>
+
+      <button class="full-btn" id="btn-place-hole2" disabled>📍 Click model to place hole axis</button>
+      <div id="hole-status" style="font-size:.72rem;color:#aaa;margin-top:4px"></div>
+    </div>
+
+    <!-- Labels -->
+    <div>
+      <div class="section-title">Sheet Labels</div>
+      <label class="row">
+        <span>Show labels</span>
+        <input type="checkbox" id="chk-labels" checked style="width:auto"/>
+      </label>
+      <label class="row">
+        <span>Label font size (mm)</span>
+        <input id="inp-label-size" type="number" min="1" max="30" step="0.5" value="5"/>
+      </label>
+    </div>
+
+    <!-- SVG export layout -->
+    <div>
+      <div class="section-title">Export Layout</div>
+      <label class="row">
+        <span>Page width (mm)</span>
+        <input id="inp-page-w" type="number" min="50" max="2000" step="1" value="400"/>
+      </label>
+      <label class="row">
+        <span>Page height (mm)</span>
+        <input id="inp-page-h" type="number" min="50" max="2000" step="1" value="300"/>
+      </label>
+      <label class="row">
+        <span>Tile margin (mm)</span>
+        <input id="inp-tile-margin" type="number" min="0" max="50" step="1" value="5"/>
+      </label>
+    </div>
+
+    <!-- Model info -->
+    <div>
+      <div class="section-title">Model Info</div>
+      <div id="slice-info">Load an STL to see slice preview.</div>
+    </div>
+
+    <div id="status"></div>
+
+  </div>
+</div>
+
+<!-- Three.js r165 from CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+// ─── State ──────────────────────────────────────────────────────────────────
+let geometry = null;          // current BufferGeometry
+let slices   = [];            // [{z, polygons}] last slice result
+let holePos  = null;          // {u, v} in model-local coords (perpendicular plane)
+let placingHole = false;
+
+// ─── Three.js setup ──────────────────────────────────────────────────────────
+const viewport = document.getElementById('viewport');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setClearColor(0x0d0d1a);
+viewport.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
+camera.position.set(0, 0, 300);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+dir.position.set(1, 2, 3);
+scene.add(dir);
+
+// Axes helper (small)
+const axesHelper = new THREE.AxesHelper(20);
+scene.add(axesHelper);
+
+// Model mesh container
+let meshGroup = new THREE.Group();
+scene.add(meshGroup);
+
+// Slice planes (visual only)
+let planeGroup = new THREE.Group();
+scene.add(planeGroup);
+
+// Hole marker
+let holeMarker = null;
+
+function resize() {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(viewport);
+resize();
+
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+// ─── STL loading ──────────────────────────────────────────────────────────────
+const loader = new STLLoader();
+
+function loadGeometry(buffer) {
+  const geom = loader.parse(buffer);
+  geom.computeVertexNormals();
+  geom.computeBoundingBox();
+
+  geometry = geom;
+  slices = [];
+  holePos = null;
+  planeGroup.clear();
+  meshGroup.clear();
+  if (holeMarker) { scene.remove(holeMarker); holeMarker = null; }
+
+  // Centre geometry
+  const centre = new THREE.Vector3();
+  geom.boundingBox.getCenter(centre);
+  geom.translate(-centre.x, -centre.y, -centre.z);
+  geom.computeBoundingBox();
+
+  const mat = new THREE.MeshPhongMaterial({ color: 0x4a9eff, opacity: 0.85, transparent: true, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(geom, mat);
+  meshGroup.add(mesh);
+
+  // Fit camera
+  const box = geom.boundingBox;
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  camera.position.set(0, 0, maxDim * 2);
+  camera.near = maxDim * 0.001;
+  camera.far  = maxDim * 20;
+  camera.updateProjectionMatrix();
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  document.getElementById('drop-overlay').style.display = 'none';
+  updateModelInfo();
+  enableButtons(true);
+  setStatus('');
+}
+
+function enableButtons(on) {
+  ['btn-place-hole','btn-place-hole2','btn-slice'].forEach(id =>
+    document.getElementById(id).disabled = !on
+  );
+}
+
+function updateModelInfo() {
+  if (!geometry) return;
+  const bb = geometry.boundingBox;
+  const s = new THREE.Vector3(); bb.getSize(s);
+  const axis  = document.getElementById('sel-axis').value;
+  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
+  const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
+  const step  = thick + gap;
+  const span  = axis === 'z' ? s.z : axis === 'x' ? s.x : s.y;
+  const count = Math.max(1, Math.ceil(span / step));
+
+  document.getElementById('slice-info').innerHTML =
+    `Size: ${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm<br>` +
+    `Axis: <b>${axis.toUpperCase()}</b> | Step: ${step.toFixed(2)} mm<br>` +
+    `Estimated sheets: <b>${count}</b>`;
+}
+
+// ─── Input listeners ─────────────────────────────────────────────────────────
+['sel-axis','inp-thickness','inp-gap'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateModelInfo)
+);
+
+document.getElementById('stl-input').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  setStatus('Loading…');
+  const reader = new FileReader();
+  reader.onload = ev => { try { loadGeometry(ev.target.result); } catch(err) { setStatus('Error: ' + err.message); } };
+  reader.readAsArrayBuffer(file);
+});
+
+// Drag-and-drop on viewport
+viewport.addEventListener('dragover', e => e.preventDefault());
+viewport.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = [...e.dataTransfer.files].find(f => f.name.toLowerCase().endsWith('.stl'));
+  if (!file) return;
+  setStatus('Loading…');
+  const reader = new FileReader();
+  reader.onload = ev => { try { loadGeometry(ev.target.result); } catch(err) { setStatus('Error: ' + err.message); } };
+  reader.readAsArrayBuffer(file);
+});
+
+// ─── Place hole ───────────────────────────────────────────────────────────────
+function startPlaceHole() {
+  if (!geometry) return;
+  placingHole = true;
+  controls.enabled = false;
+  document.getElementById('placing-hint').style.display = 'block';
+  document.getElementById('hole-status').textContent = 'Click on the model…';
+}
+
+['btn-place-hole','btn-place-hole2'].forEach(id =>
+  document.getElementById(id).addEventListener('click', startPlaceHole)
+);
+
+viewport.addEventListener('contextmenu', e => {
+  if (placingHole) { e.preventDefault(); cancelPlaceHole(); }
+});
+
+function cancelPlaceHole() {
+  placingHole = false;
+  controls.enabled = true;
+  document.getElementById('placing-hint').style.display = 'none';
+  document.getElementById('hole-status').textContent = holePos ? `Hole at (${holePos.u.toFixed(1)}, ${holePos.v.toFixed(1)}) mm` : 'Cancelled.';
+}
+
+const raycaster = new THREE.Raycaster();
+const mouse2    = new THREE.Vector2();
+
+renderer.domElement.addEventListener('click', e => {
+  if (!placingHole || !geometry) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse2.x = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  mouse2.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse2, camera);
+  const hits = raycaster.intersectObjects(meshGroup.children, true);
+  if (!hits.length) { cancelPlaceHole(); return; }
+
+  const pt   = hits[0].point.clone(); // world space (model is already centred)
+  const axis = document.getElementById('sel-axis').value;
+
+  // Project hit point onto the perpendicular plane
+  holePos = axis === 'z' ? { u: pt.x, v: pt.y }
+           : axis === 'x' ? { u: pt.y, v: pt.z }
+           :                { u: pt.x, v: pt.z };
+
+  // Marker sphere
+  if (holeMarker) scene.remove(holeMarker);
+  const size = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  holeMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(size * 0.5, 16, 16),
+    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.7, transparent: true })
+  );
+  holeMarker.position.copy(pt);
+  scene.add(holeMarker);
+
+  cancelPlaceHole();
+  document.getElementById('hole-status').textContent = `Hole at (${holePos.u.toFixed(1)}, ${holePos.v.toFixed(1)}) mm`;
+});
+
+// ─── Slicer ───────────────────────────────────────────────────────────────────
+document.getElementById('btn-slice').addEventListener('click', doSlice);
+
+function doSlice() {
+  if (!geometry) return;
+  setStatus('Slicing…');
+
+  const axis  = document.getElementById('sel-axis').value;
+  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
+  const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
+  const step  = thick + gap;
+
+  const bb   = geometry.boundingBox;
+  const minV = axis === 'z' ? bb.min.z : axis === 'x' ? bb.min.x : bb.min.y;
+  const maxV = axis === 'z' ? bb.max.z : axis === 'x' ? bb.max.x : bb.max.y;
+
+  slices = [];
+  planeGroup.clear();
+
+  const pos = geometry.attributes.position;
+  const tris = pos.count / 3;
+
+  // Build flat triangle array once
+  const verts = pos.array; // Float32Array
+
+  // Gather triangles into axis-sorted buckets
+  let planeZ = minV + step * 0.5;
+  let idx = 0;
+
+  while (planeZ <= maxV + 0.001) {
+    const lo = planeZ - thick * 0.5;
+    const hi = planeZ + thick * 0.5;
+
+    const polygons = sliceGeometryAtBand(verts, tris, axis, lo, hi);
+    slices.push({ depth: planeZ, lo, hi, polygons });
+
+    // Visual plane
+    const planeMesh = makePlaneMesh(axis, planeZ, bb, idx);
+    planeGroup.add(planeMesh);
+
+    planeZ += step;
+    idx++;
+  }
+
+  setStatus(`✓ ${slices.length} sheets. Ready to export.`);
+  document.getElementById('btn-export').disabled = false;
+  updateModelInfo();
+}
+
+// Sutherland-Hodgman band clipping: clip all triangles to the band [lo, hi] on given axis
+function sliceGeometryAtBand(verts, tris, axis, lo, hi) {
+  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2; // axis index
+  const bi = (ai + 1) % 3; // first perpendicular
+  const ci = (ai + 2) % 3; // second perpendicular
+
+  const loops = [];
+
+  for (let t = 0; t < tris; t++) {
+    const base = t * 9;
+    const pts = [
+      [verts[base+0], verts[base+1], verts[base+2]],
+      [verts[base+3], verts[base+4], verts[base+5]],
+      [verts[base+6], verts[base+7], verts[base+8]],
+    ];
+
+    const clipped = clipTriToBand(pts, ai, lo, hi);
+    if (clipped.length < 3) continue;
+
+    // Project onto 2D perpendicular plane
+    const poly2d = clipped.map(p => [p[bi], p[ci]]);
+    loops.push(poly2d);
+  }
+
+  // Merge into outline contours (simplified: just collect all loops as individual polys)
+  return mergePolygons(loops);
+}
+
+// Clip a triangle to the band [lo,hi] on axis ai using Sutherland-Hodgman
+function clipTriToBand(pts, ai, lo, hi) {
+  let poly = pts.slice();
+
+  // Clip against lo plane (keep where v[ai] >= lo)
+  poly = clipPolyByPlane(poly, ai, lo, 1);
+  if (poly.length < 3) return [];
+
+  // Clip against hi plane (keep where v[ai] <= hi)
+  poly = clipPolyByPlane(poly, ai, hi, -1);
+  return poly;
+}
+
+function clipPolyByPlane(poly, ai, val, sign) {
+  // sign=1 → keep pts where p[ai] >= val
+  // sign=-1 → keep pts where p[ai] <= val
+  const out = [];
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const cur  = poly[i];
+    const next = poly[(i + 1) % n];
+    const cIn  = sign * (cur[ai]  - val) >= 0;
+    const nIn  = sign * (next[ai] - val) >= 0;
+    if (cIn) out.push(cur);
+    if (cIn !== nIn) {
+      // Intersection
+      const t = (val - cur[ai]) / (next[ai] - cur[ai]);
+      out.push([
+        cur[0] + t * (next[0] - cur[0]),
+        cur[1] + t * (next[1] - cur[1]),
+        cur[2] + t * (next[2] - cur[2]),
+      ]);
+    }
+  }
+  return out;
+}
+
+// Very simple "merge" — for now just returns the list of polygon loops.
+// A full polygon union (CSG) would require a 2D boolean library.
+// Here we return all loops and let the SVG export draw them individually
+// (union effect is good enough for most STLs when triangles share vertices).
+function mergePolygons(loops) {
+  // Deduplicate near-collinear tiny triangles
+  return loops.filter(poly => {
+    if (poly.length < 3) return false;
+    // simple area check
+    let a = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const j = (i + 1) % poly.length;
+      a += poly[i][0] * poly[j][1] - poly[j][0] * poly[i][1];
+    }
+    return Math.abs(a) * 0.5 > 0.0001;
+  });
+}
+
+// Visual slice plane in viewport
+function makePlaneMesh(axis, depth, bb, idx) {
+  const size = 10000;
+  let geom;
+  if (axis === 'z') {
+    geom = new THREE.PlaneGeometry(size, size);
+  } else if (axis === 'x') {
+    geom = new THREE.PlaneGeometry(size, size);
+    geom.rotateY(Math.PI / 2);
+  } else {
+    geom = new THREE.PlaneGeometry(size, size);
+    geom.rotateX(Math.PI / 2);
+  }
+  const mat = new THREE.MeshBasicMaterial({ color: 0xe94560, opacity: 0.07, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+  const m = new THREE.Mesh(geom, mat);
+  if (axis === 'z') m.position.z = depth;
+  else if (axis === 'x') m.position.x = depth;
+  else m.position.y = depth;
+  return m;
+}
+
+// ─── SVG export ───────────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', doExport);
+
+function doExport() {
+  if (!slices.length) return;
+
+  const pageW    = parseFloat(document.getElementById('inp-page-w').value)     || 400;
+  const pageH    = parseFloat(document.getElementById('inp-page-h').value)     || 300;
+  const tileMargin = parseFloat(document.getElementById('inp-tile-margin').value) || 5;
+  const showLabels = document.getElementById('chk-labels').checked;
+  const labelSize  = parseFloat(document.getElementById('inp-label-size').value) || 5;
+  const holeSize   = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const holeShape  = document.getElementById('sel-hole-shape').value;
+  const axis       = document.getElementById('sel-axis').value;
+
+  // Scale factor: we work in mm (model units = mm assumed)
+  const PX_PER_MM = 3.7795275591; // 96 dpi equivalent (SVG default)
+
+  // Collect per-slice 2D bounding boxes to lay them out
+  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+  const bi = (ai + 1) % 3;
+  const ci = (ai + 2) % 3;
+
+  // Compute overall bounds of slices in 2D
+  let polyMinU = Infinity, polyMaxU = -Infinity;
+  let polyMinV = Infinity, polyMaxV = -Infinity;
+  for (const sl of slices) {
+    for (const poly of sl.polygons) {
+      for (const [u, v] of poly) {
+        if (u < polyMinU) polyMinU = u;
+        if (u > polyMaxU) polyMaxU = u;
+        if (v < polyMinV) polyMinV = v;
+        if (v > polyMaxV) polyMaxV = v;
+      }
+    }
+  }
+
+  const sliceW = polyMaxU - polyMinU;
+  const sliceH = polyMaxV - polyMinV;
+  const tileW  = sliceW + tileMargin;
+  const tileH  = sliceH + tileMargin;
+
+  // Tile into rows
+  const cols = Math.max(1, Math.floor((pageW + tileMargin) / tileW));
+
+  const svgW = pageW * PX_PER_MM;
+  const svgH = pageH * PX_PER_MM;
+
+  let svgParts = [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg xmlns="http://www.w3.org/2000/svg"`,
+    `     width="${svgW.toFixed(2)}px" height="${svgH.toFixed(2)}px"`,
+    `     viewBox="0 0 ${svgW.toFixed(2)} ${svgH.toFixed(2)}">`,
+    `  <style>`,
+    `    .cut { fill: none; stroke: #000; stroke-width: ${(0.2 * PX_PER_MM).toFixed(2)}; }`,
+    `    .label { font-family: sans-serif; font-size: ${(labelSize * PX_PER_MM).toFixed(1)}px; fill: #000; }`,
+    `    .hole  { fill: none; stroke: #f00; stroke-width: ${(0.2 * PX_PER_MM).toFixed(2)}; }`,
+    `  </style>`,
+  ];
+
+  slices.forEach((sl, idx) => {
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const ox  = (tileMargin + col * tileW - polyMinU) * PX_PER_MM;
+    const oy  = (tileMargin + row * tileH - polyMinV) * PX_PER_MM;
+
+    svgParts.push(`  <g id="sheet-${idx + 1}" transform="translate(0,0)">`);
+
+    // Cut outlines
+    for (const poly of sl.polygons) {
+      if (poly.length < 2) continue;
+      const d = poly.map(([u, v], i) => {
+        const px = (ox + u * PX_PER_MM).toFixed(2);
+        const py = (oy + v * PX_PER_MM).toFixed(2);
+        return (i === 0 ? `M${px},${py}` : `L${px},${py}`);
+      }).join(' ') + ' Z';
+      svgParts.push(`    <path class="cut" d="${d}"/>`);
+    }
+
+    // Alignment hole
+    if (holePos) {
+      const hx = (ox + holePos.u * PX_PER_MM).toFixed(2);
+      const hy = (oy + holePos.v * PX_PER_MM).toFixed(2);
+      const hr = (holeSize * 0.5 * PX_PER_MM).toFixed(2);
+      svgParts.push(holeSvg(holeShape, hx, hy, hr));
+    }
+
+    // Label
+    if (showLabels) {
+      // Place label at top-left of tile
+      const lx = (ox + polyMinU * PX_PER_MM + 2 * PX_PER_MM).toFixed(2);
+      const ly = (oy + polyMinV * PX_PER_MM + labelSize * PX_PER_MM * 1.2).toFixed(2);
+      svgParts.push(`    <text class="label" x="${lx}" y="${ly}">${idx + 1}</text>`);
+    }
+
+    svgParts.push(`  </g>`);
+  });
+
+  svgParts.push(`</svg>`);
+
+  const blob = new Blob([svgParts.join('\n')], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 's1c3r-sheets.svg';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  setStatus('SVG exported!');
+}
+
+function holeSvg(shape, cx, cy, r) {
+  const cxf = parseFloat(cx), cyf = parseFloat(cy), rf = parseFloat(r);
+  if (shape === 'circle') {
+    return `    <circle class="hole" cx="${cx}" cy="${cy}" r="${r}"/>`;
+  }
+  if (shape === 'square') {
+    const s = rf * 2;
+    return `    <rect class="hole" x="${(cxf - rf).toFixed(2)}" y="${(cyf - rf).toFixed(2)}" width="${s.toFixed(2)}" height="${s.toFixed(2)}"/>`;
+  }
+  if (shape === 'triangle') {
+    const pts = [
+      [cxf, cyf - rf],
+      [cxf + rf * Math.sin(2*Math.PI/3), cyf - rf * Math.cos(2*Math.PI/3)],
+      [cxf + rf * Math.sin(4*Math.PI/3), cyf - rf * Math.cos(4*Math.PI/3)],
+    ].map(p => p.map(v => v.toFixed(2)).join(',')).join(' ');
+    return `    <polygon class="hole" points="${pts}"/>`;
+  }
+  if (shape === 'hex') {
+    const pts = Array.from({length:6}, (_,i) => {
+      const a = i * Math.PI / 3;
+      return `${(cxf + rf * Math.cos(a)).toFixed(2)},${(cyf + rf * Math.sin(a)).toFixed(2)}`;
+    }).join(' ');
+    return `    <polygon class="hole" points="${pts}"/>`;
+  }
+  return '';
+}
+
+// ─── Util ─────────────────────────────────────────────────────────────────────
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+</script>
+</body>
+</html>

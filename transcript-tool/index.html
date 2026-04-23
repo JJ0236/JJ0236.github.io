@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Transcript Tool - Josh's Corner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #f5e7de;
+      --card: #ffffff;
+      --ink: #2f2f2f;
+      --muted: #666;
+      --border: #d8c2b5;
+      --accent: #8f4c2f;
+      --accent-hover: #753e26;
+      --success: #205d2b;
+      --error: #8c1d18;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top right, #fff4ed, var(--bg) 42%);
+      color: var(--ink);
+      font-family: 'Roboto', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 920px;
+      margin: 48px 0;
+    }
+
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.08);
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.75rem, 3vw, 2.4rem);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 0 0 20px;
+      line-height: 1.4;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .hint {
+      display: block;
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 6px;
+      line-height: 1.35;
+    }
+
+    input[type="file"],
+    input[type="password"],
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 260px;
+      resize: vertical;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 15px;
+      font-weight: 700;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 0.14s ease, background-color 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #e8ded8;
+      color: #332d2a;
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #ddd0c8;
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      transform: none;
+    }
+
+    .status {
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      font-size: 0.95rem;
+      display: none;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.ok {
+      background: #eaf6ed;
+      color: var(--success);
+      border-color: #badcbf;
+    }
+
+    .status.error {
+      background: #fbeceb;
+      color: var(--error);
+      border-color: #f3c3c1;
+    }
+
+    .status.info {
+      background: #f5f2ff;
+      color: #4a3b80;
+      border-color: #d9d0f7;
+    }
+
+    .footnote {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .transcript-head {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .transcript-head label {
+      margin: 0;
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 14px; }
+      .panel { padding: 18px; }
+      .wrap { margin: 56px 0 18px; }
+    }
+  </style>
+</head>
+<body>
+  <a href="/projects/" class="home-icon" title="Projects">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+
+  <main class="wrap">
+    <section class="panel">
+      <h1>Video Transcript Tool</h1>
+      <p class="subtitle">Upload a video or audio file and generate a transcript directly in your browser with a local Whisper model.</p>
+
+      <div class="grid">
+        <div>
+          <label for="fileInput">Video or audio file</label>
+          <input id="fileInput" type="file" accept="video/*,audio/*" />
+          <span class="hint">Supported examples: mp4, mov, mp3, wav, m4a, webm. For better reliability, keep uploads under 25MB.</span>
+        </div>
+
+        <div>
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="Xenova/whisper-tiny.en" selected>Whisper Tiny (fastest, English)</option>
+            <option value="Xenova/whisper-base.en">Whisper Base (better quality, English)</option>
+            <option value="Xenova/whisper-small">Whisper Small (multilingual, slower)</option>
+          </select>
+          <span class="hint">First run downloads the model in your browser cache. Larger models are slower but usually more accurate.</span>
+        </div>
+
+        <div>
+          <label for="language">Language (optional)</label>
+          <input id="language" type="text" maxlength="8" placeholder="en" />
+          <span class="hint">For multilingual model only. Use ISO-639-1 (en, es, fr, de). Leave blank for auto-detect.</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="transcribeBtn" class="btn-primary">Transcribe</button>
+        <button id="downloadBtn" class="btn-secondary" disabled>Download .txt</button>
+        <button id="copyBtn" class="btn-secondary" disabled>Copy Text</button>
+      </div>
+
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+
+      <div class="transcript-head">
+        <label for="transcriptOutput">Transcript</label>
+        <button id="copyTopBtn" class="btn-secondary" type="button" disabled>Copy Transcript</button>
+      </div>
+      <textarea id="transcriptOutput" placeholder="Transcript will appear here..."></textarea>
+
+      <p class="footnote">Note: no speech model can guarantee a mathematically perfect transcript on every recording. For best results, use clear audio and minimal background noise.</p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    const fileInput = document.getElementById('fileInput');
+    const modelInput = document.getElementById('model');
+    const languageInput = document.getElementById('language');
+    const transcribeBtn = document.getElementById('transcribeBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyTopBtn = document.getElementById('copyTopBtn');
+    const output = document.getElementById('transcriptOutput');
+    const statusBox = document.getElementById('status');
+
+    const transcriberCache = new Map();
+
+    function setStatus(message, kind) {
+      statusBox.textContent = message;
+      statusBox.className = `status show ${kind}`;
+    }
+
+    function clearStatus() {
+      statusBox.textContent = '';
+      statusBox.className = 'status';
+    }
+
+    function setBusy(isBusy) {
+      transcribeBtn.disabled = isBusy;
+      transcribeBtn.textContent = isBusy ? 'Transcribing...' : 'Transcribe';
+    }
+
+    function normalizeLanguageCode(value) {
+      return value.trim().toLowerCase();
+    }
+
+    async function decodeToMono16k(file) {
+      const audioBuffer = await file.arrayBuffer();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const context = new Ctx({ sampleRate: 16000 });
+
+      try {
+        const decoded = await context.decodeAudioData(audioBuffer.slice(0));
+        const channels = decoded.numberOfChannels;
+        const length = decoded.length;
+
+        if (channels === 1) {
+          return new Float32Array(decoded.getChannelData(0));
+        }
+
+        const mixed = new Float32Array(length);
+        for (let c = 0; c < channels; c += 1) {
+          const data = decoded.getChannelData(c);
+          for (let i = 0; i < length; i += 1) {
+            mixed[i] += data[i] / channels;
+          }
+        }
+        return mixed;
+      } finally {
+        await context.close();
+      }
+    }
+
+    async function getTranscriber(modelId) {
+      if (transcriberCache.has(modelId)) {
+        return transcriberCache.get(modelId);
+      }
+
+      setStatus('Loading local model (first run can take a minute)...', 'info');
+      const transcriberPromise = pipeline('automatic-speech-recognition', modelId);
+      transcriberCache.set(modelId, transcriberPromise);
+      return transcriberPromise;
+    }
+
+    async function transcribeFile() {
+      clearStatus();
+
+      const file = fileInput.files && fileInput.files[0];
+      const language = normalizeLanguageCode(languageInput.value);
+      const model = modelInput.value;
+
+      if (!file) {
+        setStatus('Please choose a video or audio file first.', 'error');
+        return;
+      }
+
+      if (language && !/^[a-z]{2,3}$/.test(language)) {
+        setStatus('Language code must look like en, es, fr, de, etc.', 'error');
+        return;
+      }
+
+      if (file.size > 200 * 1024 * 1024) {
+        setStatus('Very large files can be slow in-browser. If this stalls, try a shorter clip.', 'info');
+      }
+
+      setBusy(true);
+      if (statusBox.className === 'status') {
+        setStatus('Preparing local audio and running transcription...', 'info');
+      }
+
+      try {
+        const audio = await decodeToMono16k(file);
+        const transcriber = await getTranscriber(model);
+
+        const options = {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          return_timestamps: false
+        };
+
+        if (language && model === 'Xenova/whisper-small') {
+          options.language = language;
+        }
+
+        const result = await transcriber(audio, options);
+        const transcript = result && result.text ? String(result.text).trim() : '';
+
+        if (!transcript) {
+          throw new Error('No transcript text was produced for this file.');
+        }
+
+        output.value = transcript;
+        downloadBtn.disabled = false;
+        copyBtn.disabled = false;
+        copyTopBtn.disabled = false;
+        setStatus('Transcript completed locally in your browser.', 'ok');
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || 'Transcription failed in-browser.', 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function downloadTranscript() {
+      const text = output.value.trim();
+      if (!text) {
+        setStatus('No transcript available to download yet.', 'error');
+        return;
+      }
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'transcript.txt';
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatus('Downloaded transcript.txt.', 'ok');
+    }
+
+    async function copyTranscript() {
+      const text = output.value.trim();
+      if (!text) {
+        setStatus('No transcript available to copy yet.', 'error');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus('Transcript copied to clipboard.', 'ok');
+      } catch (err) {
+        console.error(err);
+        setStatus('Clipboard copy failed. You can still select and copy text manually.', 'error');
+      }
+    }
+
+    transcribeBtn.addEventListener('click', transcribeFile);
+    downloadBtn.addEventListener('click', downloadTranscript);
+    copyBtn.addEventListener('click', copyTranscript);
+    copyTopBtn.addEventListener('click', copyTranscript);
+  </script>
+</body>
+</html>

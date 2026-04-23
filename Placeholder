@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projects - Josh's Corner</title>
+  <!-- Google Font (Roboto) -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      background-color: #F5E7DE;
+      font-family: 'Roboto', sans-serif;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      min-height: 100vh;
+      position: relative;
+    }
+    /* Home Icon at Top Center */
+    .home-icon {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32px;
+      height: 32px;
+      color: #333;
+      text-decoration: none;
+      transition: transform 0.2s ease;
+      z-index: 100;
+    }
+    .home-icon:hover {
+      transform: translateX(-50%) scale(1.1);
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 1em;
+      text-align: center;
+    }
+    p {
+      font-size: 1.2rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+      <path d="M9 21V12H15V21"/>
+    </svg>
+  </a>
+  <h1>Projects</h1>
+  <p>This is the Projects page.</p>
+  <p>Project details will be updated soon.</p>
+</body>
+</html>
