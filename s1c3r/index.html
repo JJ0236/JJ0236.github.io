@@ -289,21 +289,32 @@
       </label>
     </div>
 
+    <!-- Model units -->
+    <div>
+      <div class="section-title">Model Units</div>
+      <label class="row">
+        <span>STL units</span>
+        <select id="sel-units">
+          <option value="1" selected>mm</option>
+          <option value="10">cm</option>
+          <option value="25.4">inch</option>
+        </select>
+      </label>
+      <div style="font-size:.72rem;color:#666;margin-bottom:4px">If sheet count looks wrong, change units</div>
+    </div>
+
     <!-- SVG export layout -->
     <div>
       <div class="section-title">Export Layout</div>
       <label class="row">
-        <span>Page width (mm)</span>
-        <input id="inp-page-w" type="number" min="50" max="2000" step="1" value="400"/>
+        <span>Sheets per row</span>
+        <input id="inp-cols" type="number" min="1" max="50" step="1" value="5"/>
       </label>
       <label class="row">
-        <span>Page height (mm)</span>
-        <input id="inp-page-h" type="number" min="50" max="2000" step="1" value="300"/>
-      </label>
-      <label class="row">
-        <span>Tile margin (mm)</span>
+        <span>Margin between (mm)</span>
         <input id="inp-tile-margin" type="number" min="0" max="50" step="1" value="5"/>
       </label>
+      <div style="font-size:.72rem;color:#666;margin-bottom:4px">SVG auto-sizes to fit all sheets at 1:1 mm scale</div>
     </div>
 
     <!-- Model info -->
@@ -332,10 +343,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 
-// ─── State ──────────────────────────────────────────────────────────────────
-let geometry = null;          // current BufferGeometry
-let slices   = [];            // [{z, polygons}] last slice result
-let holePos  = null;          // {u, v} in model-local coords (perpendicular plane)
+// ─── State ───────────────────────────────────────────────────────────────────
+let geometry    = null;  // BufferGeometry in raw STL units
+let slices      = [];    // [{depth:mm, polygons:[[u,v][]]}]
+let holePos     = null;  // {u,v} in mm on the perpendicular plane
 let placingHole = false;
 
 // ─── Three.js setup ──────────────────────────────────────────────────────────
@@ -352,25 +363,14 @@ camera.position.set(0, 0, 300);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// Lights
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 const dir = new THREE.DirectionalLight(0xffffff, 0.9);
 dir.position.set(1, 2, 3);
 scene.add(dir);
+scene.add(new THREE.AxesHelper(20));
 
-// Axes helper (small)
-const axesHelper = new THREE.AxesHelper(20);
-scene.add(axesHelper);
-
-// Model mesh container
-let meshGroup = new THREE.Group();
-scene.add(meshGroup);
-
-// Slice planes (visual only)
-let planeGroup = new THREE.Group();
-scene.add(planeGroup);
-
-// Hole marker
+let meshGroup  = new THREE.Group(); scene.add(meshGroup);
+let planeGroup = new THREE.Group(); scene.add(planeGroup);
 let holeMarker = null;
 
 function resize() {
@@ -432,30 +432,35 @@ function loadGeometry(buffer) {
 }
 
 function enableButtons(on) {
-  ['btn-place-hole','btn-place-hole2','btn-slice'].forEach(id =>
+  ['btn-place-hole', 'btn-place-hole2', 'btn-slice'].forEach(id =>
     document.getElementById(id).disabled = !on
   );
+}
+
+// ─── Unit scale: raw STL coords × scale = mm ─────────────────────────────────
+function getScale() {
+  return parseFloat(document.getElementById('sel-units').value) || 1;
 }
 
 function updateModelInfo() {
   if (!geometry) return;
   const bb = geometry.boundingBox;
-  const s = new THREE.Vector3(); bb.getSize(s);
+  const s  = new THREE.Vector3(); bb.getSize(s);
+  const sc = getScale();
   const axis  = document.getElementById('sel-axis').value;
   const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
   const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
   const step  = thick + gap;
-  const span  = axis === 'z' ? s.z : axis === 'x' ? s.x : s.y;
+  const span  = (axis === 'x' ? s.x : axis === 'y' ? s.y : s.z) * sc;
   const count = Math.max(1, Math.ceil(span / step));
 
   document.getElementById('slice-info').innerHTML =
-    `Size: ${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm<br>` +
+    `Size: ${(s.x*sc).toFixed(1)} × ${(s.y*sc).toFixed(1)} × ${(s.z*sc).toFixed(1)} mm<br>` +
     `Axis: <b>${axis.toUpperCase()}</b> | Step: ${step.toFixed(2)} mm<br>` +
-    `Estimated sheets: <b>${count}</b>`;
+    `Sheets: <b>${count}</b>`;
 }
 
-// ─── Input listeners ─────────────────────────────────────────────────────────
-['sel-axis','inp-thickness','inp-gap'].forEach(id =>
+['sel-axis', 'inp-thickness', 'inp-gap', 'sel-units'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateModelInfo)
 );
 
@@ -518,20 +523,20 @@ renderer.domElement.addEventListener('click', e => {
   const hits = raycaster.intersectObjects(meshGroup.children, true);
   if (!hits.length) { cancelPlaceHole(); return; }
 
-  const pt   = hits[0].point.clone(); // world space (model is already centred)
+  const sc   = getScale();
+  const pt   = hits[0].point.clone(); // raw coords (model centred at origin)
   const axis = document.getElementById('sel-axis').value;
 
-  // Project hit point onto the perpendicular plane
-  holePos = axis === 'z' ? { u: pt.x, v: pt.y }
-           : axis === 'x' ? { u: pt.y, v: pt.z }
-           :                { u: pt.x, v: pt.z };
+  // Project to mm coordinates on the perpendicular plane
+  holePos = axis === 'z' ? { u: pt.x * sc, v: pt.y * sc }
+           : axis === 'x' ? { u: pt.y * sc, v: pt.z * sc }
+           :                { u: pt.x * sc, v: pt.z * sc };
 
-  // Marker sphere
   if (holeMarker) scene.remove(holeMarker);
-  const size = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const holeSize = parseFloat(document.getElementById('inp-hole-size').value) || 6;
   holeMarker = new THREE.Mesh(
-    new THREE.SphereGeometry(size * 0.5, 16, 16),
-    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.7, transparent: true })
+    new THREE.SphereGeometry(holeSize * 0.5 / sc, 16, 16),
+    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.75, transparent: true })
   );
   holeMarker.position.copy(pt);
   scene.add(holeMarker);
@@ -550,146 +555,146 @@ function doSlice() {
   const axis  = document.getElementById('sel-axis').value;
   const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
   const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
-  const step  = thick + gap;
+  const sc    = getScale(); // raw unit → mm
+  const step  = thick + gap; // mm per slice
 
   const bb   = geometry.boundingBox;
-  const minV = axis === 'z' ? bb.min.z : axis === 'x' ? bb.min.x : bb.min.y;
-  const maxV = axis === 'z' ? bb.max.z : axis === 'x' ? bb.max.x : bb.max.y;
+  const minV = (axis === 'x' ? bb.min.x : axis === 'y' ? bb.min.y : bb.min.z) * sc; // mm
+  const maxV = (axis === 'x' ? bb.max.x : axis === 'y' ? bb.max.y : bb.max.z) * sc; // mm
 
   slices = [];
   planeGroup.clear();
 
-  const pos = geometry.attributes.position;
-  const tris = pos.count / 3;
+  const verts = geometry.attributes.position.array;
+  const tris  = verts.length / 9;
 
-  // Build flat triangle array once
-  const verts = pos.array; // Float32Array
-
-  // Gather triangles into axis-sorted buckets
-  let planeZ = minV + step * 0.5;
-  let idx = 0;
-
-  while (planeZ <= maxV + 0.001) {
-    const lo = planeZ - thick * 0.5;
-    const hi = planeZ + thick * 0.5;
-
-    const polygons = sliceGeometryAtBand(verts, tris, axis, lo, hi);
-    slices.push({ depth: planeZ, lo, hi, polygons });
-
-    // Visual plane
-    const planeMesh = makePlaneMesh(axis, planeZ, bb, idx);
-    planeGroup.add(planeMesh);
-
-    planeZ += step;
-    idx++;
+  // Slice mid-plane of each sheet, stepping by (thick + gap)
+  let depth = minV + thick * 0.5;
+  while (depth <= maxV + step * 0.001) {
+    const rawPlane = depth / sc;
+    const polygons = sliceAtPlane(verts, tris, axis, rawPlane, sc);
+    slices.push({ depth, polygons });
+    planeGroup.add(makePlaneMesh(axis, rawPlane));
+    depth += step;
   }
 
-  setStatus(`✓ ${slices.length} sheets. Ready to export.`);
+  const withGeo = slices.filter(s => s.polygons.length > 0).length;
+  setStatus(`✓ ${slices.length} sheets (${withGeo} with geometry). Ready to export.`);
   document.getElementById('btn-export').disabled = false;
   updateModelInfo();
 }
 
-// Sutherland-Hodgman band clipping: clip all triangles to the band [lo, hi] on given axis
-function sliceGeometryAtBand(verts, tris, axis, lo, hi) {
-  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2; // axis index
-  const bi = (ai + 1) % 3; // first perpendicular
-  const ci = (ai + 2) % 3; // second perpendicular
+// ── True cross-section: plane-triangle intersection ───────────────────────────
+// Intersects a plane (axis-aligned at rawPlane in raw coords) with every triangle.
+// Returns closed polylines in mm coordinates.
+function sliceAtPlane(verts, tris, axis, rawPlane, sc) {
+  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2; // slice axis
+  const bi = (ai + 1) % 3;                              // perp axis 1
+  const ci = (ai + 2) % 3;                              // perp axis 2
 
-  const loops = [];
+  const segments = [];
 
   for (let t = 0; t < tris; t++) {
-    const base = t * 9;
-    const pts = [
-      [verts[base+0], verts[base+1], verts[base+2]],
-      [verts[base+3], verts[base+4], verts[base+5]],
-      [verts[base+6], verts[base+7], verts[base+8]],
-    ];
+    const b  = t * 9;
+    const p0 = [verts[b],   verts[b+1], verts[b+2]];
+    const p1 = [verts[b+3], verts[b+4], verts[b+5]];
+    const p2 = [verts[b+6], verts[b+7], verts[b+8]];
+    const tri = [p0, p1, p2];
 
-    const clipped = clipTriToBand(pts, ai, lo, hi);
-    if (clipped.length < 3) continue;
-
-    // Project onto 2D perpendicular plane
-    const poly2d = clipped.map(p => [p[bi], p[ci]]);
-    loops.push(poly2d);
-  }
-
-  // Merge into outline contours (simplified: just collect all loops as individual polys)
-  return mergePolygons(loops);
-}
-
-// Clip a triangle to the band [lo,hi] on axis ai using Sutherland-Hodgman
-function clipTriToBand(pts, ai, lo, hi) {
-  let poly = pts.slice();
-
-  // Clip against lo plane (keep where v[ai] >= lo)
-  poly = clipPolyByPlane(poly, ai, lo, 1);
-  if (poly.length < 3) return [];
-
-  // Clip against hi plane (keep where v[ai] <= hi)
-  poly = clipPolyByPlane(poly, ai, hi, -1);
-  return poly;
-}
-
-function clipPolyByPlane(poly, ai, val, sign) {
-  // sign=1 → keep pts where p[ai] >= val
-  // sign=-1 → keep pts where p[ai] <= val
-  const out = [];
-  const n = poly.length;
-  for (let i = 0; i < n; i++) {
-    const cur  = poly[i];
-    const next = poly[(i + 1) % n];
-    const cIn  = sign * (cur[ai]  - val) >= 0;
-    const nIn  = sign * (next[ai] - val) >= 0;
-    if (cIn) out.push(cur);
-    if (cIn !== nIn) {
-      // Intersection
-      const t = (val - cur[ai]) / (next[ai] - cur[ai]);
-      out.push([
-        cur[0] + t * (next[0] - cur[0]),
-        cur[1] + t * (next[1] - cur[1]),
-        cur[2] + t * (next[2] - cur[2]),
+    // Find two edge-plane crossings
+    const crossings = [];
+    for (let e = 0; e < 3; e++) {
+      const a = tri[e], b2 = tri[(e + 1) % 3];
+      const av = a[ai], bv = b2[ai];
+      // One vertex strictly below, one at or above → edge crosses
+      if ((av < rawPlane) === (bv < rawPlane)) continue;
+      const t2 = (rawPlane - av) / (bv - av);
+      crossings.push([
+        (a[bi] + t2 * (b2[bi] - a[bi])) * sc,
+        (a[ci] + t2 * (b2[ci] - a[ci])) * sc,
       ]);
     }
-  }
-  return out;
-}
 
-// Very simple "merge" — for now just returns the list of polygon loops.
-// A full polygon union (CSG) would require a 2D boolean library.
-// Here we return all loops and let the SVG export draw them individually
-// (union effect is good enough for most STLs when triangles share vertices).
-function mergePolygons(loops) {
-  // Deduplicate near-collinear tiny triangles
-  return loops.filter(poly => {
-    if (poly.length < 3) return false;
-    // simple area check
-    let a = 0;
-    for (let i = 0; i < poly.length; i++) {
-      const j = (i + 1) % poly.length;
-      a += poly[i][0] * poly[j][1] - poly[j][0] * poly[i][1];
+    if (crossings.length === 2) {
+      const du = crossings[1][0] - crossings[0][0];
+      const dv = crossings[1][1] - crossings[0][1];
+      if (du*du + dv*dv > 1e-10) {
+        segments.push([crossings[0], crossings[1]]);
+      }
     }
-    return Math.abs(a) * 0.5 > 0.0001;
-  });
+  }
+
+  return connectSegments(segments);
 }
 
-// Visual slice plane in viewport
-function makePlaneMesh(axis, depth, bb, idx) {
-  const size = 10000;
-  let geom;
-  if (axis === 'z') {
-    geom = new THREE.PlaneGeometry(size, size);
-  } else if (axis === 'x') {
-    geom = new THREE.PlaneGeometry(size, size);
-    geom.rotateY(Math.PI / 2);
-  } else {
-    geom = new THREE.PlaneGeometry(size, size);
-    geom.rotateX(Math.PI / 2);
+// ── Connect a segment soup into closed polylines ──────────────────────────────
+// For a manifold STL each cross-section segment endpoint is shared by exactly
+// one other segment. We greedily walk the adjacency graph to form closed loops.
+function connectSegments(segs) {
+  if (!segs.length) return [];
+
+  const PREC = 4; // 0.0001 mm resolution for endpoint matching
+  const key  = ([u, v]) => `${u.toFixed(PREC)},${v.toFixed(PREC)}`;
+
+  // adj: point-key → [{segIdx i, ptIdx pi}]
+  const adj = new Map();
+  segs.forEach((seg, i) => {
+    for (let pi = 0; pi < 2; pi++) {
+      const k = key(seg[pi]);
+      if (!adj.has(k)) adj.set(k, []);
+      adj.get(k).push({ i, pi });
+    }
+  });
+
+  const used  = new Uint8Array(segs.length);
+  const loops = [];
+
+  for (let start = 0; start < segs.length; start++) {
+    if (used[start]) continue;
+
+    const loop  = [];
+    let curIdx  = start;
+    let fromPi  = 0; // enter at end 0, exit at end 1
+
+    for (let guard = 0; guard <= segs.length; guard++) {
+      if (used[curIdx]) break;
+      used[curIdx] = 1;
+
+      const seg = segs[curIdx];
+      loop.push(seg[fromPi]); // record entry point
+
+      const exitKey = key(seg[1 - fromPi]);
+      let found = false;
+      for (const nb of (adj.get(exitKey) || [])) {
+        if (!used[nb.i]) {
+          curIdx = nb.i;
+          fromPi = nb.pi;
+          found  = true;
+          break;
+        }
+      }
+      if (!found) break;
+    }
+
+    if (loop.length >= 3) loops.push(loop);
   }
-  const mat = new THREE.MeshBasicMaterial({ color: 0xe94560, opacity: 0.07, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+
+  return loops;
+}
+
+// ─── Visual slice plane ───────────────────────────────────────────────────────
+function makePlaneMesh(axis, rawDepth) {
+  const geom = new THREE.PlaneGeometry(10000, 10000);
+  if (axis === 'x')      geom.rotateY(Math.PI / 2);
+  else if (axis === 'y') geom.rotateX(Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xe94560, opacity: 0.07, transparent: true,
+    side: THREE.DoubleSide, depthWrite: false
+  });
   const m = new THREE.Mesh(geom, mat);
-  if (axis === 'z') m.position.z = depth;
-  else if (axis === 'x') m.position.x = depth;
-  else m.position.y = depth;
+  if (axis === 'z')      m.position.z = rawDepth;
+  else if (axis === 'x') m.position.x = rawDepth;
+  else                   m.position.y = rawDepth;
   return m;
 }
 
@@ -699,107 +704,98 @@ document.getElementById('btn-export').addEventListener('click', doExport);
 function doExport() {
   if (!slices.length) return;
 
-  const pageW    = parseFloat(document.getElementById('inp-page-w').value)     || 400;
-  const pageH    = parseFloat(document.getElementById('inp-page-h').value)     || 300;
-  const tileMargin = parseFloat(document.getElementById('inp-tile-margin').value) || 5;
-  const showLabels = document.getElementById('chk-labels').checked;
-  const labelSize  = parseFloat(document.getElementById('inp-label-size').value) || 5;
-  const holeSize   = parseFloat(document.getElementById('inp-hole-size').value) || 6;
-  const holeShape  = document.getElementById('sel-hole-shape').value;
-  const axis       = document.getElementById('sel-axis').value;
+  const sheetsPerRow = Math.max(1, parseInt(document.getElementById('inp-cols').value)  || 5);
+  const tileMargin   = parseFloat(document.getElementById('inp-tile-margin').value) || 5;
+  const showLabels   = document.getElementById('chk-labels').checked;
+  const labelSize    = parseFloat(document.getElementById('inp-label-size').value) || 5;
+  const holeSize     = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const holeShape    = document.getElementById('sel-hole-shape').value;
 
-  // Scale factor: we work in mm (model units = mm assumed)
-  const PX_PER_MM = 3.7795275591; // 96 dpi equivalent (SVG default)
-
-  // Collect per-slice 2D bounding boxes to lay them out
-  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
-  const bi = (ai + 1) % 3;
-  const ci = (ai + 2) % 3;
-
-  // Compute overall bounds of slices in 2D
-  let polyMinU = Infinity, polyMaxU = -Infinity;
-  let polyMinV = Infinity, polyMaxV = -Infinity;
+  // Tight bounding box in mm across all slice polygons
+  let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
   for (const sl of slices) {
     for (const poly of sl.polygons) {
       for (const [u, v] of poly) {
-        if (u < polyMinU) polyMinU = u;
-        if (u > polyMaxU) polyMaxU = u;
-        if (v < polyMinV) polyMinV = v;
-        if (v > polyMaxV) polyMaxV = v;
+        if (u < minU) minU = u; if (u > maxU) maxU = u;
+        if (v < minV) minV = v; if (v > maxV) maxV = v;
       }
     }
   }
 
-  const sliceW = polyMaxU - polyMinU;
-  const sliceH = polyMaxV - polyMinV;
-  const tileW  = sliceW + tileMargin;
-  const tileH  = sliceH + tileMargin;
+  if (!isFinite(minU)) {
+    setStatus('No geometry found in slices — check STL units setting.');
+    return;
+  }
 
-  // Tile into rows
-  const cols = Math.max(1, Math.floor((pageW + tileMargin) / tileW));
+  const sheetW = maxU - minU;
+  const sheetH = maxV - minV;
+  const cellW  = sheetW + tileMargin;
+  const cellH  = sheetH + tileMargin;
+  const cols   = Math.min(sheetsPerRow, slices.length);
+  const rows   = Math.ceil(slices.length / cols);
 
-  const svgW = pageW * PX_PER_MM;
-  const svgH = pageH * PX_PER_MM;
+  // SVG auto-sizes to exactly fit; 1 SVG unit = 1 mm (physical size encoded in width/height)
+  const pageW = cols * cellW + tileMargin;
+  const pageH = rows * cellH + tileMargin;
 
-  let svgParts = [
+  const lines = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<svg xmlns="http://www.w3.org/2000/svg"`,
-    `     width="${svgW.toFixed(2)}px" height="${svgH.toFixed(2)}px"`,
-    `     viewBox="0 0 ${svgW.toFixed(2)} ${svgH.toFixed(2)}">`,
+    `     width="${pageW.toFixed(2)}mm" height="${pageH.toFixed(2)}mm"`,
+    `     viewBox="0 0 ${pageW.toFixed(4)} ${pageH.toFixed(4)}">`,
+    `  <!-- s1c3r | ${slices.length} sheets | ${sheetW.toFixed(1)}x${sheetH.toFixed(1)} mm each -->`,
     `  <style>`,
-    `    .cut { fill: none; stroke: #000; stroke-width: ${(0.2 * PX_PER_MM).toFixed(2)}; }`,
-    `    .label { font-family: sans-serif; font-size: ${(labelSize * PX_PER_MM).toFixed(1)}px; fill: #000; }`,
-    `    .hole  { fill: none; stroke: #f00; stroke-width: ${(0.2 * PX_PER_MM).toFixed(2)}; }`,
+    `    .cut   { fill: none; stroke: #000000; stroke-width: 0.1; }`,
+    `    .hole  { fill: none; stroke: #ff0000; stroke-width: 0.1; }`,
+    `    .label { font-family: sans-serif; font-size: ${labelSize.toFixed(2)}px; fill: #333333; }`,
     `  </style>`,
   ];
 
   slices.forEach((sl, idx) => {
     const col = idx % cols;
     const row = Math.floor(idx / cols);
-    const ox  = (tileMargin + col * tileW - polyMinU) * PX_PER_MM;
-    const oy  = (tileMargin + row * tileH - polyMinV) * PX_PER_MM;
+    // Offset so slice's minU/minV lands at cell origin + margin
+    const ox = tileMargin + col * cellW - minU;
+    const oy = tileMargin + row * cellH - minV;
 
-    svgParts.push(`  <g id="sheet-${idx + 1}" transform="translate(0,0)">`);
+    lines.push(`  <g id="sheet-${idx + 1}">`);
 
-    // Cut outlines
+    // Each closed polyline = one laser cut path
     for (const poly of sl.polygons) {
       if (poly.length < 2) continue;
-      const d = poly.map(([u, v], i) => {
-        const px = (ox + u * PX_PER_MM).toFixed(2);
-        const py = (oy + v * PX_PER_MM).toFixed(2);
-        return (i === 0 ? `M${px},${py}` : `L${px},${py}`);
-      }).join(' ') + ' Z';
-      svgParts.push(`    <path class="cut" d="${d}"/>`);
+      const d = poly.map(([u, v], i) =>
+        (i === 0 ? 'M' : 'L') + (ox + u).toFixed(4) + ',' + (oy + v).toFixed(4)
+      ).join(' ') + ' Z';
+      lines.push(`    <path class="cut" d="${d}"/>`);
     }
 
-    // Alignment hole
+    // Alignment hole — same position on every sheet
     if (holePos) {
-      const hx = (ox + holePos.u * PX_PER_MM).toFixed(2);
-      const hy = (oy + holePos.v * PX_PER_MM).toFixed(2);
-      const hr = (holeSize * 0.5 * PX_PER_MM).toFixed(2);
-      svgParts.push(holeSvg(holeShape, hx, hy, hr));
+      const hx = (ox + holePos.u).toFixed(4);
+      const hy = (oy + holePos.v).toFixed(4);
+      const hr = (holeSize * 0.5).toFixed(4);
+      lines.push(holeSvg(holeShape, hx, hy, hr));
     }
 
-    // Label
+    // Sheet number label
     if (showLabels) {
-      // Place label at top-left of tile
-      const lx = (ox + polyMinU * PX_PER_MM + 2 * PX_PER_MM).toFixed(2);
-      const ly = (oy + polyMinV * PX_PER_MM + labelSize * PX_PER_MM * 1.2).toFixed(2);
-      svgParts.push(`    <text class="label" x="${lx}" y="${ly}">${idx + 1}</text>`);
+      const lx = (tileMargin + col * cellW + 1).toFixed(2);
+      const ly = (tileMargin + row * cellH + labelSize * 1.3).toFixed(2);
+      lines.push(`    <text class="label" x="${lx}" y="${ly}">${idx + 1}</text>`);
     }
 
-    svgParts.push(`  </g>`);
+    lines.push(`  </g>`);
   });
 
-  svgParts.push(`</svg>`);
+  lines.push(`</svg>`);
 
-  const blob = new Blob([svgParts.join('\n')], { type: 'image/svg+xml' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  const blob = new Blob([lines.join('\n')], { type: 'image/svg+xml' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
   a.download = 's1c3r-sheets.svg';
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatus('SVG exported!');
+  setStatus(`Exported ${slices.length} sheets — ${pageW.toFixed(0)} × ${pageH.toFixed(0)} mm`);
 }
 
 function holeSvg(shape, cx, cy, r) {
@@ -808,21 +804,20 @@ function holeSvg(shape, cx, cy, r) {
     return `    <circle class="hole" cx="${cx}" cy="${cy}" r="${r}"/>`;
   }
   if (shape === 'square') {
-    const s = rf * 2;
-    return `    <rect class="hole" x="${(cxf - rf).toFixed(2)}" y="${(cyf - rf).toFixed(2)}" width="${s.toFixed(2)}" height="${s.toFixed(2)}"/>`;
+    const s = (rf * 2).toFixed(4);
+    return `    <rect class="hole" x="${(cxf-rf).toFixed(4)}" y="${(cyf-rf).toFixed(4)}" width="${s}" height="${s}"/>`;
   }
   if (shape === 'triangle') {
-    const pts = [
-      [cxf, cyf - rf],
-      [cxf + rf * Math.sin(2*Math.PI/3), cyf - rf * Math.cos(2*Math.PI/3)],
-      [cxf + rf * Math.sin(4*Math.PI/3), cyf - rf * Math.cos(4*Math.PI/3)],
-    ].map(p => p.map(v => v.toFixed(2)).join(',')).join(' ');
+    const pts = Array.from({ length: 3 }, (_, i) => {
+      const a = i * 2 * Math.PI / 3 - Math.PI / 2;
+      return `${(cxf + rf * Math.cos(a)).toFixed(4)},${(cyf + rf * Math.sin(a)).toFixed(4)}`;
+    }).join(' ');
     return `    <polygon class="hole" points="${pts}"/>`;
   }
   if (shape === 'hex') {
-    const pts = Array.from({length:6}, (_,i) => {
+    const pts = Array.from({ length: 6 }, (_, i) => {
       const a = i * Math.PI / 3;
-      return `${(cxf + rf * Math.cos(a)).toFixed(2)},${(cyf + rf * Math.sin(a)).toFixed(2)}`;
+      return `${(cxf + rf * Math.cos(a)).toFixed(4)},${(cyf + rf * Math.sin(a)).toFixed(4)}`;
     }).join(' ');
     return `    <polygon class="hole" points="${pts}"/>`;
   }
