@@ -53,10 +53,6 @@
     architectureRecessBias: 0.34,
     objectEdgeHardness: 0.64,
     landscapeLayerPreservation: 0.62,
-    stlWidthMm: 140,
-    stlReliefMm: 7,
-    stlBaseMm: 1.8,
-    stlResolution: 320,
     displacement: 0.12,
     autoSway: true,
     invert: false,
@@ -684,45 +680,6 @@
 
       <hr class="dm-divider">
 
-      <div class="dm-field">
-        <label class="dm-slider-label">
-          STL Width (mm)
-          <span class="dm-slider-val" id="dm-stl-width-val">${Math.round(state.stlWidthMm)}mm</span>
-        </label>
-        <input type="range" id="dm-stl-width" min="60" max="260" step="2"
-          value="${state.stlWidthMm}" class="dm-range" />
-      </div>
-
-      <div class="dm-field">
-        <label class="dm-slider-label">
-          STL Relief (mm)
-          <span class="dm-slider-val" id="dm-stl-relief-val">${state.stlReliefMm.toFixed(1)}mm</span>
-        </label>
-        <input type="range" id="dm-stl-relief" min="1" max="20" step="0.2"
-          value="${state.stlReliefMm}" class="dm-range" />
-      </div>
-
-      <div class="dm-field">
-        <label class="dm-slider-label">
-          STL Base (mm)
-          <span class="dm-slider-val" id="dm-stl-base-val">${state.stlBaseMm.toFixed(1)}mm</span>
-        </label>
-        <input type="range" id="dm-stl-base" min="0.6" max="8" step="0.1"
-          value="${state.stlBaseMm}" class="dm-range" />
-      </div>
-
-      <div class="dm-field">
-        <label class="dm-slider-label">
-          STL Mesh Density
-          <span class="dm-slider-val" id="dm-stl-resolution-val">${Math.round(state.stlResolution)}</span>
-        </label>
-        <input type="range" id="dm-stl-resolution" min="140" max="700" step="10"
-          value="${state.stlResolution}" class="dm-range" />
-        <div class="dm-field-hint">Higher values produce smoother, heavier STL files</div>
-      </div>
-
-      <hr class="dm-divider">
-
       <!-- 3D Preview settings -->
       <div class="dm-field">
         <label class="dm-slider-label">
@@ -762,9 +719,6 @@
         </button>
         <button class="dm-btn dm-btn-secondary" id="dm-download-preview-btn" style="display:none">
           Preview PNG
-        </button>
-        <button class="dm-btn dm-btn-secondary" id="dm-download-stl-btn" style="display:none">
-          Download STL
         </button>
       </div>
 
@@ -928,7 +882,6 @@
     const generateBtn = document.getElementById('dm-generate-btn');
     const downloadBtn = document.getElementById('dm-download-btn');
     const downloadPreviewBtn = document.getElementById('dm-download-preview-btn');
-    const downloadStlBtn = document.getElementById('dm-download-stl-btn');
     const origBody    = document.getElementById('dm-orig-body');
 
     /* ── Upload ── */
@@ -959,7 +912,6 @@
     });
     downloadBtn.addEventListener('click', downloadDepthMap);
     downloadPreviewBtn.addEventListener('click', downloadPreviewStage);
-    downloadStlBtn.addEventListener('click', downloadDepthSTL);
 
     /* ── Pan/zoom ── */
     pzInstances.orig   = setupPanZoom(origBody, document.getElementById('dm-orig-wrap'));
@@ -1050,19 +1002,6 @@
         rerenderIfReady();
       });
     });
-    const stlBindings = [
-      ['dm-stl-width', 'stlWidthMm', 'dm-stl-width-val', (v) => `${Math.round(v)}mm`],
-      ['dm-stl-relief', 'stlReliefMm', 'dm-stl-relief-val', (v) => `${v.toFixed(1)}mm`],
-      ['dm-stl-base', 'stlBaseMm', 'dm-stl-base-val', (v) => `${v.toFixed(1)}mm`],
-      ['dm-stl-resolution', 'stlResolution', 'dm-stl-resolution-val', (v) => `${Math.round(v)}`],
-    ];
-    stlBindings.forEach(([id, key, outId, format]) => {
-      const el = document.getElementById(id);
-      el.addEventListener('input', (e) => {
-        state[key] = parseFloat(e.target.value);
-        document.getElementById(outId).textContent = format(state[key]);
-      });
-    });
     document.getElementById('dm-stage-select').addEventListener('change', (e) => {
       state.previewStage = e.target.value;
       if (state.debugOutputs) showDepthResult();
@@ -1137,7 +1076,6 @@
         document.getElementById('dm-result-info').textContent = '';
         document.getElementById('dm-download-btn').style.display = 'none';
         document.getElementById('dm-download-preview-btn').style.display = 'none';
-        document.getElementById('dm-download-stl-btn').style.display = 'none';
 
         document.getElementById('dm-orig-body').style.cursor = '';
         document.getElementById('dm-replace-btn').style.display = 'inline-block';
@@ -2029,7 +1967,6 @@
       `${stageCanvas.width} × ${stageCanvas.height} px · ${state.previewStage} · ${state.sceneCategory}`;
     document.getElementById('dm-download-btn').style.display = '';
     document.getElementById('dm-download-preview-btn').style.display = '';
-    document.getElementById('dm-download-stl-btn').style.display = '';
 
     // Ensure we're in depth view
     setResultView('depth');
@@ -2488,183 +2425,6 @@
     } catch {
       blob = await new Promise((resolve) => state.depthCanvas.toBlob(resolve, 'image/png'));
     }
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  }
-
-  function sampleDepthBilinear(depth, w, h, u, v) {
-    const fx = u * (w - 1);
-    const fy = v * (h - 1);
-    const x0 = Math.max(0, Math.min(w - 1, Math.floor(fx)));
-    const y0 = Math.max(0, Math.min(h - 1, Math.floor(fy)));
-    const x1 = Math.max(0, Math.min(w - 1, x0 + 1));
-    const y1 = Math.max(0, Math.min(h - 1, y0 + 1));
-    const tx = fx - x0;
-    const ty = fy - y0;
-    const d00 = depth[y0 * w + x0];
-    const d10 = depth[y0 * w + x1];
-    const d01 = depth[y1 * w + x0];
-    const d11 = depth[y1 * w + x1];
-    const a = d00 + (d10 - d00) * tx;
-    const b = d01 + (d11 - d01) * tx;
-    return a + (b - a) * ty;
-  }
-
-  function buildReliefTriangles(depth, w, h, cols, rows, widthMm, reliefMm, baseMm) {
-    const heightMm = widthMm * (h / w);
-    const triCount = 4 * ((cols - 1) * (rows - 1) + (rows - 1) + (cols - 1));
-    const tris = new Float32Array(triCount * 9);
-
-    const top = new Float32Array(cols * rows * 3);
-    const bot = new Float32Array(cols * rows * 3);
-    for (let gy = 0; gy < rows; gy++) {
-      const v = gy / Math.max(1, rows - 1);
-      for (let gx = 0; gx < cols; gx++) {
-        const u = gx / Math.max(1, cols - 1);
-        const idx = (gy * cols + gx) * 3;
-        const x = u * widthMm;
-        const y = v * heightMm;
-        const zTop = baseMm + sampleDepthBilinear(depth, w, h, u, v) * reliefMm;
-        top[idx] = x;
-        top[idx + 1] = y;
-        top[idx + 2] = zTop;
-        bot[idx] = x;
-        bot[idx + 1] = y;
-        bot[idx + 2] = 0;
-      }
-    }
-
-    let tp = 0;
-    function tri(ax, ay, az, bx, by, bz, cx, cy, cz) {
-      tris[tp++] = ax; tris[tp++] = ay; tris[tp++] = az;
-      tris[tp++] = bx; tris[tp++] = by; tris[tp++] = bz;
-      tris[tp++] = cx; tris[tp++] = cy; tris[tp++] = cz;
-    }
-
-    function get(arr, x, y, o) {
-      return arr[(y * cols + x) * 3 + o];
-    }
-
-    // Top and bottom caps
-    for (let y = 0; y < rows - 1; y++) {
-      for (let x = 0; x < cols - 1; x++) {
-        const t00x = get(top, x, y, 0), t00y = get(top, x, y, 1), t00z = get(top, x, y, 2);
-        const t10x = get(top, x + 1, y, 0), t10y = get(top, x + 1, y, 1), t10z = get(top, x + 1, y, 2);
-        const t01x = get(top, x, y + 1, 0), t01y = get(top, x, y + 1, 1), t01z = get(top, x, y + 1, 2);
-        const t11x = get(top, x + 1, y + 1, 0), t11y = get(top, x + 1, y + 1, 1), t11z = get(top, x + 1, y + 1, 2);
-        tri(t00x, t00y, t00z, t10x, t10y, t10z, t11x, t11y, t11z);
-        tri(t00x, t00y, t00z, t11x, t11y, t11z, t01x, t01y, t01z);
-
-        const b00x = get(bot, x, y, 0), b00y = get(bot, x, y, 1), b00z = get(bot, x, y, 2);
-        const b10x = get(bot, x + 1, y, 0), b10y = get(bot, x + 1, y, 1), b10z = get(bot, x + 1, y, 2);
-        const b01x = get(bot, x, y + 1, 0), b01y = get(bot, x, y + 1, 1), b01z = get(bot, x, y + 1, 2);
-        const b11x = get(bot, x + 1, y + 1, 0), b11y = get(bot, x + 1, y + 1, 1), b11z = get(bot, x + 1, y + 1, 2);
-        tri(b00x, b00y, b00z, b11x, b11y, b11z, b10x, b10y, b10z);
-        tri(b00x, b00y, b00z, b01x, b01y, b01z, b11x, b11y, b11z);
-      }
-    }
-
-    // Left/right walls
-    for (let y = 0; y < rows - 1; y++) {
-      const lt0x = get(top, 0, y, 0), lt0y = get(top, 0, y, 1), lt0z = get(top, 0, y, 2);
-      const lt1x = get(top, 0, y + 1, 0), lt1y = get(top, 0, y + 1, 1), lt1z = get(top, 0, y + 1, 2);
-      const lb0x = get(bot, 0, y, 0), lb0y = get(bot, 0, y, 1), lb0z = get(bot, 0, y, 2);
-      const lb1x = get(bot, 0, y + 1, 0), lb1y = get(bot, 0, y + 1, 1), lb1z = get(bot, 0, y + 1, 2);
-      tri(lt0x, lt0y, lt0z, lb1x, lb1y, lb1z, lb0x, lb0y, lb0z);
-      tri(lt0x, lt0y, lt0z, lt1x, lt1y, lt1z, lb1x, lb1y, lb1z);
-
-      const rx = cols - 1;
-      const rt0x = get(top, rx, y, 0), rt0y = get(top, rx, y, 1), rt0z = get(top, rx, y, 2);
-      const rt1x = get(top, rx, y + 1, 0), rt1y = get(top, rx, y + 1, 1), rt1z = get(top, rx, y + 1, 2);
-      const rb0x = get(bot, rx, y, 0), rb0y = get(bot, rx, y, 1), rb0z = get(bot, rx, y, 2);
-      const rb1x = get(bot, rx, y + 1, 0), rb1y = get(bot, rx, y + 1, 1), rb1z = get(bot, rx, y + 1, 2);
-      tri(rt0x, rt0y, rt0z, rb0x, rb0y, rb0z, rb1x, rb1y, rb1z);
-      tri(rt0x, rt0y, rt0z, rb1x, rb1y, rb1z, rt1x, rt1y, rt1z);
-    }
-
-    // Top/bottom walls
-    for (let x = 0; x < cols - 1; x++) {
-      const tt0x = get(top, x, 0, 0), tt0y = get(top, x, 0, 1), tt0z = get(top, x, 0, 2);
-      const tt1x = get(top, x + 1, 0, 0), tt1y = get(top, x + 1, 0, 1), tt1z = get(top, x + 1, 0, 2);
-      const tb0x = get(bot, x, 0, 0), tb0y = get(bot, x, 0, 1), tb0z = get(bot, x, 0, 2);
-      const tb1x = get(bot, x + 1, 0, 0), tb1y = get(bot, x + 1, 0, 1), tb1z = get(bot, x + 1, 0, 2);
-      tri(tt0x, tt0y, tt0z, tb0x, tb0y, tb0z, tb1x, tb1y, tb1z);
-      tri(tt0x, tt0y, tt0z, tb1x, tb1y, tb1z, tt1x, tt1y, tt1z);
-
-      const by = rows - 1;
-      const bt0x = get(top, x, by, 0), bt0y = get(top, x, by, 1), bt0z = get(top, x, by, 2);
-      const bt1x = get(top, x + 1, by, 0), bt1y = get(top, x + 1, by, 1), bt1z = get(top, x + 1, by, 2);
-      const bb0x = get(bot, x, by, 0), bb0y = get(bot, x, by, 1), bb0z = get(bot, x, by, 2);
-      const bb1x = get(bot, x + 1, by, 0), bb1y = get(bot, x + 1, by, 1), bb1z = get(bot, x + 1, by, 2);
-      tri(bt0x, bt0y, bt0z, bb1x, bb1y, bb1z, bb0x, bb0y, bb0z);
-      tri(bt0x, bt0y, bt0z, bt1x, bt1y, bt1z, bb1x, bb1y, bb1z);
-    }
-
-    return { triangles: tris, triangleCount: triCount };
-  }
-
-  function encodeBinarySTL(triangles, triangleCount, name) {
-    const out = new ArrayBuffer(84 + triangleCount * 50);
-    const dv = new DataView(out);
-    const header = new Uint8Array(out, 0, 80);
-    const title = new TextEncoder().encode((name || 'lazar_relief').slice(0, 79));
-    header.set(title.subarray(0, Math.min(title.length, 80)));
-    dv.setUint32(80, triangleCount, true);
-
-    let p = 84;
-    let t = 0;
-    for (let i = 0; i < triangleCount; i++) {
-      const ax = triangles[t++], ay = triangles[t++], az = triangles[t++];
-      const bx = triangles[t++], by = triangles[t++], bz = triangles[t++];
-      const cx = triangles[t++], cy = triangles[t++], cz = triangles[t++];
-      const abx = bx - ax, aby = by - ay, abz = bz - az;
-      const acx = cx - ax, acy = cy - ay, acz = cz - az;
-      let nx = aby * acz - abz * acy;
-      let ny = abz * acx - abx * acz;
-      let nz = abx * acy - aby * acx;
-      const len = Math.hypot(nx, ny, nz) || 1;
-      nx /= len; ny /= len; nz /= len;
-
-      dv.setFloat32(p, nx, true); p += 4;
-      dv.setFloat32(p, ny, true); p += 4;
-      dv.setFloat32(p, nz, true); p += 4;
-      dv.setFloat32(p, ax, true); p += 4;
-      dv.setFloat32(p, ay, true); p += 4;
-      dv.setFloat32(p, az, true); p += 4;
-      dv.setFloat32(p, bx, true); p += 4;
-      dv.setFloat32(p, by, true); p += 4;
-      dv.setFloat32(p, bz, true); p += 4;
-      dv.setFloat32(p, cx, true); p += 4;
-      dv.setFloat32(p, cy, true); p += 4;
-      dv.setFloat32(p, cz, true); p += 4;
-      dv.setUint16(p, 0, true); p += 2;
-    }
-    return new Blob([out], { type: 'model/stl' });
-  }
-
-  async function downloadDepthSTL() {
-    if (!state.processedDepthFloat || !state.originalImg) return;
-    const W = state.originalImg.naturalWidth;
-    const H = state.originalImg.naturalHeight;
-    const maxSide = Math.max(2, Math.round(state.stlResolution));
-    const cols = Math.max(24, maxSide);
-    const rows = Math.max(24, Math.round(cols * (H / W)));
-    const { triangles, triangleCount } = buildReliefTriangles(
-      state.processedDepthFloat,
-      W,
-      H,
-      cols,
-      rows,
-      state.stlWidthMm,
-      state.stlReliefMm,
-      state.stlBaseMm,
-    );
-    const stem = state.file?.name ? state.file.name.replace(/\.[^.]+$/, '') : 'image';
-    const filename = `${stem}_relief_${cols}x${rows}_${Math.round(state.stlWidthMm)}mm.stl`;
-    const blob = encodeBinarySTL(triangles, triangleCount, stem);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
