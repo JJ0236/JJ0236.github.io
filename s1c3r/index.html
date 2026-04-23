@@ -188,6 +188,46 @@
       cursor: pointer;
     }
     .swatch.active { border-color: #e94560; }
+
+    /* ── Sheet scrubber overlay ──────────── */
+    #slice-scrubber {
+      position: absolute;
+      bottom: 48px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(22,33,62,.92);
+      border: 1px solid #0f3460;
+      border-radius: 8px;
+      padding: 8px 18px 6px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      min-width: 280px;
+      z-index: 10;
+      pointer-events: all;
+    }
+    #slice-scrubber input[type=range] { width: 240px; margin: 0; }
+    #sld-label {
+      font-size: .78rem;
+      color: #e94560;
+      letter-spacing: .06em;
+    }
+    #sld-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    #sld-row button {
+      background: none;
+      border: none;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    #sld-row button:hover { color: #e94560; }
   </style>
 </head>
 <body>
@@ -205,7 +245,7 @@
   <h1>s1c3r</h1>
   <label class="btn" for="stl-input">📂 Load STL</label>
   <input type="file" id="stl-input" accept=".stl"/>
-  <button id="btn-place-hole" disabled>📍 Place Hole</button>
+  <button id="btn-place-hole" disabled>📍 Add Hole</button>
   <button id="btn-slice" disabled>⚡ Slice</button>
   <button id="btn-export" disabled>💾 Export SVG</button>
 </div>
@@ -222,7 +262,15 @@
       </svg>
       <p>Load an STL to get started</p>
     </div>
-    <div id="placing-hint">Click on the model to place alignment hole — right-click to cancel</div>
+    <div id="placing-hint">Click on the model to add a hole — right-click to cancel</div>
+    <div id="slice-scrubber">
+      <div id="sld-row">
+        <button id="sld-prev" title="Previous sheet">◀</button>
+        <input type="range" id="sld-slice" min="1" max="1" value="1"/>
+        <button id="sld-next" title="Next sheet">▶</button>
+      </div>
+      <span id="sld-label">Sheet 1 / 1</span>
+    </div>
   </div>
 
   <!-- Side panel -->
@@ -272,8 +320,9 @@
         <input id="inp-hole-size" type="number" min="1" max="50" step="0.5" value="6"/>
       </label>
 
-      <button class="full-btn" id="btn-place-hole2" disabled>📍 Click model to place hole axis</button>
-      <div id="hole-status" style="font-size:.72rem;color:#aaa;margin-top:4px"></div>
+      <button class="full-btn" id="btn-place-hole2" disabled>📍 Add hole (click model)</button>
+      <button class="full-btn" id="btn-clear-holes" style="margin-top:5px;border-color:#555" disabled>✕ Clear all holes</button>
+      <div id="hole-status" style="font-size:.72rem;color:#aaa;margin-top:5px">No holes placed</div>
     </div>
 
     <!-- Labels -->
@@ -346,8 +395,10 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 // ─── State ───────────────────────────────────────────────────────────────────
 let geometry    = null;  // BufferGeometry in raw STL units
 let slices      = [];    // [{depth:mm, polygons:[[u,v][]]}]
-let holePos     = null;  // {u,v} in mm on the perpendicular plane
+let holePosArr  = [];    // [{u,v}] array of holes in mm
+let holeMarkers = [];    // THREE.Mesh[] in scene, one per hole
 let placingHole = false;
+let activeSlice = -1;    // index into slices[] highlighted by scrubber (-1 = all)
 
 // ─── Three.js setup ──────────────────────────────────────────────────────────
 const viewport = document.getElementById('viewport');
@@ -371,7 +422,6 @@ scene.add(new THREE.AxesHelper(20));
 
 let meshGroup  = new THREE.Group(); scene.add(meshGroup);
 let planeGroup = new THREE.Group(); scene.add(planeGroup);
-let holeMarker = null;
 
 function resize() {
   const w = viewport.clientWidth, h = viewport.clientHeight;
@@ -398,10 +448,15 @@ function loadGeometry(buffer) {
 
   geometry = geom;
   slices = [];
-  holePos = null;
+  holePosArr = [];
+  activeSlice = -1;
   planeGroup.clear();
   meshGroup.clear();
-  if (holeMarker) { scene.remove(holeMarker); holeMarker = null; }
+  holeMarkers.forEach(m => scene.remove(m));
+  holeMarkers = [];
+  document.getElementById('slice-scrubber').style.display = 'none';
+  document.getElementById('hole-status').textContent = 'No holes placed';
+  document.getElementById('btn-clear-holes').disabled = true;
 
   // Centre geometry
   const centre = new THREE.Vector3();
@@ -498,15 +553,26 @@ function startPlaceHole() {
   document.getElementById(id).addEventListener('click', startPlaceHole)
 );
 
-viewport.addEventListener('contextmenu', e => {
-  if (placingHole) { e.preventDefault(); cancelPlaceHole(); }
+document.getElementById('btn-clear-holes').addEventListener('click', () => {
+  holeMarkers.forEach(m => scene.remove(m));
+  holeMarkers = [];
+  holePosArr  = [];
+  document.getElementById('hole-status').textContent = 'No holes placed';
+  document.getElementById('btn-clear-holes').disabled = true;
 });
 
-function cancelPlaceHole() {
+viewport.addEventListener('contextmenu', e => {
+  if (placingHole) { e.preventDefault(); cancelPlaceHole(true); }
+});
+
+function cancelPlaceHole(cancelled) {
   placingHole = false;
   controls.enabled = true;
   document.getElementById('placing-hint').style.display = 'none';
-  document.getElementById('hole-status').textContent = holePos ? `Hole at (${holePos.u.toFixed(1)}, ${holePos.v.toFixed(1)}) mm` : 'Cancelled.';
+  const n = holePosArr.length;
+  document.getElementById('hole-status').textContent =
+    n > 0 ? `${n} hole${n !== 1 ? 's' : ''} placed`
+          : (cancelled ? 'Cancelled.' : 'No holes placed');
 }
 
 const raycaster = new THREE.Raycaster();
@@ -528,21 +594,22 @@ renderer.domElement.addEventListener('click', e => {
   const axis = document.getElementById('sel-axis').value;
 
   // Project to mm coordinates on the perpendicular plane
-  holePos = axis === 'z' ? { u: pt.x * sc, v: pt.y * sc }
-           : axis === 'x' ? { u: pt.y * sc, v: pt.z * sc }
-           :                { u: pt.x * sc, v: pt.z * sc };
+  const newHole = axis === 'z' ? { u: pt.x * sc, v: pt.y * sc }
+                : axis === 'x' ? { u: pt.y * sc, v: pt.z * sc }
+                :                { u: pt.x * sc, v: pt.z * sc };
+  holePosArr.push(newHole);
 
-  if (holeMarker) scene.remove(holeMarker);
   const holeSize = parseFloat(document.getElementById('inp-hole-size').value) || 6;
-  holeMarker = new THREE.Mesh(
+  const marker = new THREE.Mesh(
     new THREE.SphereGeometry(holeSize * 0.5 / sc, 16, 16),
-    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.75, transparent: true })
+    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.8, transparent: true })
   );
-  holeMarker.position.copy(pt);
-  scene.add(holeMarker);
+  marker.position.copy(pt);
+  scene.add(marker);
+  holeMarkers.push(marker);
+  document.getElementById('btn-clear-holes').disabled = false;
 
-  cancelPlaceHole();
-  document.getElementById('hole-status').textContent = `Hole at (${holePos.u.toFixed(1)}, ${holePos.v.toFixed(1)}) mm`;
+  cancelPlaceHole(false);
 });
 
 // ─── Slicer ───────────────────────────────────────────────────────────────────
@@ -582,7 +649,58 @@ function doSlice() {
   setStatus(`✓ ${slices.length} sheets (${withGeo} with geometry). Ready to export.`);
   document.getElementById('btn-export').disabled = false;
   updateModelInfo();
+
+  // Show and initialise sheet scrubber
+  const sld = document.getElementById('sld-slice');
+  sld.min   = 1;
+  sld.max   = slices.length;
+  sld.value = 1;
+  document.getElementById('sld-label').textContent = `Sheet 1 / ${slices.length}`;
+  document.getElementById('slice-scrubber').style.display = 'flex';
+  activeSlice = 0;
+  updateSliceHighlight();
 }
+
+function updateSliceHighlight() {
+  planeGroup.children.forEach((m, i) => {
+    if (activeSlice === -1) {
+      m.material.color.setHex(0xe94560);
+      m.material.opacity = 0.07;
+    } else if (i === activeSlice) {
+      m.material.color.setHex(0xff9f1c);
+      m.material.opacity = 0.5;
+    } else {
+      m.material.color.setHex(0xe94560);
+      m.material.opacity = 0.02;
+    }
+    m.material.needsUpdate = true;
+  });
+  meshGroup.children.forEach(m => {
+    m.material.opacity     = activeSlice === -1 ? 0.85 : 0.22;
+    m.material.needsUpdate = true;
+  });
+}
+
+// Scrubber controls
+document.getElementById('sld-slice').addEventListener('input', e => {
+  activeSlice = parseInt(e.target.value) - 1;
+  document.getElementById('sld-label').textContent = `Sheet ${activeSlice + 1} / ${slices.length}`;
+  updateSliceHighlight();
+});
+document.getElementById('sld-prev').addEventListener('click', () => {
+  const sld = document.getElementById('sld-slice');
+  if (parseInt(sld.value) > 1) {
+    sld.value = parseInt(sld.value) - 1;
+    sld.dispatchEvent(new Event('input'));
+  }
+});
+document.getElementById('sld-next').addEventListener('click', () => {
+  const sld = document.getElementById('sld-slice');
+  if (parseInt(sld.value) < slices.length) {
+    sld.value = parseInt(sld.value) + 1;
+    sld.dispatchEvent(new Event('input'));
+  }
+});
 
 // ── True cross-section: plane-triangle intersection ───────────────────────────
 // Intersects a plane (axis-aligned at rawPlane in raw coords) with every triangle.
@@ -769,10 +887,10 @@ function doExport() {
       lines.push(`    <path class="cut" d="${d}"/>`);
     }
 
-    // Alignment hole — same position on every sheet
-    if (holePos) {
-      const hx = (ox + holePos.u).toFixed(4);
-      const hy = (oy + holePos.v).toFixed(4);
+    // Alignment holes — same positions on every sheet
+    for (const hp of holePosArr) {
+      const hx = (ox + hp.u).toFixed(4);
+      const hy = (oy + hp.v).toFixed(4);
       const hr = (holeSize * 0.5).toFixed(4);
       lines.push(holeSvg(holeShape, hx, hy, hr));
     }
