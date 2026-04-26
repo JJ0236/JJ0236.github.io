@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Instagram Analytics — Josh's Corner</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* ── IG Gradient ───────────────────────────────── */
+    .ig-text {
+      background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Home icon ─────────────────────────────────── */
+    .home-icon {
+      position: fixed;
+      top: 16px;
+      left: 20px;
+      width: 30px;
+      height: 30px;
+      color: #555;
+      text-decoration: none;
+      z-index: 200;
+      transition: color 0.2s;
+    }
+    .home-icon:hover { color: #dc2743; }
+
+    /* ── Search section ────────────────────────────── */
+    .search-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 50px 24px 20px;
+      gap: 10px;
+    }
+    .search-wrap h1 { font-size: 2.2rem; text-align: center; }
+    .search-wrap .sub { color: #555; font-size: 0.9rem; text-align: center; }
+
+    .search-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 460px;
+      margin-top: 6px;
+    }
+    .search-row input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 10px;
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      padding: 12px 16px;
+    }
+    .search-row input:focus { outline: none; border-color: #dc2743; }
+    .search-row input::placeholder { color: #444; }
+
+    #analyzeBtn {
+      padding: 12px 24px;
+      background: linear-gradient(135deg, #f09433, #dc2743);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #analyzeBtn:hover { opacity: 0.9; }
+    #analyzeBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    #status {
+      font-size: 0.88rem;
+      min-height: 20px;
+      color: #555;
+      text-align: center;
+    }
+    #status.err { color: #e74c3c; }
+
+    /* ── Profile Bar ───────────────────────────────── */
+    #profile-bar {
+      display: none;
+      background: #111;
+      border-top: 1px solid #1e1e1e;
+      border-bottom: 1px solid #1e1e1e;
+      padding: 14px 24px;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    #profile-bar.show { display: flex; }
+
+    #pfp {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #dc2743;
+    }
+    .pfp-info h2 { font-size: 1.1rem; margin-bottom: 3px; }
+    .pfp-info p { font-size: 0.82rem; color: #555; max-width: 400px; line-height: 1.4; }
+
+    .pfp-stats { display: flex; gap: 24px; flex-wrap: wrap; }
+    .pfp-stat .n { font-size: 1.25rem; font-weight: 700; }
+    .pfp-stat .l { font-size: 0.7rem; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* ── Top Nav ───────────────────────────────────── */
+    .top-nav {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+      border-bottom: 1px solid #222;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      overflow-x: auto;
+    }
+    .top-nav.show { display: flex; }
+
+    .nav-btn {
+      padding: 14px 22px;
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: #666;
+      font: inherit;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .nav-btn:hover { color: #ccc; }
+    .nav-btn.active { color: #fff; border-bottom-color: #dc2743; }
+
+    /* ── Pages ─────────────────────────────────────── */
+    .page { display: none; padding: 28px 24px; max-width: 1100px; margin: 0 auto; }
+    .page.active { display: block; }
+
+    /* ── Stat Cards ────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card .number { font-size: 1.8rem; font-weight: 700; }
+    .stat-card .label { font-size: 0.73rem; color: #555; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* ── Chart + Table Cards ───────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .card h3 {
+      margin-bottom: 14px;
+      font-size: 0.8rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+    canvas { max-height: 280px; }
+
+    /* ── Table ─────────────────────────────────────── */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { padding: 9px 8px; color: #555; text-align: left; border-bottom: 1px solid #2a2a2a; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    td { padding: 9px 8px; border-bottom: 1px solid #1c1c1c; vertical-align: middle; }
+    td a { color: #dc2743; text-decoration: none; }
+    td a:hover { text-decoration: underline; }
+
+    .thumb { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+    .badge-image    { background: #1a3a4a; color: #5ab0d8; }
+    .badge-reel     { background: #3a1a3a; color: #c55bd8; }
+    .badge-carousel { background: #3a2a1a; color: #d88e5b; }
+    .badge-hook     { background: #222; color: #aaa; border: 1px solid #333; }
+
+    /* ── Tags ──────────────────────────────────────── */
+    .tag-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag-pill {
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 20px;
+      padding: 5px 13px;
+      font-size: 0.8rem;
+    }
+    .tag-pill .tn { color: #dc2743; }
+    .tag-pill .tc { color: #444; margin-left: 4px; }
+
+    /* ── Notice ────────────────────────────────────── */
+    .notice {
+      background: #12121e;
+      border: 1px solid #2a2a4a;
+      border-radius: 10px;
+      padding: 11px 15px;
+      font-size: 0.83rem;
+      color: #666;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .notice strong { color: #dc2743; }
+
+    /* ── Full-width card util ───────────────────────── */
+    .col-full { grid-column: 1 / -1; }
+
+    /* ── Responsive ────────────────────────────────── */
+    @media (max-width: 640px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .page { padding: 16px; }
+      .search-wrap { padding: 44px 16px 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<a href="/projects/" class="home-icon" title="Back to Projects">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+    <path d="M9 21V12H15V21"/>
+  </svg>
+</a>
+
+<!-- ── Search ───────────────────────────────────────── -->
+<div class="search-wrap">
+  <h1 class="ig-text">Instagram Analytics</h1>
+  <p class="sub">Enter any public handle to generate a dashboard — runs entirely on your site, no third-party API or key needed.</p>
+  <div class="search-row">
+    <input id="handleInput" type="text" placeholder="@username or username" maxlength="60" autocomplete="off"/>
+    <button id="analyzeBtn">Analyze</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<!-- ── Profile Bar ──────────────────────────────────── -->
+<div id="profile-bar">
+  <img id="pfp" src="" alt="Profile picture"/>
+  <div class="pfp-info">
+    <h2 id="pfp-name"></h2>
+    <p id="pfp-bio"></p>
+  </div>
+  <div class="pfp-stats">
+    <div class="pfp-stat">
+      <div class="n ig-text" id="ps-followers"></div>
+      <div class="l">Followers</div>
+    </div>
+    <div class="pfp-stat">
+      <div class="n ig-text" id="ps-following"></div>
+      <div class="l">Following</div>
+    </div>
+    <div class="pfp-stat">
+      <div class="n ig-text" id="ps-posts"></div>
+      <div class="l">Posts</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Navigation ───────────────────────────────────── -->
+<nav class="top-nav" id="main-nav">
+  <button class="nav-btn" data-page="analytics"><span class="nav-icon">📊</span> Analytics</button>
+  <button class="nav-btn" data-page="hashtags"><span class="nav-icon">🏷️</span> Hashtags</button>
+  <button class="nav-btn" data-page="content"><span class="nav-icon">📝</span> Content</button>
+  <button class="nav-btn" data-page="timing"><span class="nav-icon">⏰</span> Timing</button>
+  <button class="nav-btn" data-page="posts"><span class="nav-icon">📷</span> Posts</button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PAGE: Analytics                                     -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="page-analytics" class="page">
+  <div class="stats-grid" id="stats-grid"></div>
+  <div class="charts-grid">
+    <div class="card">
+      <h3>Post Type Breakdown</h3>
+      <canvas id="ch-types"></canvas>
+    </div>
+    <div class="card">
+      <h3>Posts Per Month</h3>
+      <canvas id="ch-monthly"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid" id="type-perf-wrap" style="display:none;">
+    <div class="card col-full">
+      <h3>Avg Engagement Score by Post Type</h3>
+      <canvas id="ch-type-perf" style="max-height:200px;"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid" id="growth-wrap" style="display:none;">
+    <div class="card col-full">
+      <h3>Monthly Growth Trend</h3>
+      <canvas id="ch-growth" style="max-height:260px;"></canvas>
+    </div>
+  </div>
+  <div class="card" id="top-posts-card" style="display:none; margin-top:4px;">
+    <h3>Top 10 Posts by Engagement Score</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Caption</th>
+            <th>Type</th>
+            <th>Likes</th>
+            <th>Comments</th>
+            <th>Score</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="top-posts-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PAGE: Hashtags                                      -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="page-hashtags" class="page">
+  <div class="notice">
+    Analysis based on captions from <strong id="post-count-note">0</strong> scraped posts.
+    <span id="eng-note" style="display:none"> Hashtags ranked by avg engagement score (likes + comments × 3).</span>
+  </div>
+  <div class="card" style="margin-bottom:20px;">
+    <h3>Top Hashtags by <span id="hashtag-rank-label">Usage</span></h3>
+    <canvas id="ch-tags" style="max-height:400px;"></canvas>
+  </div>
+  <div class="card">
+    <h3>All Hashtags</h3>
+    <div class="tag-grid" id="tag-pills"></div>
+  </div>
+  <div class="card" id="content-gaps-card" style="display:none; margin-top:20px;">
+    <h3>Content Gaps — Underexplored High-Performers</h3>
+    <div class="tag-grid" id="content-gaps-pills"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PAGE: Content                                       -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="page-content" class="page">
+  <div class="charts-grid">
+    <div class="card">
+      <h3>Caption Length Distribution</h3>
+      <canvas id="ch-cap"></canvas>
+    </div>
+    <div class="card">
+      <h3>Hashtags Per Post</h3>
+      <canvas id="ch-hcount"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid" id="cap-eng-wrap" style="display:none;">
+    <div class="card col-full">
+      <h3>Caption Length vs Engagement</h3>
+      <canvas id="ch-cap-eng" style="max-height:220px;"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid">
+    <div class="card col-full">
+      <h3>Opening Line Hook Style Breakdown</h3>
+      <canvas id="ch-hooks" style="max-height:220px;"></canvas>
+    </div>
+  </div>
+  <div class="card" style="margin-top:0;">
+    <h3>Top Opening Lines</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Hook Text</th>
+            <th>Style</th>
+            <th id="hook-score-th" style="display:none;">Score</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="hooks-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PAGE: Timing                                        -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="page-timing" class="page">
+  <div class="notice">
+    Charts show <strong>your historical posting frequency</strong> by day and hour — useful for understanding your own pattern and identifying gaps.
+  </div>
+  <div class="charts-grid">
+    <div class="card">
+      <h3>Posts by Day of Week</h3>
+      <canvas id="ch-days"></canvas>
+    </div>
+    <div class="card">
+      <h3>Posts by Hour of Day</h3>
+      <canvas id="ch-hours"></canvas>
+    </div>
+  </div>
+  <div class="charts-grid" id="timing-eng-wrap" style="display:none;">
+    <div class="card">
+      <h3>Avg Engagement Score by Day</h3>
+      <canvas id="ch-days-eng"></canvas>
+    </div>
+    <div class="card">
+      <h3>Avg Engagement Score by Hour</h3>
+      <canvas id="ch-hours-eng"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- PAGE: Posts                                         -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="page-posts" class="page">
+  <div class="card">
+    <h3>All Posts</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th>Caption</th>
+            <th>Type</th>
+            <th id="th-likes" style="display:none;">Likes</th>
+            <th id="th-comments" style="display:none;">Comments</th>
+            <th id="th-score" style="display:none;">Score</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="posts-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────
+  let _charts = {};
+  const IG = ['#f09433', '#e6683c', '#dc2743', '#cc2366', '#bc1888'];
+
+  // ── Utilities ──────────────────────────────────────────
+  function fmt(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return String(n);
+  }
+
+  function setStatus(msg, cls = '') {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = cls;
+  }
+
+  // ── Worker URL (your Cloudflare Worker) ─────────────────
+  const WORKER_URL = 'https://ig-proxy.joshua02050236.workers.dev';
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  async function fetchProfileData(handle, onProgress) {
+    const clean = handle.replace(/^@/, '').trim().toLowerCase();
+    if (!clean) throw new Error('Please enter a username.');
+
+    // 1) Fetch profile + first 12 posts
+    const res = await fetch(`${WORKER_URL}/?username=${encodeURIComponent(clean)}`);
+    const body = await res.json();
+
+    if (!res.ok || body.error) {
+      throw new Error(body.error || `Request failed (${res.status})`);
+    }
+    if (!body.profile?.username) {
+      throw new Error('Could not parse profile data. The account may be private or does not exist.');
+    }
+
+    const allPosts = body.posts || [];
+    const seen = new Set(allPosts.map(p => p.shortcode));
+    const userId = body.userId;
+    const total = body.profile.totalPosts || 0;
+    let cursor = body.cursor;
+    let hasNext = body.hasNext;
+
+    if (onProgress) onProgress(allPosts.length, total);
+
+    // 2) Paginate ALL remaining posts via GraphQL cursor
+    if (userId && hasNext && cursor) {
+      let failures = 0;
+
+      for (let page = 0; page < 2000; page++) {
+        try {
+          await sleep(1500 + Math.random() * 1500); // 1.5–3s delay
+
+          const pageUrl = `${WORKER_URL}/?userId=${userId}&cursor=${encodeURIComponent(cursor)}`;
+          const pRes = await fetch(pageUrl);
+
+          if (!pRes.ok) {
+            if (++failures >= 5) break;
+            await sleep(3000 * failures);
+            continue;
+          }
+
+          const pBody = await pRes.json();
+          if (pBody.error) {
+            if (++failures >= 5) break;
+            await sleep(3000 * failures);
+            continue;
+          }
+
+          failures = 0;
+          for (const post of (pBody.posts || [])) {
+            if (!seen.has(post.shortcode)) {
+              seen.add(post.shortcode);
+              allPosts.push(post);
+            }
+          }
+
+          if (onProgress) onProgress(allPosts.length, total);
+
+          if (!pBody.hasNext || !pBody.cursor) break;
+          cursor = pBody.cursor;
+        } catch {
+          if (++failures >= 5) break;
+          await sleep(3000 * failures);
+        }
+      }
+    }
+
+    // Normalize post dates
+    body.posts = allPosts.map(p => ({
+      ...p,
+      date: new Date((p.timestamp || 0) * 1000),
+    }));
+
+    return body;
+  }
+
+  // ── Analytics ──────────────────────────────────────────
+  function computeAnalytics({ posts }) {
+    const dayFreq  = new Array(7).fill(0);
+    const hourFreq = new Array(24).fill(0);
+    const dayEng   = Array.from({ length: 7 }, () => []);
+    const hourEng  = Array.from({ length: 24 }, () => []);
+    const monthMap = {};
+    const monthEng = {};
+    const typeMap  = { image: 0, reel: 0, carousel: 0 };
+    const hashFreq = {};
+    const hashEngMap = {};
+    const capBuckets = { '0–50': 0, '51–150': 0, '151–300': 0, '301–500': 0, '500+': 0 };
+    const capEngBuckets = { '0–50': [], '51–150': [], '151–300': [], '301–500': [], '500+': [] };
+    const hashCounts = [];
+    const hookStyles = {};
+    const hooks = [];
+    const typeEng = {};
+    let totalLikes = 0, totalComments = 0, totalPlays = 0, videoCount = 0, hasEng = false;
+    const allScores = [];
+
+    for (const p of posts) {
+      typeMap[p.type] = (typeMap[p.type] || 0) + 1;
+
+      const d = p.date;
+      const dow = d.getDay();
+      const hr = d.getHours();
+      dayFreq[dow]++;
+      hourFreq[hr]++;
+
+      const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthMap[mk] = (monthMap[mk] || 0) + 1;
+
+      const cap  = p.caption || '';
+      const tags = (cap.match(/#\w+/g) || []).map(t => t.toLowerCase());
+      hashCounts.push(tags.length);
+
+      const score = p.likes + p.comments * 3;
+      allScores.push(score);
+      for (const t of tags) {
+        hashFreq[t]    = (hashFreq[t]    || 0) + 1;
+        hashEngMap[t]  = (hashEngMap[t]  || 0) + score;
+      }
+
+      const len = cap.length;
+      const bucket = len <= 50 ? '0–50' : len <= 150 ? '51–150' : len <= 300 ? '151–300' : len <= 500 ? '301–500' : '500+';
+      capBuckets[bucket]++;
+      capEngBuckets[bucket].push(score);
+
+      if (p.likes > 0) { totalLikes += p.likes; hasEng = true; }
+      totalComments += p.comments;
+      if (p.isVideo || p.type === 'reel') {
+        totalPlays += (p.plays || 0);
+        videoCount++;
+      }
+
+      dayEng[dow].push(score);
+      hourEng[hr].push(score);
+
+      if (!monthEng[mk]) monthEng[mk] = { scores: [], likes: [] };
+      monthEng[mk].scores.push(score);
+      monthEng[mk].likes.push(p.likes);
+
+      if (!typeEng[p.type]) typeEng[p.type] = [];
+      typeEng[p.type].push(score);
+
+      const hook = extractHook(cap);
+      if (hook) {
+        const style = classifyHook(hook);
+        hooks.push({ text: hook.slice(0, 130), date: d, score, style, likes: p.likes, type: p.type, url: p.url });
+        hookStyles[style] = (hookStyles[style] || 0) + 1;
+      }
+    }
+
+    const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : 0;
+
+    // Build hashtag ranking
+    const topHashtags = Object.entries(hashFreq)
+      .sort(([ta, ca], [tb, cb]) => {
+        if (hasEng) {
+          const avgA = (hashEngMap[ta] || 0) / ca;
+          const avgB = (hashEngMap[tb] || 0) / cb;
+          return avgB - avgA;
+        }
+        return cb - ca;
+      })
+      .slice(0, 25)
+      .map(([tag, count]) => ({ tag, count, avgEng: Math.round((hashEngMap[tag] || 0) / count) }));
+
+    // Content gaps: hashtags used ≤2 times with above-median score
+    const medianScore = allScores.length ? [...allScores].sort((a, b) => a - b)[Math.floor(allScores.length / 2)] : 0;
+    const contentGaps = Object.entries(hashFreq)
+      .filter(([tag, count]) => count <= 2 && (hashEngMap[tag] || 0) / count > medianScore)
+      .sort(([ta, ca], [tb, cb]) => (hashEngMap[tb] / cb) - (hashEngMap[ta] / ca))
+      .slice(0, 10)
+      .map(([tag, count]) => ({ tag, count, avgEng: Math.round((hashEngMap[tag] || 0) / count) }));
+
+    const monthlyPosts = Object.entries(monthMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([month, count]) => ({
+        month, count,
+        avgScore: avg(monthEng[month]?.scores ?? []),
+        avgLikes: avg(monthEng[month]?.likes ?? []),
+      }));
+
+    const typeAvgEng = Object.fromEntries(
+      Object.entries(typeEng).map(([t, vals]) => [t, avg(vals)])
+    );
+
+    const capEngAvg = Object.fromEntries(
+      Object.entries(capEngBuckets).map(([b, vals]) => [b, avg(vals)])
+    );
+
+    let postsPerWeek = null;
+    if (posts.length >= 2) {
+      const sorted  = [...posts].sort((a, b) => a.timestamp - b.timestamp);
+      const spanW   = (sorted.at(-1).timestamp - sorted[0].timestamp) / (7 * 86400);
+      postsPerWeek  = spanW > 0 ? (posts.length / spanW).toFixed(1) : null;
+    }
+
+    // Top 10 posts by engagement score
+    const topPosts = [...posts]
+      .map(p => ({ ...p, score: p.likes + p.comments * 3 }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+
+    return {
+      typeMap, topHashtags, contentGaps, monthlyPosts, capBuckets, capEngAvg, hashCounts,
+      hookStyles, dayFreq, hourFreq, hasEng, typeAvgEng, topPosts,
+      dayEngAvg:  dayEng.map(arr => avg(arr)),
+      hourEngAvg: hourEng.map(arr => avg(arr)),
+      hooks: hooks.sort((a, b) => b.score - a.score),
+      totalLikes,
+      avgLikes:      hasEng && posts.length ? Math.round(totalLikes    / posts.length) : null,
+      avgComments:   posts.length          ? Math.round(totalComments / posts.length) : null,
+      avgEngagement: hasEng && posts.length ? Math.round((totalLikes + totalComments) / posts.length) : null,
+      avgVideoPlays: videoCount > 0 ? Math.round(totalPlays / videoCount) : null,
+      avgCap:     avg(posts.map(p => p.caption?.length ?? 0)),
+      avgTags:    posts.length ? (hashCounts.reduce((s, v) => s + v, 0) / posts.length).toFixed(1) : 0,
+      postsPerWeek,
+    };
+  }
+
+  // ── Hook helpers ───────────────────────────────────────
+  function extractHook(cap) {
+    if (!cap) return '';
+    for (const d of ['\n', '. ', '! ', '? ']) {
+      const i = cap.indexOf(d);
+      if (i > 2 && i < 200) return cap.slice(0, i).trim();
+    }
+    return cap.slice(0, 100).trim();
+  }
+
+  function classifyHook(h) {
+    const t = h.toLowerCase();
+    if (/did you know|secret|nobody talks|most people|you won't believe/.test(t)) return 'Curiosity Gap';
+    if (/stop|wait|don't scroll|hold on|psa/.test(t))                             return 'Pattern Interrupt';
+    if (/how to|here's how|step |tutorial|guide/.test(t))                         return 'How-To';
+    if (/top |best |favorite|#1|list/.test(t))                                     return 'Listicle';
+    if (/new |now open|just |announcing|introducing|we're|we are/.test(t))        return 'Announcement';
+    if (/\?/.test(h))                                                              return 'Question';
+    if (/this is|here's|meet |check out|look at/.test(t))                         return 'Showcase';
+    return 'Other';
+  }
+
+  // ── Chart helpers ──────────────────────────────────────
+  function mkChart(id, type, labels, datasets, extra = {}) {
+    if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+    const ctx = document.getElementById(id)?.getContext('2d');
+    if (!ctx) return;
+    _charts[id] = new Chart(ctx, {
+      type,
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: type === 'doughnut' || type === 'pie',
+            labels: { color: '#888', boxWidth: 12, font: { size: 11 } },
+          },
+        },
+        scales: (type === 'bar' || type === 'line') ? {
+          x: { ticks: { color: '#555' }, grid: { color: '#1c1c1c' } },
+          y: { ticks: { color: '#555' }, grid: { color: '#1c1c1c' } },
+        } : {},
+        ...extra,
+      },
+    });
+  }
+
+  function barDs(data, color = '#dc2743') {
+    return [{ data, backgroundColor: color, borderColor: color, borderRadius: 5, borderWidth: 0 }];
+  }
+
+  // ── Render Dashboard ───────────────────────────────────
+  function render(data, a) {
+    const { profile, posts } = data;
+
+    // Profile bar
+    const pfpEl = document.getElementById('pfp');
+    pfpEl.src = profile.profilePic;
+    pfpEl.onerror = () => { pfpEl.style.display = 'none'; };
+    document.getElementById('pfp-name').textContent =
+      (profile.isVerified ? '✔ ' : '') + (profile.fullName || profile.username) + ` (@${profile.username})`;
+    document.getElementById('pfp-bio').textContent = profile.biography || profile.bio || '';
+    document.getElementById('ps-followers').textContent = fmt(profile.followers);
+    document.getElementById('ps-following').textContent = fmt(profile.following);
+    document.getElementById('ps-posts').textContent = fmt(profile.totalPosts);
+    document.getElementById('profile-bar').classList.add('show');
+    document.getElementById('main-nav').classList.add('show');
+
+    // ── ANALYTICS PAGE ──────────────────────────────────
+    const statsRows = [
+      { v: posts.length,          l: 'Posts Analyzed'   },
+      { v: a.postsPerWeek ?? '—', l: 'Posts / Week'   },
+      ...(a.hasEng ? [
+        { v: fmt(a.totalLikes),       l: 'Total Likes'      },
+        { v: fmt(a.avgLikes),         l: 'Avg Likes'        },
+        { v: fmt(a.avgComments),      l: 'Avg Comments'     },
+        { v: fmt(a.avgEngagement),    l: 'Avg Engagement'   },
+        ...(a.avgVideoPlays != null ? [{ v: fmt(a.avgVideoPlays), l: 'Avg Video Plays' }] : []),
+      ] : [
+        { v: a.avgCap,              l: 'Avg Caption Len' },
+        { v: a.avgTags,             l: 'Avg Hashtags'    },
+      ]),
+    ];
+    document.getElementById('stats-grid').innerHTML = statsRows
+      .map(s => `<div class="stat-card">
+          <div class="number ig-text">${s.v}</div>
+          <div class="label">${s.l}</div>
+        </div>`)
+      .join('');
+
+    mkChart('ch-types', 'doughnut',
+      Object.keys(a.typeMap),
+      [{ data: Object.values(a.typeMap), backgroundColor: IG, borderColor: '#0f0f0f', borderWidth: 3 }]
+    );
+
+    mkChart('ch-monthly', 'bar',
+      a.monthlyPosts.map(m => m.month),
+      barDs(a.monthlyPosts.map(m => m.count)),
+      { plugins: { legend: { display: false } } }
+    );
+
+    const typePerfWrap = document.getElementById('type-perf-wrap');
+    if (a.hasEng && Object.keys(a.typeAvgEng).length > 1) {
+      typePerfWrap.style.display = '';
+      mkChart('ch-type-perf', 'bar',
+        Object.keys(a.typeAvgEng),
+        [{ data: Object.values(a.typeAvgEng), backgroundColor: IG, borderRadius: 5 }],
+        { plugins: { legend: { display: false } } }
+      );
+    } else {
+      typePerfWrap.style.display = 'none';
+    }
+
+    // Monthly Growth Trend (line chart with avg likes + avg score)
+    const growthWrap = document.getElementById('growth-wrap');
+    if (a.hasEng && a.monthlyPosts.length >= 2) {
+      growthWrap.style.display = '';
+      mkChart('ch-growth', 'line',
+        a.monthlyPosts.map(m => m.month),
+        [
+          { label: 'Avg Likes', data: a.monthlyPosts.map(m => m.avgLikes), borderColor: '#f09433', backgroundColor: 'rgba(240,148,51,0.15)', fill: true, tension: 0.3 },
+          { label: 'Avg Score', data: a.monthlyPosts.map(m => m.avgScore), borderColor: '#dc2743', backgroundColor: 'rgba(220,39,67,0.1)', fill: true, tension: 0.3 },
+        ],
+        { plugins: { legend: { display: true, labels: { color: '#888' } } } }
+      );
+    } else {
+      growthWrap.style.display = 'none';
+    }
+
+    // Top 10 Posts table
+    const topPostsCard = document.getElementById('top-posts-card');
+    if (a.hasEng && a.topPosts.length) {
+      topPostsCard.style.display = '';
+      document.getElementById('top-posts-tbody').innerHTML = a.topPosts
+        .map((p, i) => `<tr>
+            <td style="color:#555;">${i + 1}</td>
+            <td>${(p.caption || '').slice(0, 80) || '(no caption)'}</td>
+            <td><span class="badge badge-${p.type}">${p.type}</span></td>
+            <td style="color:#f09433;">${fmt(p.likes)}</td>
+            <td style="color:#888;">${fmt(p.comments)}</td>
+            <td style="color:#dc2743; font-weight:700;">${fmt(p.score)}</td>
+            <td><a href="${p.url}" target="_blank" rel="noopener noreferrer">View</a></td>
+          </tr>`)
+        .join('');
+    } else {
+      topPostsCard.style.display = 'none';
+    }
+
+    // ── HASHTAGS PAGE ────────────────────────────────────
+    document.getElementById('post-count-note').textContent = posts.length;
+    document.getElementById('eng-note').style.display = a.hasEng ? '' : 'none';
+    document.getElementById('hashtag-rank-label').textContent = a.hasEng ? 'Avg Engagement' : 'Usage';
+
+    const topN = a.topHashtags.slice(0, 15);
+    mkChart('ch-tags', 'bar',
+      topN.map(h => h.tag),
+      [{ data: topN.map(h => a.hasEng ? h.avgEng : h.count), backgroundColor: IG[2], borderRadius: 5 }],
+      { indexAxis: 'y', plugins: { legend: { display: false } } }
+    );
+
+    document.getElementById('tag-pills').innerHTML = a.topHashtags
+      .map(h => `<span class="tag-pill"><span class="tn">${h.tag}</span><span class="tc">×${h.count}${a.hasEng ? ` · score ${h.avgEng}` : ''}</span></span>`)
+      .join('');
+
+    // Content Gaps
+    const gapsCard = document.getElementById('content-gaps-card');
+    if (a.hasEng && a.contentGaps.length) {
+      gapsCard.style.display = '';
+      document.getElementById('content-gaps-pills').innerHTML = a.contentGaps
+        .map(h => `<span class="tag-pill"><span class="tn">${h.tag}</span><span class="tc">${h.count}× · score ${h.avgEng}</span></span>`)
+        .join('');
+    } else {
+      gapsCard.style.display = 'none';
+    }
+
+    // ── CONTENT PAGE ─────────────────────────────────────
+    mkChart('ch-cap', 'doughnut',
+      Object.keys(a.capBuckets),
+      [{ data: Object.values(a.capBuckets), backgroundColor: IG, borderColor: '#0f0f0f', borderWidth: 3 }]
+    );
+
+    // Caption Length vs Engagement (bar chart)
+    const capEngWrap = document.getElementById('cap-eng-wrap');
+    if (a.hasEng) {
+      capEngWrap.style.display = '';
+      mkChart('ch-cap-eng', 'bar',
+        Object.keys(a.capEngAvg),
+        [{ data: Object.values(a.capEngAvg), backgroundColor: IG, borderRadius: 5 }],
+        { plugins: { legend: { display: false } } }
+      );
+    } else {
+      capEngWrap.style.display = 'none';
+    }
+
+    const hDist = { '0': 0, '1–5': 0, '6–10': 0, '11–20': 0, '20+': 0 };
+    for (const n of a.hashCounts) {
+      if      (n === 0) hDist['0']++;
+      else if (n <=  5) hDist['1–5']++;
+      else if (n <= 10) hDist['6–10']++;
+      else if (n <= 20) hDist['11–20']++;
+      else              hDist['20+']++;
+    }
+    mkChart('ch-hcount', 'bar',
+      Object.keys(hDist),
+      barDs(Object.values(hDist), '#f09433'),
+      { plugins: { legend: { display: false } } }
+    );
+
+    mkChart('ch-hooks', 'bar',
+      Object.keys(a.hookStyles),
+      [{ data: Object.values(a.hookStyles), backgroundColor: IG, borderRadius: 5 }],
+      { plugins: { legend: { display: false } } }
+    );
+
+    const showScore = a.hasEng;
+    document.getElementById('hook-score-th').style.display = showScore ? '' : 'none';
+    document.getElementById('hooks-tbody').innerHTML = a.hooks.slice(0, 20)
+      .map(h => `<tr>
+          <td>${h.text}</td>
+          <td><span class="badge badge-hook">${h.style}</span></td>
+          ${showScore ? `<td style="color:#f09433">${fmt(h.score)}</td>` : ''}
+          <td style="color:#444;white-space:nowrap;">${h.date.toLocaleDateString()}</td>
+        </tr>`)
+      .join('');
+
+    // ── TIMING PAGE ──────────────────────────────────────
+    mkChart('ch-days', 'bar',
+      ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+      barDs(a.dayFreq, '#e6683c'),
+      { plugins: { legend: { display: false } } }
+    );
+
+    mkChart('ch-hours', 'bar',
+      Array.from({ length: 24 }, (_, i) => `${i}:00`),
+      barDs(a.hourFreq, '#cc2366'),
+      { plugins: { legend: { display: false } } }
+    );
+
+    // Engagement-weighted timing charts
+    const timingEngWrap = document.getElementById('timing-eng-wrap');
+    if (a.hasEng) {
+      timingEngWrap.style.display = '';
+      mkChart('ch-days-eng', 'bar',
+        ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        barDs(a.dayEngAvg, '#f09433'),
+        { plugins: { legend: { display: false } } }
+      );
+      mkChart('ch-hours-eng', 'line',
+        Array.from({ length: 24 }, (_, i) => `${i}:00`),
+        [{ data: a.hourEngAvg, borderColor: '#dc2743', backgroundColor: 'rgba(220,39,67,0.15)', fill: true, tension: 0.3, pointRadius: 3 }],
+        { plugins: { legend: { display: false } } }
+      );
+    } else {
+      timingEngWrap.style.display = 'none';
+    }
+
+    // ── POSTS PAGE ───────────────────────────────────────
+    document.getElementById('th-likes').style.display    = a.hasEng ? '' : 'none';
+    document.getElementById('th-comments').style.display = a.hasEng ? '' : 'none';
+    document.getElementById('th-score').style.display    = a.hasEng ? '' : 'none';
+
+    const sortedPosts = a.hasEng
+      ? [...posts].map(p => ({ ...p, score: p.likes + p.comments * 3 })).sort((a, b) => b.score - a.score)
+      : posts;
+
+    document.getElementById('posts-tbody').innerHTML = sortedPosts
+      .map(p => `<tr>
+          <td>${p.thumbnail
+            ? `<img class="thumb" src="${p.thumbnail}" alt="" onerror="this.style.display='none'"/>`
+            : ''}</td>
+          <td><a href="${p.url}" target="_blank" rel="noopener noreferrer">${(p.caption || '').slice(0, 90) || '(no caption)'}</a></td>
+          <td><span class="badge badge-${p.type}">${p.type}</span></td>
+          ${a.hasEng ? `<td style="color:#f09433;">${fmt(p.likes)}</td><td style="color:#888;">${fmt(p.comments)}</td><td style="color:#dc2743;">${fmt(p.score)}</td>` : ''}
+          <td style="color:#444;white-space:nowrap;">${p.date.toLocaleDateString()}</td>
+        </tr>`)
+      .join('');
+
+    goTo('analytics');
+  }
+
+  // ── Analyze flow ───────────────────────────────────────
+  async function analyze() {
+    const raw = document.getElementById('handleInput').value.trim();
+    if (!raw) { setStatus('Enter an Instagram handle.', 'err'); return; }
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    document.getElementById('profile-bar').classList.remove('show');
+    document.getElementById('main-nav').classList.remove('show');
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    setStatus('Fetching profile…');
+
+    try {
+      const data = await fetchProfileData(raw, (loaded, total) => {
+        setStatus(`Loading posts… ${loaded} of ${total}`);
+      });
+      const analytics = computeAnalytics(data);
+      render(data, analytics);
+      setStatus(`Analyzed ${data.posts.length} of ${data.profile.totalPosts} posts for @${data.profile.username}.`);
+    } catch (err) {
+      setStatus(err.message, 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Nav ────────────────────────────────────────────────
+  function goTo(id) {
+    document.querySelectorAll('.nav-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.page === id);
+    });
+    document.querySelectorAll('.page').forEach(p => {
+      p.classList.toggle('active', p.id === `page-${id}`);
+    });
+  }
+
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.addEventListener('click', () => goTo(b.dataset.page));
+  });
+
+  document.getElementById('analyzeBtn').addEventListener('click', analyze);
+  document.getElementById('handleInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') analyze();
+  });
+</script>
+</body>
+</html>
