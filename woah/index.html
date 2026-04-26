@@ -293,13 +293,13 @@
         <div class="section-title">Water Physics</div>
         <div class="row">
             <label>Damping</label>
-            <input type="range" id="dampSlider" min="0.95" max="0.999" value="0.99" step="0.001">
-            <span class="val-badge" id="dampValue">0.990</span>
+            <input type="range" id="dampSlider" min="0.98" max="0.9999" value="0.999" step="0.0001">
+            <span class="val-badge" id="dampValue">0.9990</span>
         </div>
         <div class="row">
             <label>Speed</label>
-            <input type="range" id="waveSpeedSlider" min="0.1" max="3.0" value="0.8" step="0.05">
-            <span class="val-badge" id="waveSpeedValue">0.80</span>
+            <input type="range" id="waveSpeedSlider" min="0.1" max="4.0" value="1.5" step="0.05">
+            <span class="val-badge" id="waveSpeedValue">1.50</span>
         </div>
         <div class="row">
             <label>Drop Size</label>
@@ -308,8 +308,8 @@
         </div>
         <div class="row">
             <label>Drop Force</label>
-            <input type="range" id="dropForceSlider" min="0.1" max="5.0" value="1.0" step="0.05">
-            <span class="val-badge" id="dropForceValue">1.00</span>
+            <input type="range" id="dropForceSlider" min="0.5" max="25" value="8" step="0.5">
+            <span class="val-badge" id="dropForceValue">8.00</span>
         </div>
     </div>
 
@@ -335,12 +335,12 @@
         </div>
         <div class="row">
             <label>Thickness</label>
-            <input type="number" id="thicknessInput" value="1" min="0.1" step="0.1">
+            <input type="number" id="thicknessInput" value="2" min="0.1" step="0.1">
             <span class="val-badge" id="thickUnit">in</span>
         </div>
         <div class="row">
             <label>Max Relief</label>
-            <input type="number" id="reliefInput" value="0.5" min="0.05" step="0.05">
+            <input type="number" id="reliefInput" value="1.5" min="0.05" step="0.05">
             <span class="val-badge" id="reliefUnit">in</span>
         </div>
     </div>
@@ -382,7 +382,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 const UNIT_SCALE = { in: 1, cm: 2.54, mm: 25.4 };
 let currentUnit = 'in';
 
-let boardW = 5, boardL = 5, boardT = 1, maxRelief = 0.5;
+let boardW = 5, boardL = 5, boardT = 2, maxRelief = 1.5;
 
 const MIN_PTS = 60, MAX_PTS = 400, DENSITY = 20;
 let nx, ny, heights, velocities;
@@ -489,8 +489,8 @@ let dropQueue = [];
 let isPaused = false, frameStep = false;
 let selectedTool = 'pull';
 let brushRadius = 0.5, brushStrength = 0.3;
-let dampFactor = 0.99, waveSpeed = 0.8;
-let dropSize = 0.5, dropForce = 1.0;
+let dampFactor = 0.999, waveSpeed = 1.5;
+let dropSize = 0.5, dropForce = 8.0;
 const DT = 0.016;
 
 // ─── History / scrub ───
@@ -689,7 +689,8 @@ function applyBrush(ix, iy) {
             } else if (selectedTool === 'water') {
                 const delta = brushStrength * falloff * 0.05;
                 heights[idx] = Math.min(maxRelief, heights[idx] + delta);
-                velocities[idx] += delta * 4;
+                // Velocity in in/sec — inject enough to create visible ripples
+                velocities[idx] += brushStrength * falloff * 3.0;
             } else if (selectedTool === 'smooth') {
                 let sum = 0, cnt = 0;
                 if (ii > 0)      { sum += heights[(ii-1)*ny+jj]; cnt++; }
@@ -720,15 +721,23 @@ function applyDrop(drop) {
 }
 
 function stepWave(steps) {
-    const c2 = waveSpeed * waveSpeed;
+    // Properly normalized 2D wave equation.
+    // velocities are in inches/sec; heights in inches.
+    // CFL stability: c*DT/dx <= 1/sqrt(2). Cap wave speed to enforce this.
+    const dx = boardW / (nx - 1);
+    const dz = boardL / (ny - 1);
+    const cfl = 0.65; // conservative margin below 1/sqrt(2) ≈ 0.707
+    const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
+    const Kx = effC * effC * DT / (dx * dx); // Laplacian coefficient for x
+    const Kz = effC * effC * DT / (dz * dz); // Laplacian coefficient for z
+
     for (let s = 0; s < steps; s++) {
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
-                const lap = heights[(i-1)*ny+j] + heights[(i+1)*ny+j]
-                          + heights[i*ny+(j-1)] + heights[i*ny+(j+1)]
-                          - 4 * heights[idx];
-                velocities[idx] = (velocities[idx] + lap * c2) * dampFactor;
+                const lapX = heights[(i-1)*ny+j] + heights[(i+1)*ny+j] - 2 * heights[idx];
+                const lapZ = heights[i*ny+(j-1)] + heights[i*ny+(j+1)] - 2 * heights[idx];
+                velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
             }
         }
         for (let i = 1; i < nx - 1; i++) {
@@ -877,7 +886,7 @@ function slider(id, valId, dec, cb) {
 }
 slider('brushRadiusSlider', 'brushRadiusValue', 2, v => brushRadius = v);
 slider('strengthSlider',    'strengthValue',    2, v => brushStrength = v);
-slider('dampSlider',        'dampValue',        3, v => dampFactor = v);
+slider('dampSlider',        'dampValue',        4, v => dampFactor = v);
 slider('waveSpeedSlider',   'waveSpeedValue',   2, v => waveSpeed = v);
 slider('dropSizeSlider',    'dropSizeValue',    2, v => dropSize = v);
 slider('dropForceSlider',   'dropForceValue',   2, v => dropForce = v);
@@ -903,8 +912,8 @@ document.getElementById('unitSelect').addEventListener('change', e => {
 function rebuild() {
     boardW     = toInches(parseFloat(document.getElementById('widthInput').value) || 5);
     boardL     = toInches(parseFloat(document.getElementById('lengthInput').value) || 5);
-    boardT     = toInches(parseFloat(document.getElementById('thicknessInput').value) || 1);
-    maxRelief  = toInches(parseFloat(document.getElementById('reliefInput').value) || 0.5);
+    boardT     = toInches(parseFloat(document.getElementById('thicknessInput').value) || 2);
+    maxRelief  = toInches(parseFloat(document.getElementById('reliefInput').value) || 1.5);
     initGrid();
     dropQueue = [];
     simHistory = []; historyIdx = -1; historyFrameCount = 0;
