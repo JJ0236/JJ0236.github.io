@@ -352,6 +352,11 @@
             <button class="btn" id="stepButton">Step</button>
             <button class="btn btn-danger" id="clearButton">Clear</button>
         </div>
+        <div class="row" style="margin-top:6px">
+            <label>History</label>
+            <input type="range" id="scrubSlider" min="0" max="0" value="0" step="1">
+            <span class="val-badge" id="scrubValue">0</span>
+        </div>
     </div>
 
     <div class="section">
@@ -488,6 +493,19 @@ let dampFactor = 0.99, waveSpeed = 0.8;
 let dropSize = 0.5, dropForce = 1.0;
 const DT = 0.016;
 
+// ─── History / scrub ───
+const MAX_HISTORY = 200;
+let simHistory = [];
+let historyIdx = -1;
+let historyFrameCount = 0;
+let isScrubbing = false;
+let scrubWasPaused = false;
+
+// ─── Drop visualization ───
+let pendingDropMarkers = [];  // {sphere, drop} shown while paused
+let fallingDrops = [];         // {sphere, drop, startY, targetY, startTime, duration}
+let lastHitWorld = null;       // THREE.Vector3 of last raycast surface hit
+
 document.addEventListener('keydown', e => { if (e.key === 'Shift') isShiftDown = true; });
 document.addEventListener('keyup',   e => { if (e.key === 'Shift') isShiftDown = false; });
 
@@ -497,9 +515,9 @@ function getGridCoord(event) {
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     const hits = raycaster.intersectObject(mesh);
-    if (!hits.length) return null;
-    const pt = hits[0].point;
-    const local = pt.clone().applyMatrix4(mesh.matrixWorld.clone().invert());
+    if (!hits.length) { lastHitWorld = null; return null; }
+    lastHitWorld = hits[0].point.clone();
+    const local = hits[0].point.clone().applyMatrix4(mesh.matrixWorld.clone().invert());
     const ix = Math.round((local.x + boardW / 2) / boardW * (nx - 1));
     const iy = Math.round((local.z + boardL / 2) / boardL * (ny - 1));
     if (ix < 0 || ix >= nx || iy < 0 || iy >= ny) return null;
@@ -511,7 +529,9 @@ renderer.domElement.addEventListener('mousedown', e => {
     if (selectedTool === 'drop') {
         const coord = getGridCoord(e);
         if (coord) {
-            dropQueue.push({ ix: coord.ix, iy: coord.iy, force: dropForce, radius: dropSize });
+            const drop = { ix: coord.ix, iy: coord.iy, force: dropForce, radius: dropSize };
+            dropQueue.push(drop);
+            addPendingMarker(drop);
             updateDropQueueUI();
         }
         return;
@@ -529,17 +549,21 @@ renderer.domElement.addEventListener('mouseup', e => {
 });
 
 renderer.domElement.addEventListener('mousemove', e => {
+    const dc = document.getElementById('drop-cursor');
     if (selectedTool === 'drop') {
-        const dc = document.getElementById('drop-cursor');
-        const pxPerUnit = renderer.domElement.clientWidth / boardW;
-        const r = dropSize * pxPerUnit * 0.6;
-        dc.style.display = 'block';
-        dc.style.left = e.clientX + 'px';
-        dc.style.top = e.clientY + 'px';
-        dc.style.width = (r * 2) + 'px';
-        dc.style.height = (r * 2) + 'px';
+        getGridCoord(e); // update lastHitWorld
+        if (lastHitWorld) {
+            const pxR = projectWorldRadiusToScreen(lastHitWorld, dropSize);
+            dc.style.display = 'block';
+            dc.style.left = e.clientX + 'px';
+            dc.style.top = e.clientY + 'px';
+            dc.style.width = (pxR * 2) + 'px';
+            dc.style.height = (pxR * 2) + 'px';
+        } else {
+            dc.style.display = 'none';
+        }
     } else {
-        document.getElementById('drop-cursor').style.display = 'none';
+        dc.style.display = 'none';
     }
     if (!isDrawing) return;
     const coord = getGridCoord(e);
@@ -552,6 +576,98 @@ renderer.domElement.addEventListener('mousemove', e => {
 });
 
 function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// ─── World → screen radius projection ───
+function projectWorldRadiusToScreen(worldPos, radiusWorld) {
+    const v1 = worldPos.clone().project(camera);
+    const v2 = worldPos.clone().add(new THREE.Vector3(radiusWorld, 0, 0)).project(camera);
+    const w = renderer.domElement.clientWidth;
+    const h = renderer.domElement.clientHeight;
+    const dx = (v2.x - v1.x) * w / 2;
+    const dy = (v2.y - v1.y) * h / 2;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ─── Pending-drop marker spheres (shown while paused) ───
+function addPendingMarker(drop) {
+    const wx = -boardW / 2 + (drop.ix / (nx - 1)) * boardW;
+    const wz = -boardL / 2 + (drop.iy / (ny - 1)) * boardL;
+    const surfY = boardT / 2 + heights[drop.ix * ny + drop.iy];
+    const sphereR = drop.radius * 0.4;
+    const geo = new THREE.SphereGeometry(sphereR, 20, 14);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x4499ff, transparent: true, opacity: 0.75,
+        shininess: 80, specular: 0x88bbff
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+    sphere.position.set(wx, surfY + sphereR * 3 + boardT * 0.3, wz);
+    scene.add(sphere);
+    pendingDropMarkers.push({ sphere, drop });
+}
+
+function clearPendingMarkers() {
+    for (const m of pendingDropMarkers) scene.remove(m.sphere);
+    pendingDropMarkers = [];
+}
+
+function clearFallingDrops() {
+    for (const fd of fallingDrops) scene.remove(fd.sphere);
+    fallingDrops = [];
+}
+
+// Called when play resumes — convert all pending markers to falling animations
+function launchAllDrops() {
+    for (const { sphere, drop } of pendingDropMarkers) {
+        scene.remove(sphere);
+        launchFallingDrop(drop);
+    }
+    pendingDropMarkers = [];
+    dropQueue = [];
+    updateDropQueueUI();
+}
+
+function launchFallingDrop(drop) {
+    const wx = -boardW / 2 + (drop.ix / (nx - 1)) * boardW;
+    const wz = -boardL / 2 + (drop.iy / (ny - 1)) * boardL;
+    const surfY = boardT / 2 + heights[drop.ix * ny + drop.iy];
+    const sphereR = drop.radius * 0.4;
+    const startY = surfY + sphereR * 3 + boardT * 0.5;
+    const geo = new THREE.SphereGeometry(sphereR, 20, 14);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x2277dd, transparent: true, opacity: 0.9,
+        shininess: 100, specular: 0xaaccff
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+    sphere.position.set(wx, startY, wz);
+    scene.add(sphere);
+    fallingDrops.push({
+        sphere, drop, startY, targetY: surfY,
+        startTime: performance.now(), duration: 550,
+        impacted: false
+    });
+}
+
+// ─── History snapshot ───
+function snapshotHistory() {
+    if (isScrubbing) return;
+    if (historyFrameCount++ % 2 !== 0) return; // sample every other frame
+    const snap = heights.slice();              // typed array .slice() = fast copy
+    if (simHistory.length >= MAX_HISTORY) simHistory.shift();
+    simHistory.push(snap);
+    historyIdx = simHistory.length - 1;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = historyIdx;
+    sl.value = historyIdx;
+    document.getElementById('scrubValue').textContent = historyIdx;
+}
+
+function restoreHistoryFrame(idx) {
+    if (idx < 0 || idx >= simHistory.length) return;
+    heights.set(simHistory[idx]);
+    velocities.fill(0);
+    historyIdx = idx;
+    pushVertices();
+}
 
 function gridRadius(radiusInches) {
     return Math.max(3, (radiusInches / Math.max(boardW, boardL)) * Math.max(nx, ny) * 0.5);
@@ -629,26 +745,47 @@ function stepWave(steps) {
 
 function animate() {
     requestAnimationFrame(animate);
+
     if (!isPaused) {
+        // Launch queued drops as falling sphere animations
         if (dropQueue.length > 0) {
-            for (const d of dropQueue) applyDrop(d);
-            dropQueue = [];
-            updateDropQueueUI();
+            launchAllDrops();
         }
-        if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
-            const now = performance.now();
-            if (now - lastDrawTime >= DRAW_THROTTLE) {
-                applyBrush(lastIx, lastIy);
-                lastDrawTime = now;
+
+        // Advance falling drop animations
+        const now = performance.now();
+        for (let i = fallingDrops.length - 1; i >= 0; i--) {
+            const fd = fallingDrops[i];
+            const t = Math.min(1, (now - fd.startTime) / fd.duration);
+            const ease = t * t; // gravity: accelerate downward
+            fd.sphere.position.y = fd.startY + (fd.targetY - fd.startY) * ease;
+            if (t >= 1 && !fd.impacted) {
+                fd.impacted = true;
+                applyDrop(fd.drop);
+                scene.remove(fd.sphere);
+                fallingDrops.splice(i, 1);
             }
         }
+
+        // Continuous brush sculpting (Shift+drag)
+        if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
+            const now2 = performance.now();
+            if (now2 - lastDrawTime >= DRAW_THROTTLE) {
+                applyBrush(lastIx, lastIy);
+                lastDrawTime = now2;
+            }
+        }
+
         stepWave(3);
+        snapshotHistory();
         pushVertices();
     } else if (frameStep) {
-        stepWave(1);
+        stepWave(3); // one full frame-worth of physics
+        snapshotHistory();
         pushVertices();
         frameStep = false;
     }
+
     controls.update();
     renderer.render(scene, camera);
 }
@@ -770,6 +907,12 @@ function rebuild() {
     maxRelief  = toInches(parseFloat(document.getElementById('reliefInput').value) || 0.5);
     initGrid();
     dropQueue = [];
+    simHistory = []; historyIdx = -1; historyFrameCount = 0;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = 0; sl.value = 0;
+    document.getElementById('scrubValue').textContent = '0';
+    clearPendingMarkers();
+    clearFallingDrops();
     updateDropQueueUI();
     createMesh();
     resetCamera();
@@ -780,15 +923,42 @@ function rebuild() {
 
 document.getElementById('pauseButton').addEventListener('click', () => {
     isPaused = !isPaused;
-    document.getElementById('pauseButton').textContent = isPaused ? '&#9654; Play' : '&#9646;&#9646; Pause';
     document.getElementById('pauseButton').innerHTML = isPaused ? '&#9654; Play' : '&#9646;&#9646; Pause';
     document.getElementById('pauseButton').classList.toggle('active', isPaused);
 });
 
 document.getElementById('stepButton').addEventListener('click', () => { if (isPaused) frameStep = true; });
+
+// Scrub slider
+const scrubSlider = document.getElementById('scrubSlider');
+scrubSlider.addEventListener('mousedown', () => {
+    scrubWasPaused = isPaused;
+    isPaused = true;
+    isScrubbing = true;
+    clearFallingDrops();
+});
+scrubSlider.addEventListener('mouseup', () => {
+    isScrubbing = false;
+    isPaused = scrubWasPaused;
+    document.getElementById('pauseButton').innerHTML = isPaused ? '&#9654; Play' : '&#9646;&#9646; Pause';
+    document.getElementById('pauseButton').classList.toggle('active', isPaused);
+});
+scrubSlider.addEventListener('input', () => {
+    const idx = parseInt(scrubSlider.value);
+    document.getElementById('scrubValue').textContent = idx;
+    restoreHistoryFrame(idx);
+});
 document.getElementById('clearButton').addEventListener('click', () => {
     heights.fill(0); velocities.fill(0);
-    dropQueue = []; updateDropQueueUI(); pushVertices();
+    dropQueue = [];
+    simHistory = []; historyIdx = -1; historyFrameCount = 0;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = 0; sl.value = 0;
+    document.getElementById('scrubValue').textContent = '0';
+    clearPendingMarkers();
+    clearFallingDrops();
+    updateDropQueueUI();
+    pushVertices();
 });
 document.getElementById('exportSTL').addEventListener('click', exportSTL);
 
