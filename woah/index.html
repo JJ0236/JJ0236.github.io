@@ -298,8 +298,8 @@
         </div>
         <div class="row">
             <label>Speed</label>
-            <input type="range" id="waveSpeedSlider" min="0.1" max="4.0" value="1.5" step="0.05">
-            <span class="val-badge" id="waveSpeedValue">1.50</span>
+            <input type="range" id="waveSpeedSlider" min="0.1" max="4.0" value="0.4" step="0.05">
+            <span class="val-badge" id="waveSpeedValue">0.40</span>
         </div>
         <div class="row">
             <label>Drop Size</label>
@@ -489,7 +489,7 @@ let dropQueue = [];
 let isPaused = false, frameStep = false;
 let selectedTool = 'pull';
 let brushRadius = 0.5, brushStrength = 0.3;
-let dampFactor = 0.999, waveSpeed = 1.5;
+let dampFactor = 0.999, waveSpeed = 0.4;
 let dropSize = 0.5, dropForce = 8.0;
 const DT = 0.016;
 
@@ -705,22 +705,28 @@ function applyBrush(ix, iy) {
 }
 
 function applyDrop(drop) {
-    // Use a sharp Gaussian HEIGHT DISPLACEMENT (not velocity).
-    // A sharp point dip naturally disperses into concentric Bessel-function rings.
-    // Large broad impulses create one big oscillation; a spike creates many tight rings.
-    const sigma = Math.max(1.2, gridRadius(drop.radius) * 0.2); // very sharp: 1-3 cells
-    const range = Math.ceil(sigma * 3.5);
-    const amplitude = drop.force * 0.04 * maxRelief;  // force=8 → ~0.48" dip at center
+    // Mexican Hat (Ricker) wavelet: center dip + surrounding raised ring.
+    // Disperses into 2-3 outgoing concentric ring features instead of just one.
+    // Shape: (1 - r²/σ²) * exp(-r²/2σ²)
+    //   r=0      → +1  (we negate, so center dips DOWN)
+    //   r=σ      → 0   (zero crossing)
+    //   r=σ√2    → -1/e ≈ -0.37  (negated → ring pops UP)
+    const sigma = 3.0;  // grid cells — fixed size independent of dropSize for consistent ring count
+    const range = Math.ceil(sigma * 4.5); // ~13 cells covers full wavelet
+    const amplitude = drop.force * 0.035 * maxRelief;
+    const s2 = sigma * sigma;
     for (let di = -range; di <= range; di++) {
         for (let dj = -range; dj <= range; dj++) {
             const d2 = di * di + dj * dj;
-            const g = Math.exp(-d2 / (2 * sigma * sigma));
-            if (g < 0.002) continue;
+            const envelope = Math.exp(-d2 / (2 * s2));
+            if (envelope < 0.002) continue;
+            const hat = (1 - d2 / s2) * envelope; // Mexican Hat
             const ii = clamp(drop.ix + di, 1, nx - 2);
             const jj = clamp(drop.iy + dj, 1, ny - 2);
             const idx = ii * ny + jj;
-            heights[idx] = Math.max(-boardT * 0.9, heights[idx] - amplitude * g);
-            velocities[idx] = 0; // zero velocity at impact for clean ring formation
+            // Subtract hat: center goes down, surrounding ring goes up
+            heights[idx] = clamp(heights[idx] - amplitude * hat, -boardT * 0.9, maxRelief);
+            velocities[idx] = 0;
         }
     }
 }
@@ -733,8 +739,8 @@ function stepWave(steps) {
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
 
-    // Sponge layer width: ~12% of grid on each edge absorbs waves so they don't reflect
-    const spongeW = Math.max(4, Math.round(Math.min(nx, ny) * 0.12));
+    // Sponge layer: 5% of grid width, stronger absorption per cell so the visible dead strip is minimal
+    const spongeW = Math.max(2, Math.round(Math.min(nx, ny) * 0.05));
 
     for (let s = 0; s < steps; s++) {
         for (let i = 1; i < nx - 1; i++) {
@@ -757,7 +763,7 @@ function stepWave(steps) {
                 const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
                 if (edgeDist < spongeW) {
                     const f = edgeDist / spongeW;          // 0 at border → 1 at inner edge
-                    const absorb = 1.0 - (1.0 - f * f) * 0.12; // gentle taper
+                    const absorb = 1.0 - (1.0 - f * f) * 0.28; // strong taper: ~72% absorbed at border per step
                     heights[idx]    *= absorb;
                     velocities[idx] *= absorb;
                 }
