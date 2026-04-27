@@ -293,8 +293,8 @@
         <div class="section-title">Water Physics</div>
         <div class="row">
             <label>Damping</label>
-            <input type="range" id="dampSlider" min="0.98" max="0.9999" value="0.999" step="0.0001">
-            <span class="val-badge" id="dampValue">0.9990</span>
+            <input type="range" id="dampSlider" min="0.985" max="0.9999" value="0.9995" step="0.0001">
+            <span class="val-badge" id="dampValue">0.9995</span>
         </div>
         <div class="row">
             <label>Speed</label>
@@ -310,6 +310,9 @@
             <label>Drop Force</label>
             <input type="range" id="dropForceSlider" min="0.5" max="25" value="8" step="0.5">
             <span class="val-badge" id="dropForceValue">8.00</span>
+        </div>
+        <div class="row" style="margin-top:4px">
+            <button class="btn" id="btn-bordermode" style="flex:1">&#8634; Reflect Walls</button>
         </div>
     </div>
 
@@ -373,7 +376,7 @@
     </div>
 </div>
 
-<div id="status">Shift+drag to sculpt &nbsp;|&nbsp; Drop tool: click to queue drops, Play to release</div>
+<div id="status">Click box to sculpt &nbsp;|&nbsp; Drag empty space to orbit &nbsp;|&nbsp; Drop tool: click to queue, Play to release</div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -480,7 +483,7 @@ resetCamera();
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-let isShiftDown = false, isDrawing = false;
+let isDrawing = false;
 let lastDrawTime = 0;
 const DRAW_THROTTLE = 20;
 let lastIx = -1, lastIy = -1;
@@ -489,8 +492,9 @@ let dropQueue = [];
 let isPaused = false, frameStep = false;
 let selectedTool = 'pull';
 let brushRadius = 0.5, brushStrength = 0.3;
-let dampFactor = 0.999, waveSpeed = 0.4;
+let dampFactor = 0.9995, waveSpeed = 0.4;
 let dropSize = 0.5, dropForce = 8.0;
+let borderMode = 'reflect';
 const DT = 0.016;
 
 // ─── History / scrub ───
@@ -506,8 +510,7 @@ let pendingDropMarkers = [];  // {sphere, drop} shown while paused
 let fallingDrops = [];         // {sphere, drop, startY, targetY, startTime, duration}
 let lastHitWorld = null;       // THREE.Vector3 of last raycast surface hit
 
-document.addEventListener('keydown', e => { if (e.key === 'Shift') isShiftDown = true; });
-document.addEventListener('keyup',   e => { if (e.key === 'Shift') isShiftDown = false; });
+
 
 function getGridCoord(event) {
     const rect = renderer.domElement.getBoundingClientRect();
@@ -536,11 +539,12 @@ renderer.domElement.addEventListener('mousedown', e => {
         }
         return;
     }
-    if (isShiftDown) {
+    const coord = getGridCoord(e);
+    if (coord) {
         isDrawing = true;
         controls.enabled = false;
-        const coord = getGridCoord(e);
-        if (coord) { lastIx = coord.ix; lastIy = coord.iy; applyBrush(lastIx, lastIy); }
+        lastIx = coord.ix; lastIy = coord.iy;
+        applyBrush(lastIx, lastIy);
     }
 });
 
@@ -739,8 +743,8 @@ function stepWave(steps) {
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
 
-    // Sponge layer: 5% of grid width, stronger absorption per cell so the visible dead strip is minimal
-    const spongeW = Math.max(2, Math.round(Math.min(nx, ny) * 0.05));
+    // Sponge layer: used only in absorb mode, thin 2-cell border damps velocity only
+    const spongeW = 2;
 
     for (let s = 0; s < steps; s++) {
         for (let i = 1; i < nx - 1; i++) {
@@ -758,14 +762,13 @@ function stepWave(steps) {
                 if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
                 if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
                 heights[idx] = newH;
-                // Sponge absorption: taper energy to zero within border zone
-                // Prevents wave reflection; waves radiate out and disappear at edges
-                const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
-                if (edgeDist < spongeW) {
-                    const f = edgeDist / spongeW;          // 0 at border → 1 at inner edge
-                    const absorb = 1.0 - (1.0 - f * f) * 0.28; // strong taper: ~72% absorbed at border per step
-                    heights[idx]    *= absorb;
-                    velocities[idx] *= absorb;
+                // Absorb mode: thin sponge damps velocity only at edge; reflect = full hard wall
+                if (borderMode === 'absorb') {
+                    const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
+                    if (edgeDist < spongeW) {
+                        const f = edgeDist / spongeW;
+                        velocities[idx] *= 1.0 - (1.0 - f * f) * 0.4;
+                    }
                 }
             }
         }
@@ -907,6 +910,18 @@ function slider(id, valId, dec, cb) {
 slider('brushRadiusSlider', 'brushRadiusValue', 2, v => brushRadius = v);
 slider('strengthSlider',    'strengthValue',    2, v => brushStrength = v);
 slider('dampSlider',        'dampValue',        4, v => dampFactor = v);
+
+document.getElementById('btn-bordermode').addEventListener('click', () => {
+    borderMode = borderMode === 'reflect' ? 'absorb' : 'reflect';
+    const btn = document.getElementById('btn-bordermode');
+    if (borderMode === 'absorb') {
+        btn.innerHTML = '&#8856; Absorb Walls';
+        btn.classList.add('active');
+    } else {
+        btn.innerHTML = '&#8634; Reflect Walls';
+        btn.classList.remove('active');
+    }
+});
 slider('waveSpeedSlider',   'waveSpeedValue',   2, v => waveSpeed = v);
 slider('dropSizeSlider',    'dropSizeValue',    2, v => dropSize = v);
 slider('dropForceSlider',   'dropForceValue',   2, v => dropForce = v);
