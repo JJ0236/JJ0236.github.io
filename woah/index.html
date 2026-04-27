@@ -381,7 +381,6 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 const UNIT_SCALE = { in: 1, cm: 2.54, mm: 25.4 };
 let currentUnit = 'in';
@@ -417,31 +416,17 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
-
-const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
-pmrem.dispose();
-
-const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+const hemi = new THREE.HemisphereLight(0x88aacc, 0x332211, 1.2);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff8ee, 2.2);
 sun.position.set(7, 16, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0x88aaff, 0.6);
-fill.position.set(-6, 3, -9);
-scene.add(fill);
-
-// subtle floor plane for contrast/grounding
-const floorGeo = new THREE.PlaneGeometry(80, 80);
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0a10, roughness: 0.95, metalness: 0 });
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-floor.position.y = -0.02;
-floor.receiveShadow = true;
-scene.add(floor);
+const rim = new THREE.DirectionalLight(0x4499ff, 0.8);
+rim.position.set(-6, 3, -9);
+scene.add(rim);
 
 let topFaceIndices = null;
 let mesh;
@@ -464,7 +449,7 @@ function buildTopFaceIndex() {
 function createMesh() {
     if (mesh) scene.remove(mesh);
     const geo = new THREE.BoxGeometry(boardW, boardT, boardL, nx - 1, 1, ny - 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2e3d50, roughness: 0.08, metalness: 0.82 });
+    const mat = new THREE.MeshPhongMaterial({ color: 0x1a6080, shininess: 120, specular: 0x88ccff, emissive: 0x050d14 });
     mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -755,12 +740,25 @@ function stepWave(steps) {
     const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
-
-    // Sponge width: 10% of smallest grid dimension — wide enough to kill waves before reflection
-    const spongeW = Math.max(6, Math.round(Math.min(nx, ny) * 0.10));
+    // Sponge spans ~12% of grid — wide enough to kill the wave before the wall
+    const spongeW = Math.max(8, Math.round(Math.min(nx, ny) * 0.12));
 
     for (let s = 0; s < steps; s++) {
-        // Interior wave propagation (boundary rows/cols stay at 0 — hard Dirichlet wall)
+        // Absorb mode: copy edge heights from their inner neighbours (Neumann BC).
+        // This removes the zero-wall restoring gradient that causes reflection.
+        // Heights themselves are NOT modified — sculpted peaks near the edge are preserved.
+        if (borderMode === 'absorb') {
+            for (let j = 0; j < ny; j++) {
+                heights[0 * ny + j]        = heights[1 * ny + j];
+                heights[(nx-1) * ny + j]   = heights[(nx-2) * ny + j];
+            }
+            for (let i = 0; i < nx; i++) {
+                heights[i * ny + 0]        = heights[i * ny + 1];
+                heights[i * ny + (ny-1)]   = heights[i * ny + (ny-2)];
+            }
+        }
+
+        // Compute new velocities from Laplacian
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
@@ -769,6 +767,22 @@ function stepWave(steps) {
                 velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
             }
         }
+
+        // Absorb mode: velocity-only sponge — wave energy dies before the wall.
+        // Heights are untouched so there is no visible dead zone.
+        if (borderMode === 'absorb') {
+            for (let i = 1; i < nx - 1; i++) {
+                for (let j = 1; j < ny - 1; j++) {
+                    const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
+                    if (edgeDist < spongeW) {
+                        const f = edgeDist / spongeW; // 0 at wall, 1 at inner edge
+                        velocities[i * ny + j] *= f * f;
+                    }
+                }
+            }
+        }
+
+        // Integrate heights
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
@@ -776,16 +790,6 @@ function stepWave(steps) {
                 if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
                 if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
                 heights[idx] = newH;
-                // Absorb mode: wide quadratic sponge kills both height delta and velocity
-                if (borderMode === 'absorb') {
-                    const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
-                    if (edgeDist < spongeW) {
-                        const f = edgeDist / spongeW;        // 0 at hard wall, 1 at inner edge
-                        const kill = f * f;                  // quadratic — strong near wall
-                        heights[idx]    *= kill + (1 - kill) * 0.98;
-                        velocities[idx] *= kill + (1 - kill) * 0.80;
-                    }
-                }
             }
         }
     }
