@@ -381,6 +381,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 const UNIT_SCALE = { in: 1, cm: 2.54, mm: 25.4 };
 let currentUnit = 'in';
@@ -399,7 +400,7 @@ function initGrid() {
 initGrid();
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d0d0f);
+scene.background = new THREE.Color(0x111118);
 
 const camera = new THREE.PerspectiveCamera(60, (window.innerWidth - 270) / window.innerHeight, 0.01, 2000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -417,19 +418,30 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.2;
+renderer.toneMappingExposure = 1.1;
 
-const hemi = new THREE.HemisphereLight(0x88aacc, 0x332211, 1.2);
-scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff8ee, 2.2);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment()).texture;
+pmrem.dispose();
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.8);
 sun.position.set(7, 16, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x4499ff, 0.8);
-rim.position.set(-6, 3, -9);
-scene.add(rim);
+const fill = new THREE.DirectionalLight(0x88aaff, 0.6);
+fill.position.set(-6, 3, -9);
+scene.add(fill);
+
+// subtle floor plane for contrast/grounding
+const floorGeo = new THREE.PlaneGeometry(80, 80);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x0a0a10, roughness: 0.95, metalness: 0 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.02;
+floor.receiveShadow = true;
+scene.add(floor);
 
 let topFaceIndices = null;
 let mesh;
@@ -452,7 +464,7 @@ function buildTopFaceIndex() {
 function createMesh() {
     if (mesh) scene.remove(mesh);
     const geo = new THREE.BoxGeometry(boardW, boardT, boardL, nx - 1, 1, ny - 1);
-    const mat = new THREE.MeshPhongMaterial({ color: 0x1a6080, shininess: 120, specular: 0x88ccff, emissive: 0x050d14 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2e3d50, roughness: 0.08, metalness: 0.82 });
     mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -744,10 +756,11 @@ function stepWave(steps) {
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
 
-    // Sponge layer: used only in absorb mode, thin 2-cell border damps velocity only
-    const spongeW = 2;
+    // Sponge width: 10% of smallest grid dimension — wide enough to kill waves before reflection
+    const spongeW = Math.max(6, Math.round(Math.min(nx, ny) * 0.10));
 
     for (let s = 0; s < steps; s++) {
+        // Interior wave propagation (boundary rows/cols stay at 0 — hard Dirichlet wall)
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
@@ -763,29 +776,17 @@ function stepWave(steps) {
                 if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
                 if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
                 heights[idx] = newH;
-                // Absorb mode: sponge damps velocity near edge so waves die out
+                // Absorb mode: wide quadratic sponge kills both height delta and velocity
                 if (borderMode === 'absorb') {
                     const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
                     if (edgeDist < spongeW) {
-                        const f = edgeDist / spongeW;
-                        velocities[idx] *= 1.0 - (1.0 - f * f) * 0.4;
+                        const f = edgeDist / spongeW;        // 0 at hard wall, 1 at inner edge
+                        const kill = f * f;                  // quadratic — strong near wall
+                        heights[idx]    *= kill + (1 - kill) * 0.98;
+                        velocities[idx] *= kill + (1 - kill) * 0.80;
                     }
                 }
             }
-        }
-        // Neumann (free) boundary: edge cells mirror their inner neighbor so brush
-        // strokes near the edge don't stick permanently and participate in the wave.
-        for (let j = 0; j < ny; j++) {
-            heights[0 * ny + j]        = heights[1 * ny + j];
-            heights[(nx-1) * ny + j]   = heights[(nx-2) * ny + j];
-            velocities[0 * ny + j]     = velocities[1 * ny + j];
-            velocities[(nx-1) * ny + j]= velocities[(nx-2) * ny + j];
-        }
-        for (let i = 0; i < nx; i++) {
-            heights[i * ny + 0]        = heights[i * ny + 1];
-            heights[i * ny + (ny-1)]   = heights[i * ny + (ny-2)];
-            velocities[i * ny + 0]     = velocities[i * ny + 1];
-            velocities[i * ny + (ny-1)]= velocities[i * ny + (ny-2)];
         }
     }
 }
