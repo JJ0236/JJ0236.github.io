@@ -1,647 +1,1009 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive 3D Manipulatable Box</title>
+    <title>Waveform STL Generator</title>
     <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
+            background: #0d0d0f;
+            color: #e0e0e8;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 13px;
             overflow: hidden;
         }
 
-        /* Home Icon at Top Center */
         .home-icon {
             position: fixed;
-            top: 20px;
+            top: 16px;
             left: 50%;
             transform: translateX(-50%);
-            width: 32px;
-            height: 32px;
-            color: #fff;
+            width: 28px;
+            height: 28px;
+            color: #555;
             text-decoration: none;
-            transition: transform 0.2s ease;
+            transition: color 0.2s;
+            z-index: 200;
+        }
+        .home-icon:hover { color: #aaa; }
+
+        #panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 270px;
+            height: 100vh;
+            background: #16161e;
+            border-left: 1px solid #2a2a38;
+            display: flex;
+            flex-direction: column;
             z-index: 100;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
-        .home-icon:hover {
-            transform: translateX(-50%) scale(1.1);
+        #panel-header {
+            padding: 14px 16px 10px;
+            border-bottom: 1px solid #2a2a38;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #6060a0;
+            flex-shrink: 0;
         }
 
-        #settings {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 250px;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid #ccc;
-            z-index: 1;
+        .section {
+            border-bottom: 1px solid #1e1e2a;
+            padding: 10px 14px;
         }
 
-        #settings label {
-            display: block;
-            margin: 5px 0;
+        .section-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #4a4a70;
+            margin-bottom: 8px;
         }
 
-        #toolButtons button {
-            margin: 5px;
-            padding: 5px 10px;
+        .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 7px;
+            gap: 8px;
+        }
+        .row:last-child { margin-bottom: 0; }
+
+        label {
+            color: #9090b0;
+            flex-shrink: 0;
+            font-size: 12px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 3px;
+            background: #2a2a40;
+            border-radius: 2px;
+            outline: none;
             cursor: pointer;
-            background: #e0e0e0;
-            border: 1px solid #aaa;
-            color: #222;
-            border-radius: 3px;
         }
-
-        #toolButtons button:hover {
-            background: #cecece;
-        }
-
-        #toolButtons button.selected {
-            background: #555;
-            color: #fff;
-            border-color: #333;
-            cursor: default;
-        }
-
-        #controlButtons button {
-            margin: 5px;
-            padding: 5px 10px;
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #5a5aff;
             cursor: pointer;
-            background: #e0e0e0;
-            border: 1px solid #aaa;
-            color: #222;
-            border-radius: 3px;
+            box-shadow: 0 0 4px #5a5aff88;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { background: #7a7aff; }
+
+        input[type="number"] {
+            width: 68px;
+            background: #1e1e2c;
+            border: 1px solid #2a2a3e;
+            color: #c0c0e0;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            outline: none;
+            text-align: right;
+        }
+        input[type="number"]:focus { border-color: #5a5aff; }
+
+        select {
+            background: #1e1e2c;
+            border: 1px solid #2a2a3e;
+            color: #c0c0e0;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+            flex: 1;
+        }
+        select:focus { border-color: #5a5aff; }
+
+        .val-badge {
+            font-size: 11px;
+            color: #7070a0;
+            min-width: 36px;
+            text-align: right;
+            flex-shrink: 0;
         }
 
-        #controlButtons button:hover {
-            background: #cecece;
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 4px;
         }
 
-        #animationSlider {
+        .tool-btn {
+            padding: 7px 4px;
+            border: 1px solid #2a2a3e;
+            border-radius: 5px;
+            background: #1e1e2c;
+            color: #9090b0;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .tool-btn:hover { border-color: #5a5aff; color: #c0c0f0; }
+        .tool-btn.active {
+            background: #5a5aff22;
+            border-color: #5a5aff;
+            color: #9090ff;
+            box-shadow: 0 0 8px #5a5aff33;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 7px 8px;
+            border: 1px solid #2a2a3e;
+            border-radius: 5px;
+            background: #1e1e2c;
+            color: #9090b0;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+        .btn:hover { border-color: #5a5aff; color: #c0c0f0; }
+        .btn.active { background: #5a5aff22; border-color: #5a5aff; color: #9090ff; }
+
+        .btn-primary {
+            background: #5a5aff22;
+            border-color: #5a5aff;
+            color: #9090ff;
+        }
+        .btn-primary:hover { background: #5a5aff44; color: #c0c0ff; }
+
+        .btn-export {
             width: 100%;
-            margin: 5px 0;
+            padding: 9px;
+            background: #1a2a1a;
+            border: 1px solid #2a5a2a;
+            color: #60b060;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            transition: all 0.15s;
         }
+        .btn-export:hover { background: #2a4a2a; border-color: #40a040; color: #80d080; }
+
+        .btn-danger {
+            background: #2a1a1a;
+            border-color: #5a2a2a;
+            color: #b06060;
+        }
+        .btn-danger:hover { background: #3a1a1a; border-color: #a04040; color: #d08080; }
+
+        #drop-queue-info {
+            font-size: 11px;
+            color: #5a5a80;
+            text-align: center;
+            padding: 4px 0;
+        }
+
+        #status {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            font-size: 11px;
+            color: #3a3a5a;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #drop-cursor {
+            position: fixed;
+            pointer-events: none;
+            border: 2px solid #5a5affaa;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 99;
+        }
+
+        #panel::-webkit-scrollbar { width: 4px; }
+        #panel::-webkit-scrollbar-track { background: #16161e; }
+        #panel::-webkit-scrollbar-thumb { background: #2a2a3e; border-radius: 2px; }
     </style>
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
-                "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
-            }
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.178.0/build/three.module.js",
+            "three/": "https://cdn.jsdelivr.net/npm/three@0.178.0/"
         }
+    }
     </script>
 </head>
-
 <body>
-    <!-- Home Icon at Top Center -->
-    <a href="/" class="home-icon" title="Home">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32" xmlns="http://www.w3.org/2000/svg">
-            <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z" />
-            <path d="M9 21V12H15V21" />
-        </svg>
-    </a>
 
-    <div id="settings">
-        <label>
-            Tool:
-        </label>
-        <div id="toolButtons">
-            <button id="pullTool">Pull</button>
-            <button id="waterTool">Water</button>
+<a href="/" class="home-icon" title="Home">
+    <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
+        <path d="M9 21V12H15V21"/>
+    </svg>
+</a>
+
+<div id="drop-cursor"></div>
+
+<div id="panel">
+    <div id="panel-header">Waveform STL Generator</div>
+
+    <div class="section">
+        <div class="section-title">Tool</div>
+        <div class="tool-grid">
+            <button class="tool-btn active" id="btn-pull">Raise</button>
+            <button class="tool-btn" id="btn-water">Water</button>
+            <button class="tool-btn" id="btn-drop">Drop</button>
+            <button class="tool-btn" id="btn-smooth">Smooth</button>
         </div>
-        <label>
-            Brush Radius (inches): <span id="brushRadiusValue">1.0</span>
-            <input type="range" id="brushRadiusSlider" min="0.1" max="5.0" value="1.0" step="0.1">
-        </label>
-        <label>
-            Pull Height (inches): <span id="pullHeightValue">0.3</span>
-            <input type="number" id="pullHeightInput" min="0.1" value="0.3" step="0.1">
-        </label>
-        <label>
-            Liquid Thickness: <span id="liquidThicknessValue">0.99</span>
-            <input type="range" id="liquidThicknessSlider" min="0.95" max="0.995" value="0.99" step="0.005">
-        </label>
-        <label>
-            Width (inches):
-            <input type="number" id="widthInput" value="20" min="1" step="0.1">
-        </label>
-        <label>
-            Length (inches):
-            <input type="number" id="lengthInput" value="10" min="1" step="0.1">
-        </label>
-        <label>
-            Thickness (inches):
-            <input type="number" id="thicknessInput" value="2" min="0.1" step="0.1">
-        </label>
-        <div id="controlButtons">
-            <button id="pauseButton">Pause</button>
-            <button id="stepButton">Step</button>
-            <input type="range" id="animationSlider" min="0" max="100" value="0" step="1">
+        <div id="drop-queue-info" style="display:none">Drops queued: <span id="drop-count">0</span></div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Brush</div>
+        <div class="row">
+            <label>Radius</label>
+            <input type="range" id="brushRadiusSlider" min="0.1" max="5.0" value="0.5" step="0.05">
+            <span class="val-badge" id="brushRadiusValue">0.50</span>
+        </div>
+        <div class="row">
+            <label>Strength</label>
+            <input type="range" id="strengthSlider" min="0.05" max="2.0" value="0.3" step="0.05">
+            <span class="val-badge" id="strengthValue">0.30</span>
         </div>
     </div>
 
-    <script type="module">
-        console.log('Module script started loading at 2:56 PM CDT, July 19, 2025.');
+    <div class="section">
+        <div class="section-title">Water Physics</div>
+        <div class="row">
+            <label>Damping</label>
+            <input type="range" id="dampSlider" min="0.98" max="0.9999" value="0.999" step="0.0001">
+            <span class="val-badge" id="dampValue">0.9990</span>
+        </div>
+        <div class="row">
+            <label>Speed</label>
+            <input type="range" id="waveSpeedSlider" min="0.1" max="4.0" value="0.4" step="0.05">
+            <span class="val-badge" id="waveSpeedValue">0.40</span>
+        </div>
+        <div class="row">
+            <label>Drop Size</label>
+            <input type="range" id="dropSizeSlider" min="0.1" max="3.0" value="0.5" step="0.05">
+            <span class="val-badge" id="dropSizeValue">0.50</span>
+        </div>
+        <div class="row">
+            <label>Drop Force</label>
+            <input type="range" id="dropForceSlider" min="0.5" max="25" value="8" step="0.5">
+            <span class="val-badge" id="dropForceValue">8.00</span>
+        </div>
+    </div>
 
-        import * as THREE from 'three';
-        console.log('THREE imported successfully:', THREE);
+    <div class="section">
+        <div class="section-title">Board Dimensions</div>
+        <div class="row">
+            <label>Units</label>
+            <select id="unitSelect">
+                <option value="in" selected>Inches (in)</option>
+                <option value="cm">Centimeters (cm)</option>
+                <option value="mm">Millimeters (mm)</option>
+            </select>
+        </div>
+        <div class="row">
+            <label>Width</label>
+            <input type="number" id="widthInput" value="5" min="0.5" step="0.5">
+            <span class="val-badge" id="widthUnit">in</span>
+        </div>
+        <div class="row">
+            <label>Length</label>
+            <input type="number" id="lengthInput" value="5" min="0.5" step="0.5">
+            <span class="val-badge" id="lengthUnit">in</span>
+        </div>
+        <div class="row">
+            <label>Thickness</label>
+            <input type="number" id="thicknessInput" value="2" min="0.1" step="0.1">
+            <span class="val-badge" id="thickUnit">in</span>
+        </div>
+        <div class="row">
+            <label>Max Relief</label>
+            <input type="number" id="reliefInput" value="1.5" min="0.05" step="0.05">
+            <span class="val-badge" id="reliefUnit">in</span>
+        </div>
+    </div>
 
-        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-        console.log('OrbitControls imported successfully.');
+    <div class="section">
+        <div class="section-title">Playback</div>
+        <div class="row" style="gap:6px">
+            <button class="btn btn-primary" id="pauseButton">&#9646;&#9646; Pause</button>
+            <button class="btn" id="stepButton">Step</button>
+            <button class="btn btn-danger" id="clearButton">Clear</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+            <label>History</label>
+            <input type="range" id="scrubSlider" min="0" max="0" value="0" step="1">
+            <span class="val-badge" id="scrubValue">0</span>
+        </div>
+    </div>
 
-        // Scene setup
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
+    <div class="section">
+        <div class="section-title">Export</div>
+        <div class="row">
+            <label>STL Units</label>
+            <select id="stlUnitSelect">
+                <option value="in">Inches</option>
+                <option value="cm">Centimeters</option>
+                <option value="mm" selected>Millimeters</option>
+            </select>
+        </div>
+        <button class="btn-export" id="exportSTL">&#11015; Export STL</button>
+    </div>
+</div>
 
-        // Controls
-        const controls = new OrbitControls(camera, renderer.domElement);
+<div id="status">Shift+drag to sculpt &nbsp;|&nbsp; Drop tool: click to queue drops, Play to release</div>
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 10, 5);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 1024;
-        directionalLight.shadow.mapSize.height = 1024;
-        scene.add(directionalLight);
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-        // Grid density (points per inch)
-        const density = 10; // 10 points per inch
+const UNIT_SCALE = { in: 1, cm: 2.54, mm: 25.4 };
+let currentUnit = 'in';
 
-        // Grid parameters
-        let width = 20;
-        let length = 10;
-        let nx = Math.round(width * density); // points in x (width)
-        let ny = Math.round(length * density); // points in z (length)
-        let thickness = 2;
-        let selectedTool = 'pull'; // Default tool: pull (raise without ripples)
-        let brushRadius = 1.0; // Initial brush radius in inches
-        let pullHeight = 0.3; // Maximum pull height in inches
-        let isPaused = false;
-        let frameStep = false;
-        let animationProgress = 0; // Track animation progress for slider
+let boardW = 5, boardL = 5, boardT = 2, maxRelief = 1.5;
 
-        // Wave simulation parameters (for water tool)
-        const c = 0.8; // Wave speed for visible ripples
-        let damp = 0.99; // Damping factor for longer-lasting ripples (controlled by slider)
-        const dt = 0.02; // Time step
-        const raiseAmount = 0.3; // Base amount to raise for water
-        const impulseMultiplier = 3; // Stronger impulse for ripples
+const MIN_PTS = 60, MAX_PTS = 400, DENSITY = 20;
+let nx, ny, heights, velocities;
 
-        // Drawing throttle
-        let lastDrawTime = 0;
-        const drawThrottleMs = 30; // ~33fps to reduce lag
+function initGrid() {
+    nx = Math.max(MIN_PTS, Math.min(MAX_PTS, Math.round(boardW * DENSITY)));
+    ny = Math.max(MIN_PTS, Math.min(MAX_PTS, Math.round(boardL * DENSITY)));
+    heights    = new Float32Array(nx * ny);
+    velocities = new Float32Array(nx * ny);
+}
+initGrid();
 
-        // Height and velocity arrays for top face deformation
-        function initializeArrays() {
-            return {
-                heights: Array.from({ length: nx }, () => Array(ny).fill(0)),
-                velocities: Array.from({ length: nx }, () => Array(ny).fill(0))
-            };
-        }
-        let { heights, velocities } = initializeArrays();
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d0f);
 
-        // Last mouse position for holding
-        let lastIx = -1;
-        let lastIy = -1;
+const camera = new THREE.PerspectiveCamera(60, (window.innerWidth - 270) / window.innerHeight, 0.01, 2000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(window.innerWidth - 270, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
 
-        // Mesh
-        let mesh;
-        function createMesh() {
-            try {
-                if (mesh) scene.remove(mesh);
-                if (nx <= 1 || ny <= 1) {
-                    console.error('Invalid grid size: nx=', nx, 'ny=', ny, 'Setting to minimum 50x50');
-                    nx = Math.max(50, nx);
-                    ny = Math.max(50, ny);
-                }
-                const geometry = new THREE.BoxGeometry(width, thickness, length, nx - 1, 1, ny - 1);
-                const material = new THREE.MeshPhongMaterial({
-                    color: 0x8B4513,
-                    shininess: 30,
-                    specular: 0x444444
-                });
-                mesh = new THREE.Mesh(geometry, material);
-                mesh.castShadow = true;
-                mesh.receiveShadow = true;
-                scene.add(mesh);
-                updateVertices();
-                console.log('Mesh created successfully with nx:', nx, 'ny:', ny);
-            } catch (error) {
-                console.error('Error creating mesh:', error);
-                nx = 200;
-                ny = 100;
-                createMesh();
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+scene.add(new THREE.AmbientLight(0x8888bb, 0.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x4444aa, 0.4);
+fill.position.set(-5, 4, -8);
+scene.add(fill);
+
+const gridHelper = new THREE.GridHelper(50, 50, 0x1a1a2a, 0x1a1a2a);
+gridHelper.position.y = -0.01;
+scene.add(gridHelper);
+
+let topFaceIndices = null;
+let mesh;
+
+function buildTopFaceIndex() {
+    const pos = mesh.geometry.attributes.position;
+    topFaceIndices = [];
+    for (let k = 0; k < pos.count; k++) {
+        if (pos.getY(k) > 0) {
+            const x = pos.getX(k), z = pos.getZ(k);
+            const i = Math.round((x + boardW / 2) / boardW * (nx - 1));
+            const j = Math.round((z + boardL / 2) / boardL * (ny - 1));
+            if (i >= 0 && i < nx && j >= 0 && j < ny) {
+                topFaceIndices.push({ k, i, j });
             }
         }
+    }
+}
 
-        function updateVertices() {
-            try {
-                if (!mesh || !mesh.geometry || !mesh.geometry.attributes.position) {
-                    console.error('Mesh or geometry not properly initialized');
-                    return;
+function createMesh() {
+    if (mesh) scene.remove(mesh);
+    const geo = new THREE.BoxGeometry(boardW, boardT, boardL, nx - 1, 1, ny - 1);
+    const mat = new THREE.MeshPhongMaterial({ color: 0x9a7a5a, shininess: 20, specular: 0x333322 });
+    mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    buildTopFaceIndex();
+    pushVertices();
+}
+
+function pushVertices() {
+    const pos = mesh.geometry.attributes.position;
+    const halfT = boardT / 2;
+    for (const { k, i, j } of topFaceIndices) {
+        const h = heights[i * ny + j];
+        pos.setY(k, halfT + Math.max(-boardT, Math.min(maxRelief, h)));
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+}
+
+function resetCamera() {
+    const diag = Math.sqrt(boardW * boardW + boardL * boardL);
+    camera.position.set(0, diag * 0.9, diag * 0.7);
+    controls.target.set(0, 0, 0);
+    controls.update();
+}
+
+createMesh();
+resetCamera();
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let isShiftDown = false, isDrawing = false;
+let lastDrawTime = 0;
+const DRAW_THROTTLE = 20;
+let lastIx = -1, lastIy = -1;
+
+let dropQueue = [];
+let isPaused = false, frameStep = false;
+let selectedTool = 'pull';
+let brushRadius = 0.5, brushStrength = 0.3;
+let dampFactor = 0.999, waveSpeed = 0.4;
+let dropSize = 0.5, dropForce = 8.0;
+const DT = 0.016;
+
+// ─── History / scrub ───
+const MAX_HISTORY = 200;
+let simHistory = [];
+let historyIdx = -1;
+let historyFrameCount = 0;
+let isScrubbing = false;
+let scrubWasPaused = false;
+
+// ─── Drop visualization ───
+let pendingDropMarkers = [];  // {sphere, drop} shown while paused
+let fallingDrops = [];         // {sphere, drop, startY, targetY, startTime, duration}
+let lastHitWorld = null;       // THREE.Vector3 of last raycast surface hit
+
+document.addEventListener('keydown', e => { if (e.key === 'Shift') isShiftDown = true; });
+document.addEventListener('keyup',   e => { if (e.key === 'Shift') isShiftDown = false; });
+
+function getGridCoord(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObject(mesh);
+    if (!hits.length) { lastHitWorld = null; return null; }
+    lastHitWorld = hits[0].point.clone();
+    const local = hits[0].point.clone().applyMatrix4(mesh.matrixWorld.clone().invert());
+    const ix = Math.round((local.x + boardW / 2) / boardW * (nx - 1));
+    const iy = Math.round((local.z + boardL / 2) / boardL * (ny - 1));
+    if (ix < 0 || ix >= nx || iy < 0 || iy >= ny) return null;
+    return { ix, iy };
+}
+
+renderer.domElement.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (selectedTool === 'drop') {
+        const coord = getGridCoord(e);
+        if (coord) {
+            const drop = { ix: coord.ix, iy: coord.iy, force: dropForce, radius: dropSize };
+            dropQueue.push(drop);
+            addPendingMarker(drop);
+            updateDropQueueUI();
+        }
+        return;
+    }
+    if (isShiftDown) {
+        isDrawing = true;
+        controls.enabled = false;
+        const coord = getGridCoord(e);
+        if (coord) { lastIx = coord.ix; lastIy = coord.iy; applyBrush(lastIx, lastIy); }
+    }
+});
+
+renderer.domElement.addEventListener('mouseup', e => {
+    if (e.button === 0) { isDrawing = false; controls.enabled = true; }
+});
+
+renderer.domElement.addEventListener('mousemove', e => {
+    const dc = document.getElementById('drop-cursor');
+    if (selectedTool === 'drop') {
+        getGridCoord(e); // update lastHitWorld
+        if (lastHitWorld) {
+            const pxR = projectWorldRadiusToScreen(lastHitWorld, dropSize);
+            dc.style.display = 'block';
+            dc.style.left = e.clientX + 'px';
+            dc.style.top = e.clientY + 'px';
+            dc.style.width = (pxR * 2) + 'px';
+            dc.style.height = (pxR * 2) + 'px';
+        } else {
+            dc.style.display = 'none';
+        }
+    } else {
+        dc.style.display = 'none';
+    }
+    if (!isDrawing) return;
+    const coord = getGridCoord(e);
+    if (!coord) return;
+    const now = performance.now();
+    if (now - lastDrawTime < DRAW_THROTTLE) return;
+    lastIx = coord.ix; lastIy = coord.iy;
+    applyBrush(lastIx, lastIy);
+    lastDrawTime = now;
+});
+
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+// ─── World → screen radius projection ───
+function projectWorldRadiusToScreen(worldPos, radiusWorld) {
+    const v1 = worldPos.clone().project(camera);
+    const v2 = worldPos.clone().add(new THREE.Vector3(radiusWorld, 0, 0)).project(camera);
+    const w = renderer.domElement.clientWidth;
+    const h = renderer.domElement.clientHeight;
+    const dx = (v2.x - v1.x) * w / 2;
+    const dy = (v2.y - v1.y) * h / 2;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// ─── Pending-drop marker spheres (shown while paused) ───
+function addPendingMarker(drop) {
+    const wx = -boardW / 2 + (drop.ix / (nx - 1)) * boardW;
+    const wz = -boardL / 2 + (drop.iy / (ny - 1)) * boardL;
+    const surfY = boardT / 2 + heights[drop.ix * ny + drop.iy];
+    const sphereR = drop.radius * 0.4;
+    const geo = new THREE.SphereGeometry(sphereR, 20, 14);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x4499ff, transparent: true, opacity: 0.75,
+        shininess: 80, specular: 0x88bbff
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+    sphere.position.set(wx, surfY + sphereR * 3 + boardT * 0.3, wz);
+    scene.add(sphere);
+    pendingDropMarkers.push({ sphere, drop });
+}
+
+function clearPendingMarkers() {
+    for (const m of pendingDropMarkers) scene.remove(m.sphere);
+    pendingDropMarkers = [];
+}
+
+function clearFallingDrops() {
+    for (const fd of fallingDrops) scene.remove(fd.sphere);
+    fallingDrops = [];
+}
+
+// Called when play resumes — convert all pending markers to falling animations
+function launchAllDrops() {
+    for (const { sphere, drop } of pendingDropMarkers) {
+        scene.remove(sphere);
+        launchFallingDrop(drop);
+    }
+    pendingDropMarkers = [];
+    dropQueue = [];
+    updateDropQueueUI();
+}
+
+function launchFallingDrop(drop) {
+    const wx = -boardW / 2 + (drop.ix / (nx - 1)) * boardW;
+    const wz = -boardL / 2 + (drop.iy / (ny - 1)) * boardL;
+    const surfY = boardT / 2 + heights[drop.ix * ny + drop.iy];
+    const sphereR = drop.radius * 0.4;
+    const startY = surfY + sphereR * 3 + boardT * 0.5;
+    const geo = new THREE.SphereGeometry(sphereR, 20, 14);
+    const mat = new THREE.MeshPhongMaterial({
+        color: 0x2277dd, transparent: true, opacity: 0.9,
+        shininess: 100, specular: 0xaaccff
+    });
+    const sphere = new THREE.Mesh(geo, mat);
+    sphere.position.set(wx, startY, wz);
+    scene.add(sphere);
+    fallingDrops.push({
+        sphere, drop, startY, targetY: surfY,
+        startTime: performance.now(), duration: 550,
+        impacted: false
+    });
+}
+
+// ─── History snapshot ───
+function snapshotHistory() {
+    if (isScrubbing) return;
+    if (historyFrameCount++ % 2 !== 0) return; // sample every other frame
+    const snap = heights.slice();              // typed array .slice() = fast copy
+    if (simHistory.length >= MAX_HISTORY) simHistory.shift();
+    simHistory.push(snap);
+    historyIdx = simHistory.length - 1;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = historyIdx;
+    sl.value = historyIdx;
+    document.getElementById('scrubValue').textContent = historyIdx;
+}
+
+function restoreHistoryFrame(idx) {
+    if (idx < 0 || idx >= simHistory.length) return;
+    heights.set(simHistory[idx]);
+    velocities.fill(0);
+    historyIdx = idx;
+    pushVertices();
+}
+
+function gridRadius(radiusInches) {
+    return Math.max(3, (radiusInches / Math.max(boardW, boardL)) * Math.max(nx, ny) * 0.5);
+}
+
+function applyBrush(ix, iy) {
+    const gr = gridRadius(brushRadius);
+    const gr2 = Math.ceil(gr);
+    for (let di = -gr2; di <= gr2; di++) {
+        for (let dj = -gr2; dj <= gr2; dj++) {
+            const dist = Math.sqrt(di * di + dj * dj);
+            if (dist > gr) continue;
+            const ii = clamp(ix + di, 0, nx - 1);
+            const jj = clamp(iy + dj, 0, ny - 1);
+            const idx = ii * ny + jj;
+            const falloff = 1 - dist / gr;
+            if (selectedTool === 'pull') {
+                heights[idx] = Math.min(maxRelief, heights[idx] + brushStrength * falloff * 0.05);
+            } else if (selectedTool === 'water') {
+                const delta = brushStrength * falloff * 0.05;
+                heights[idx] = Math.min(maxRelief, heights[idx] + delta);
+                // Velocity in in/sec — inject enough to create visible ripples
+                velocities[idx] += brushStrength * falloff * 3.0;
+            } else if (selectedTool === 'smooth') {
+                let sum = 0, cnt = 0;
+                if (ii > 0)      { sum += heights[(ii-1)*ny+jj]; cnt++; }
+                if (ii < nx-1)   { sum += heights[(ii+1)*ny+jj]; cnt++; }
+                if (jj > 0)      { sum += heights[ii*ny+(jj-1)]; cnt++; }
+                if (jj < ny-1)   { sum += heights[ii*ny+(jj+1)]; cnt++; }
+                if (cnt > 0) heights[idx] += (sum / cnt - heights[idx]) * falloff * 0.15;
+            }
+        }
+    }
+    pushVertices();
+}
+
+function applyDrop(drop) {
+    // Mexican Hat (Ricker) wavelet: center dip + surrounding raised ring.
+    // Disperses into 2-3 outgoing concentric ring features instead of just one.
+    // Shape: (1 - r²/σ²) * exp(-r²/2σ²)
+    //   r=0      → +1  (we negate, so center dips DOWN)
+    //   r=σ      → 0   (zero crossing)
+    //   r=σ√2    → -1/e ≈ -0.37  (negated → ring pops UP)
+    const sigma = 3.0;  // grid cells — fixed size independent of dropSize for consistent ring count
+    const range = Math.ceil(sigma * 4.5); // ~13 cells covers full wavelet
+    const amplitude = drop.force * 0.035 * maxRelief;
+    const s2 = sigma * sigma;
+    for (let di = -range; di <= range; di++) {
+        for (let dj = -range; dj <= range; dj++) {
+            const d2 = di * di + dj * dj;
+            const envelope = Math.exp(-d2 / (2 * s2));
+            if (envelope < 0.002) continue;
+            const hat = (1 - d2 / s2) * envelope; // Mexican Hat
+            const ii = clamp(drop.ix + di, 1, nx - 2);
+            const jj = clamp(drop.iy + dj, 1, ny - 2);
+            const idx = ii * ny + jj;
+            // Subtract hat: center goes down, surrounding ring goes up
+            heights[idx] = clamp(heights[idx] - amplitude * hat, -boardT * 0.9, maxRelief);
+            velocities[idx] = 0;
+        }
+    }
+}
+
+function stepWave(steps) {
+    const dx = boardW / (nx - 1);
+    const dz = boardL / (ny - 1);
+    const cfl = 0.65;
+    const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
+    const Kx = effC * effC * DT / (dx * dx);
+    const Kz = effC * effC * DT / (dz * dz);
+
+    // Sponge layer: 5% of grid width, stronger absorption per cell so the visible dead strip is minimal
+    const spongeW = Math.max(2, Math.round(Math.min(nx, ny) * 0.05));
+
+    for (let s = 0; s < steps; s++) {
+        for (let i = 1; i < nx - 1; i++) {
+            for (let j = 1; j < ny - 1; j++) {
+                const idx = i * ny + j;
+                const lapX = heights[(i-1)*ny+j] + heights[(i+1)*ny+j] - 2 * heights[idx];
+                const lapZ = heights[i*ny+(j-1)] + heights[i*ny+(j+1)] - 2 * heights[idx];
+                velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
+            }
+        }
+        for (let i = 1; i < nx - 1; i++) {
+            for (let j = 1; j < ny - 1; j++) {
+                const idx = i * ny + j;
+                let newH = heights[idx] + velocities[idx] * DT;
+                if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
+                if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
+                heights[idx] = newH;
+                // Sponge absorption: taper energy to zero within border zone
+                // Prevents wave reflection; waves radiate out and disappear at edges
+                const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
+                if (edgeDist < spongeW) {
+                    const f = edgeDist / spongeW;          // 0 at border → 1 at inner edge
+                    const absorb = 1.0 - (1.0 - f * f) * 0.28; // strong taper: ~72% absorbed at border per step
+                    heights[idx]    *= absorb;
+                    velocities[idx] *= absorb;
                 }
-                const positions = mesh.geometry.attributes.position;
-                const halfW = width / 2;
-                const halfL = length / 2;
-                const halfT = thickness / 2;
-                for (let k = 0; k < positions.count; k++) {
-                    const y = positions.getY(k);
-                    if (y > 0) { // Top face vertices
-                        const x = positions.getX(k);
-                        const z = positions.getZ(k);
-                        const i = Math.round((x + halfW) / width * (nx - 1));
-                        const j = Math.round((z + halfL) / length * (ny - 1));
-                        if (i >= 0 && i < nx && j >= 0 && j < ny && i < heights.length && j < heights[0].length) {
-                            let newHeight = halfT + heights[i][j];
-                            if (newHeight < -halfT) {
-                                newHeight = -halfT;
-                                heights[i][j] = -thickness;
-                            }
-                            positions.setY(k, newHeight);
-                        } else {
-                            console.warn('Index out of bounds: i=', i, 'j=', j, 'nx=', nx, 'ny=', ny);
-                        }
-                    }
-                }
-                positions.needsUpdate = true;
-                mesh.geometry.computeVertexNormals();
-            } catch (error) {
-                console.error('Error updating vertices:', error);
+            }
+        }
+    }
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    if (!isPaused) {
+        // Launch queued drops as falling sphere animations
+        if (dropQueue.length > 0) {
+            launchAllDrops();
+        }
+
+        // Advance falling drop animations
+        const now = performance.now();
+        for (let i = fallingDrops.length - 1; i >= 0; i--) {
+            const fd = fallingDrops[i];
+            const t = Math.min(1, (now - fd.startTime) / fd.duration);
+            const ease = t * t; // gravity: accelerate downward
+            fd.sphere.position.y = fd.startY + (fd.targetY - fd.startY) * ease;
+            if (t >= 1 && !fd.impacted) {
+                fd.impacted = true;
+                applyDrop(fd.drop);
+                scene.remove(fd.sphere);
+                fallingDrops.splice(i, 1);
             }
         }
 
-        createMesh();
-
-        camera.position.set(0, thickness * 2, length / 2 + width / 2);
-        controls.target.set(0, 0, 0);
-        controls.update();
-
-        // Raycaster for mouse interaction (draw on top face)
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2();
-        let isShiftDown = false;
-        let isDrawing = false;
-
-        // Key listeners for Shift key
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Shift') {
-                isShiftDown = true;
-            }
-        });
-
-        document.addEventListener('keyup', (event) => {
-            if (event.key === 'Shift') {
-                isShiftDown = false;
-            }
-        });
-
-        renderer.domElement.addEventListener('mousedown', (event) => {
-            if (isShiftDown && event.button === 0) {
-                isDrawing = true;
-                controls.enabled = false;
-                updateLastPosition(event);
-                if (lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
-                    applyRaise(lastIx, lastIy);
-                }
-            }
-        });
-
-        renderer.domElement.addEventListener('mouseup', (event) => {
-            if (event.button === 0) {
-                isDrawing = false;
-                controls.enabled = true;
-            }
-        });
-
-        renderer.domElement.addEventListener('mousemove', (event) => {
-            updateLastPosition(event);
-            if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
-                const now = performance.now();
-                if (now - lastDrawTime >= drawThrottleMs) {
-                    applyRaise(lastIx, lastIy);
-                    lastDrawTime = now;
-                }
-            }
-        });
-
-        function updateLastPosition(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObject(mesh);
-            if (intersects.length > 0) {
-                const point = intersects[0].point;
-                point.y = 0; // Project to top face for straight up growth
-                const localPoint = point.clone().applyMatrix4(mesh.matrixWorld.invert());
-                lastIx = Math.round((localPoint.x + width / 2) / width * (nx - 1));
-                lastIy = Math.round((localPoint.z + length / 2) / length * (ny - 1));
+        // Continuous brush sculpting (Shift+drag)
+        if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny) {
+            const now2 = performance.now();
+            if (now2 - lastDrawTime >= DRAW_THROTTLE) {
+                applyBrush(lastIx, lastIy);
+                lastDrawTime = now2;
             }
         }
 
-        function applyRaise(ix, iy) {
-            if (ix >= 0 && ix < nx && iy >= 0 && iy < ny) {
-                const maxDimension = Math.max(width, length, 10); // Use minimum dimension of 10 inches for scaling
-                const normalizedRadius = Math.max(4, (brushRadius / maxDimension) * (nx - 1) / 2); // Ensure minimum radius of 4
-                const maxAllowedHeight = thickness / 2 + pullHeight * (maxDimension / 20); // Proportional to box size
+        stepWave(6);
+        snapshotHistory();
+        pushVertices();
+    } else if (frameStep) {
+        stepWave(6); // one full frame-worth of physics
+        snapshotHistory();
+        pushVertices();
+        frameStep = false;
+    }
 
-                for (let di = -Math.round(normalizedRadius); di <= Math.round(normalizedRadius); di++) {
-                    for (let dj = -Math.round(normalizedRadius); dj <= Math.round(normalizedRadius); dj++) {
-                        const dist = Math.sqrt(di * di + dj * dj);
-                        if (dist <= normalizedRadius) {
-                            const ii = clamp(ix + di, 0, nx - 1);
-                            const jj = clamp(iy + dj, 0, ny - 1);
-                            // Skip boundary points for water tool to prevent sticking
-                            if (selectedTool === 'water' && (ii === 0 || ii === nx - 1 || jj === 0 || jj === ny - 1)) {
-                                continue; // Do not modify boundary heights for water tool
-                            }
-                            let delta = (selectedTool === 'pull' ? pullHeight : raiseAmount) * (1 - dist / normalizedRadius);
-                            let currentHeight = thickness / 2 + heights[ii][jj]; // Height relative to base
-                            if (currentHeight + delta > maxAllowedHeight) {
-                                delta = Math.max(0, maxAllowedHeight - currentHeight); // Limit to max height
-                            }
-                            if (delta > 0) {
-                                heights[ii][jj] += delta; // Update height for non-boundary points
-                                if (heights[ii][jj] < -thickness) heights[ii][jj] = -thickness;
-                                if (selectedTool === 'water') {
-                                    velocities[ii][jj] += delta * impulseMultiplier;
-                                }
-                            }
-                        }
-                    }
-                }
-                updateVertices();
-            } else {
-                console.warn('applyRaise called with out-of-bounds indices: ix=', ix, 'iy=', iy, 'nx=', nx, 'ny=', ny);
-            }
-        }
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
 
-        function clamp(value, min, max) {
-            return Math.max(min, Math.min(max, value));
-        }
+function exportSTL() {
+    const stlUnit = document.getElementById('stlUnitSelect').value;
+    const scale = UNIT_SCALE[stlUnit];
+    const halfW = boardW / 2, halfL = boardL / 2, halfT = boardT / 2;
+    const bottom = -halfT;
+    const tris = [];
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
+    function pushTri(ax,ay,az,bx,by,bz,cx,cy,cz) {
+        const ux=bx-ax,uy=by-ay,uz=bz-az, vx=cx-ax,vy=cy-ay,vz=cz-az;
+        const nx_=uy*vz-uz*vy, ny_=uz*vx-ux*vz, nz_=ux*vy-uy*vx;
+        const nl=Math.sqrt(nx_*nx_+ny_*ny_+nz_*nz_)||1;
+        tris.push({n:[nx_/nl,ny_/nl,nz_/nl],
+            v:[[ax*scale,ay*scale,az*scale],[bx*scale,by*scale,bz*scale],[cx*scale,cy*scale,cz*scale]]});
+    }
 
-            if (isDrawing && lastIx >= 0 && lastIx < nx && lastIy >= 0 && lastIy < ny && !isPaused) {
-                const now = performance.now();
-                if (now - lastDrawTime >= drawThrottleMs) {
-                    applyRaise(lastIx, lastIy);
-                    lastDrawTime = now;
-                }
-            }
+    const dx = boardW / (nx-1), dz = boardL / (ny-1);
+    for (let i=0; i<nx-1; i++) for (let j=0; j<ny-1; j++) {
+        const x0=-halfW+i*dx, z0=-halfL+j*dz, x1=x0+dx, z1=z0+dz;
+        const y00=halfT+heights[i*ny+j], y10=halfT+heights[(i+1)*ny+j];
+        const y01=halfT+heights[i*ny+(j+1)], y11=halfT+heights[(i+1)*ny+(j+1)];
+        pushTri(x0,y00,z0, x1,y10,z0, x1,y11,z1);
+        pushTri(x0,y00,z0, x1,y11,z1, x0,y01,z1);
+        pushTri(x0,bottom,z0, x1,bottom,z1, x1,bottom,z0);
+        pushTri(x0,bottom,z0, x0,bottom,z1, x1,bottom,z1);
+    }
+    for (let j=0; j<ny-1; j++) {
+        const z0=-halfL+j*dz, z1=z0+dz;
+        const y0=halfT+heights[0*ny+j], y1=halfT+heights[0*ny+(j+1)];
+        pushTri(-halfW,bottom,z0, -halfW,y0,z0, -halfW,y1,z1);
+        pushTri(-halfW,bottom,z0, -halfW,y1,z1, -halfW,bottom,z1);
+        const y2=halfT+heights[(nx-1)*ny+j], y3=halfT+heights[(nx-1)*ny+(j+1)];
+        pushTri(halfW,bottom,z0, halfW,y3,z1, halfW,y2,z0);
+        pushTri(halfW,bottom,z0, halfW,bottom,z1, halfW,y3,z1);
+    }
+    for (let i=0; i<nx-1; i++) {
+        const x0=-halfW+i*dx, x1=x0+dx;
+        const y0=halfT+heights[i*ny+0], y1=halfT+heights[(i+1)*ny+0];
+        pushTri(x0,bottom,-halfL, x0,y0,-halfL, x1,y1,-halfL);
+        pushTri(x0,bottom,-halfL, x1,y1,-halfL, x1,bottom,-halfL);
+        const y2=halfT+heights[i*ny+(ny-1)], y3=halfT+heights[(i+1)*ny+(ny-1)];
+        pushTri(x0,bottom,halfL, x1,y3,halfL, x0,y2,halfL);
+        pushTri(x0,bottom,halfL, x1,bottom,halfL, x1,y3,halfL);
+    }
 
-            if (selectedTool === 'water' && !isPaused) {
-                for (let step = 0; step < 3; step++) { // 3 steps for performance
-                    let newVelocities = velocities.map(row => [...row]);
-                    for (let i = 1; i < nx - 1; i++) {
-                        for (let j = 1; j < ny - 1; j++) {
-                            const lap = (heights[i - 1][j] + heights[i + 1][j] + heights[i][j - 1] + heights[i][j + 1] - 4 * heights[i][j]);
-                            newVelocities[i][j] += lap * c * c;
-                        }
-                    }
-                    for (let i = 0; i < nx; i++) {
-                        for (let j = 0; j < ny; j++) {
-                            if (i === 0 || i === nx - 1 || j === 0 || j === ny - 1) {
-                                newVelocities[i][j] = 0; // Stop wave at wall
-                            }
-                            newVelocities[i][j] *= damp;
-                        }
-                    }
-                    velocities = newVelocities;
-                    for (let i = 1; i < nx - 1; i++) {
-                        for (let j = 1; j < ny - 1; j++) {
-                            let currentHeight = thickness / 2 + heights[i][j];
-                            const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
-                            let heightChange = velocities[i][j] * dt;
-                            if (currentHeight + heightChange > maxAllowedHeight) {
-                                heightChange = Math.max(0, maxAllowedHeight - currentHeight);
-                                velocities[i][j] = 0; // Stop upward movement if at max
-                            }
-                            heights[i][j] += heightChange;
-                            if (heights[i][j] < -thickness) {
-                                heights[i][j] = -thickness;
-                                if (velocities[i][j] < 0) velocities[i][j] = 0;
-                            }
-                        }
-                    }
-                    updateVertices();
-                }
-            } else if (frameStep && isPaused) {
-                let newVelocities = velocities.map(row => [...row]);
-                for (let i = 1; i < nx - 1; i++) {
-                    for (let j = 1; j < ny - 1; j++) {
-                        const lap = (heights[i - 1][j] + heights[i + 1][j] + heights[i][j - 1] + heights[i][j + 1] - 4 * heights[i][j]);
-                        newVelocities[i][j] += lap * c * c;
-                    }
-                }
-                for (let i = 0; i < nx; i++) {
-                    for (let j = 0; j < ny; j++) {
-                        if (i === 0 || i === nx - 1 || j === 0 || j === ny - 1) {
-                            newVelocities[i][j] = 0; // Stop wave at wall
-                        }
-                        newVelocities[i][j] *= damp;
-                    }
-                }
-                velocities = newVelocities;
-                for (let i = 1; i < nx - 1; i++) {
-                    for (let j = 1; j < ny - 1; j++) {
-                        let currentHeight = thickness / 2 + heights[i][j];
-                        const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
-                        let heightChange = velocities[i][j] * dt;
-                        if (currentHeight + heightChange > maxAllowedHeight) {
-                            heightChange = Math.max(0, maxAllowedHeight - currentHeight);
-                            velocities[i][j] = 0; // Stop upward movement if at max
-                        }
-                        heights[i][j] += heightChange;
-                        if (heights[i][j] < -thickness) {
-                            heights[i][j] = -thickness;
-                            if (velocities[i][j] < 0) velocities[i][j] = 0;
-                        }
-                    }
-                }
-                updateVertices();
-                frameStep = false;
-            }
+    const numTris = tris.length;
+    const buf = new ArrayBuffer(84 + numTris * 50);
+    const view = new DataView(buf);
+    const hdr = `Waveform STL ${boardW}x${boardL}x${boardT} ${stlUnit}`;
+    for (let i=0; i<80; i++) view.setUint8(i, i < hdr.length ? hdr.charCodeAt(i) : 0);
+    view.setUint32(80, numTris, true);
+    let off = 84;
+    for (const tri of tris) {
+        for (let n=0; n<3; n++) { view.setFloat32(off, tri.n[n], true); off+=4; }
+        for (let v=0; v<3; v++) for (let c=0; c<3; c++) { view.setFloat32(off, tri.v[v][c], true); off+=4; }
+        view.setUint16(off, 0, true); off+=2;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], { type: 'application/octet-stream' }));
+    a.download = `waveform_${boardW}x${boardL}_${stlUnit}.stl`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
 
-            if (!isPaused && selectedTool === 'water' && isDrawing) {
-                animationProgress = (animationProgress + 1) % 101;
-                animationSlider.value = animationProgress;
-            }
+function setTool(t) {
+    selectedTool = t;
+    ['pull','water','drop','smooth'].forEach(id =>
+        document.getElementById('btn-'+id).classList.toggle('active', id===t));
+    document.getElementById('drop-queue-info').style.display = (t==='drop') ? 'block' : 'none';
+    if (t !== 'drop') document.getElementById('drop-cursor').style.display = 'none';
+}
 
-            controls.update();
-            renderer.render(scene, camera);
-        }
-        animate();
+document.getElementById('btn-pull').addEventListener('click',   () => setTool('pull'));
+document.getElementById('btn-water').addEventListener('click',  () => setTool('water'));
+document.getElementById('btn-drop').addEventListener('click',   () => setTool('drop'));
+document.getElementById('btn-smooth').addEventListener('click', () => setTool('smooth'));
 
-        // Settings listeners
-        const pullTool = document.getElementById('pullTool');
-        const waterTool = document.getElementById('waterTool');
-        const widthInput = document.getElementById('widthInput');
-        const lengthInput = document.getElementById('lengthInput');
-        const thicknessInput = document.getElementById('thicknessInput');
-        const brushRadiusSlider = document.getElementById('brushRadiusSlider');
-        const brushRadiusValue = document.getElementById('brushRadiusValue');
-        const pullHeightInput = document.getElementById('pullHeightInput');
-        const pullHeightValue = document.getElementById('pullHeightValue');
-        const liquidThicknessSlider = document.getElementById('liquidThicknessSlider');
-        const liquidThicknessValue = document.getElementById('liquidThicknessValue');
+function slider(id, valId, dec, cb) {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        document.getElementById(valId).textContent = v.toFixed(dec);
+        cb(v);
+    });
+}
+slider('brushRadiusSlider', 'brushRadiusValue', 2, v => brushRadius = v);
+slider('strengthSlider',    'strengthValue',    2, v => brushStrength = v);
+slider('dampSlider',        'dampValue',        4, v => dampFactor = v);
+slider('waveSpeedSlider',   'waveSpeedValue',   2, v => waveSpeed = v);
+slider('dropSizeSlider',    'dropSizeValue',    2, v => dropSize = v);
+slider('dropForceSlider',   'dropForceValue',   2, v => dropForce = v);
 
-        function selectTool(tool) {
-            pullTool.classList.remove('selected');
-            waterTool.classList.remove('selected');
-            tool.classList.add('selected');
-            selectedTool = tool.id.replace('Tool', '');
-        }
+function updateUnitLabels() {
+    ['widthUnit','lengthUnit','thickUnit','reliefUnit'].forEach(id =>
+        document.getElementById(id).textContent = currentUnit);
+    const step = currentUnit==='mm' ? 1 : currentUnit==='cm' ? 0.1 : 0.5;
+    ['widthInput','lengthInput','thicknessInput','reliefInput'].forEach(id =>
+        document.getElementById(id).step = step);
+}
 
-        pullTool.addEventListener('click', () => selectTool(pullTool));
-        waterTool.addEventListener('click', () => selectTool(waterTool));
+function toInches(v)   { return v / UNIT_SCALE[currentUnit]; }
+function fromInches(v) { return v * UNIT_SCALE[currentUnit]; }
 
-        selectTool(pullTool);
+document.getElementById('unitSelect').addEventListener('change', e => {
+    currentUnit = e.target.value;
+    [['widthInput',boardW],['lengthInput',boardL],['thicknessInput',boardT],['reliefInput',maxRelief]]
+        .forEach(([id,val]) => document.getElementById(id).value = parseFloat(fromInches(val).toFixed(4)));
+    updateUnitLabels();
+});
 
-        brushRadiusSlider.addEventListener('input', () => {
-            brushRadius = parseFloat(brushRadiusSlider.value);
-            brushRadiusValue.textContent = brushRadius.toFixed(1);
-        });
+function rebuild() {
+    boardW     = toInches(parseFloat(document.getElementById('widthInput').value) || 5);
+    boardL     = toInches(parseFloat(document.getElementById('lengthInput').value) || 5);
+    boardT     = toInches(parseFloat(document.getElementById('thicknessInput').value) || 2);
+    maxRelief  = toInches(parseFloat(document.getElementById('reliefInput').value) || 1.5);
+    initGrid();
+    dropQueue = [];
+    simHistory = []; historyIdx = -1; historyFrameCount = 0;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = 0; sl.value = 0;
+    document.getElementById('scrubValue').textContent = '0';
+    clearPendingMarkers();
+    clearFallingDrops();
+    updateDropQueueUI();
+    createMesh();
+    resetCamera();
+}
 
-        pullHeightInput.addEventListener('input', (event) => {
-            let value = parseFloat(event.target.value) || 0.3;
-            value = Math.max(0.1, value);
-            pullHeight = value;
-            pullHeightValue.textContent = pullHeight.toFixed(1);
-            event.target.value = pullHeight;
-        });
+['widthInput','lengthInput','thicknessInput','reliefInput'].forEach(id =>
+    document.getElementById(id).addEventListener('change', rebuild));
 
-        liquidThicknessSlider.addEventListener('input', () => {
-            damp = parseFloat(liquidThicknessSlider.value);
-            liquidThicknessValue.textContent = damp.toFixed(3);
-        });
+document.getElementById('pauseButton').addEventListener('click', () => {
+    isPaused = !isPaused;
+    document.getElementById('pauseButton').innerHTML = isPaused ? '&#9654; Play' : '&#9646;&#9646; Pause';
+    document.getElementById('pauseButton').classList.toggle('active', isPaused);
+});
 
-        pauseButton.addEventListener('click', () => {
-            isPaused = !isPaused;
-            pauseButton.textContent = isPaused ? 'Resume' : 'Pause';
-            if (isPaused) {
-                animationProgress = 0;
-                animationSlider.value = animationProgress;
-            }
-        });
+document.getElementById('stepButton').addEventListener('click', () => { if (isPaused) frameStep = true; });
 
-        stepButton.addEventListener('click', () => {
-            if (isPaused) {
-                frameStep = true;
-            }
-        });
+// Scrub slider
+const scrubSlider = document.getElementById('scrubSlider');
+scrubSlider.addEventListener('mousedown', () => {
+    scrubWasPaused = isPaused;
+    isPaused = true;
+    isScrubbing = true;
+    clearFallingDrops();
+});
+scrubSlider.addEventListener('mouseup', () => {
+    isScrubbing = false;
+    isPaused = scrubWasPaused;
+    document.getElementById('pauseButton').innerHTML = isPaused ? '&#9654; Play' : '&#9646;&#9646; Pause';
+    document.getElementById('pauseButton').classList.toggle('active', isPaused);
+});
+scrubSlider.addEventListener('input', () => {
+    const idx = parseInt(scrubSlider.value);
+    document.getElementById('scrubValue').textContent = idx;
+    restoreHistoryFrame(idx);
+});
+document.getElementById('clearButton').addEventListener('click', () => {
+    heights.fill(0); velocities.fill(0);
+    dropQueue = [];
+    simHistory = []; historyIdx = -1; historyFrameCount = 0;
+    const sl = document.getElementById('scrubSlider');
+    sl.max = 0; sl.value = 0;
+    document.getElementById('scrubValue').textContent = '0';
+    clearPendingMarkers();
+    clearFallingDrops();
+    updateDropQueueUI();
+    pushVertices();
+});
+document.getElementById('exportSTL').addEventListener('click', exportSTL);
 
-        animationSlider.addEventListener('input', (event) => {
-            if (isPaused) {
-                const progress = parseInt(event.target.value);
-                if (progress > animationProgress) {
-                    for (let i = 0; i < (progress - animationProgress); i++) {
-                        let newVelocities = velocities.map(row => [...row]);
-                        for (let i = 1; i < nx - 1; i++) {
-                            for (let j = 1; j < ny - 1; j++) {
-                                const lap = (heights[i - 1][j] + heights[i + 1][j] + heights[i][j - 1] + heights[i][j + 1] - 4 * heights[i][j]);
-                                newVelocities[i][j] += lap * c * c;
-                            }
-                        }
-                        for (let i = 0; i < nx; i++) {
-                            for (let j = 0; j < ny; j++) {
-                                if (i === 0 || i === nx - 1 || j === 0 || j === ny - 1) {
-                                    newVelocities[i][j] = 0;
-                                }
-                                newVelocities[i][j] *= damp;
-                            }
-                        }
-                        velocities = newVelocities;
-                        for (let i = 1; i < nx - 1; i++) {
-                            for (let j = 1; j < ny - 1; j++) {
-                                let currentHeight = thickness / 2 + heights[i][j];
-                                const maxAllowedHeight = thickness / 2 + pullHeight * (Math.max(width, length, 10) / 20);
-                                let heightChange = velocities[i][j] * dt;
-                                if (currentHeight + heightChange > maxAllowedHeight) {
-                                    heightChange = Math.max(0, maxAllowedHeight - currentHeight);
-                                    velocities[i][j] = 0;
-                                }
-                                heights[i][j] += heightChange;
-                                if (heights[i][j] < -thickness) {
-                                    heights[i][j] = -thickness;
-                                    if (velocities[i][j] < 0) velocities[i][j] = 0;
-                                }
-                            }
-                        }
-                        updateVertices();
-                    }
-                } else if (progress < animationProgress) {
-                    for (let i = 0; i < (animationProgress - progress); i++) {
-                        let newVelocities = velocities.map(row => [...row]);
-                        for (let i = 0; i < nx; i++) {
-                            for (let j = 0; j < ny; j++) {
-                                velocities[i][j] *= 0.9;
-                                heights[i][j] -= velocities[i][j] * dt;
-                                if (heights[i][j] < -thickness) {
-                                    heights[i][j] = -thickness;
-                                    if (velocities[i][j] < 0) velocities[i][j] = 0;
-                                }
-                            }
-                        }
-                        updateVertices();
-                    }
-                }
-                animationProgress = progress;
-            }
-        });
+function updateDropQueueUI() {
+    document.getElementById('drop-count').textContent = dropQueue.length;
+}
 
-        function updateDimensions(resetHeights = true) {
-            const newWidth = parseFloat(widthInput.value) || 20;
-            const newLength = parseFloat(lengthInput.value) || 10;
-            const newThickness = parseFloat(thicknessInput.value) || 2;
+window.addEventListener('resize', () => {
+    const w = window.innerWidth - 270, h = window.innerHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+});
 
-            if (newWidth !== width || newLength !== length || newThickness !== thickness) {
-                width = newWidth;
-                length = newLength;
-                thickness = newThickness;
-                // Ensure minimum grid resolution
-                const newNx = Math.max(50, Math.round(width * density));
-                const newNy = Math.max(50, Math.round(length * density));
-
-                if (newNx !== nx || newNy !== ny) {
-                    nx = newNx;
-                    ny = newNy;
-                    if (resetHeights) {
-                        heights = Array.from({ length: nx }, () => Array(ny).fill(0));
-                        velocities = Array.from({ length: nx }, () => Array(ny).fill(0));
-                    }
-                    createMesh();
-                    console.log(`Dimensions updated: width=${width}, length=${length}, nx=${nx}, ny=${ny}`);
-                }
-                camera.position.set(0, thickness * 2, length / 2 + width / 2);
-                controls.target.set(0, 0, 0);
-                controls.update();
-            }
-        }
-
-        widthInput.addEventListener('input', () => updateDimensions(true));
-        lengthInput.addEventListener('input', () => updateDimensions(true));
-        thicknessInput.addEventListener('input', () => updateDimensions(true));
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        console.log('Scene setup complete - box should be visible.');
-    </script>
+updateUnitLabels();
+setTool('pull');
+</script>
 </body>
-
 </html>
