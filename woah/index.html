@@ -740,55 +740,57 @@ function stepWave(steps) {
     const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
-    // Sponge spans ~12% of grid — wide enough to kill the wave before the wall
-    const spongeW = Math.max(8, Math.round(Math.min(nx, ny) * 0.12));
+    // Sponge: ~14% of grid. Wide enough to fully kill wave energy before the wall.
+    const spongeW = Math.max(10, Math.round(Math.min(nx, ny) * 0.14));
 
     for (let s = 0; s < steps; s++) {
-        // Absorb mode: copy edge heights from their inner neighbours (Neumann BC).
-        // This removes the zero-wall restoring gradient that causes reflection.
-        // Heights themselves are NOT modified — sculpted peaks near the edge are preserved.
-        if (borderMode === 'absorb') {
+        // Full-grid Laplacian. At boundaries we clamp the neighbour index to itself
+        // (Neumann: zero-gradient ghost cell). No separate copy step — that was causing
+        // a visible seam where adjacent vertices had identical heights.
+        for (let i = 0; i < nx; i++) {
+            const iL = i > 0    ? i - 1 : 0;
+            const iR = i < nx-1 ? i + 1 : nx-1;
             for (let j = 0; j < ny; j++) {
-                heights[0 * ny + j]        = heights[1 * ny + j];
-                heights[(nx-1) * ny + j]   = heights[(nx-2) * ny + j];
-            }
-            for (let i = 0; i < nx; i++) {
-                heights[i * ny + 0]        = heights[i * ny + 1];
-                heights[i * ny + (ny-1)]   = heights[i * ny + (ny-2)];
-            }
-        }
-
-        // Compute new velocities from Laplacian
-        for (let i = 1; i < nx - 1; i++) {
-            for (let j = 1; j < ny - 1; j++) {
+                const jD = j > 0    ? j - 1 : 0;
+                const jU = j < ny-1 ? j + 1 : ny-1;
                 const idx = i * ny + j;
-                const lapX = heights[(i-1)*ny+j] + heights[(i+1)*ny+j] - 2 * heights[idx];
-                const lapZ = heights[i*ny+(j-1)] + heights[i*ny+(j+1)] - 2 * heights[idx];
+                const lapX = heights[iL*ny+j] + heights[iR*ny+j] - 2*heights[idx];
+                const lapZ = heights[i*ny+jD] + heights[i*ny+jU] - 2*heights[idx];
                 velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
             }
         }
 
-        // Absorb mode: velocity-only sponge — wave energy dies before the wall.
-        // Heights are untouched so there is no visible dead zone.
         if (borderMode === 'absorb') {
-            for (let i = 1; i < nx - 1; i++) {
-                for (let j = 1; j < ny - 1; j++) {
-                    const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
+            // Velocity-only sponge, cubic rolloff. Heights are never touched so there is
+            // no visible dead zone and sculpted peaks survive right up to the edge.
+            for (let i = 0; i < nx; i++) {
+                for (let j = 0; j < ny; j++) {
+                    const edgeDist = Math.min(i, nx-1-i, j, ny-1-j);
                     if (edgeDist < spongeW) {
-                        const f = edgeDist / spongeW; // 0 at wall, 1 at inner edge
-                        velocities[i * ny + j] *= f * f;
+                        const t = edgeDist / spongeW; // 0 at wall → 1 at inner edge
+                        velocities[i*ny+j] *= t * t * t;
                     }
                 }
             }
+        } else {
+            // Hard reflect: zero velocity at the four border rows/cols.
+            for (let j = 0; j < ny; j++) {
+                velocities[j]          = 0;
+                velocities[(nx-1)*ny+j] = 0;
+            }
+            for (let i = 0; i < nx; i++) {
+                velocities[i*ny]        = 0;
+                velocities[i*ny+(ny-1)] = 0;
+            }
         }
 
-        // Integrate heights
-        for (let i = 1; i < nx - 1; i++) {
-            for (let j = 1; j < ny - 1; j++) {
+        // Integrate heights — full grid
+        for (let i = 0; i < nx; i++) {
+            for (let j = 0; j < ny; j++) {
                 const idx = i * ny + j;
                 let newH = heights[idx] + velocities[idx] * DT;
-                if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
-                if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
+                if (newH > maxRelief) { newH = maxRelief; if (velocities[idx] > 0) velocities[idx] = 0; }
+                if (newH < -boardT)   { newH = -boardT;   if (velocities[idx] < 0) velocities[idx] = 0; }
                 heights[idx] = newH;
             }
         }
