@@ -417,18 +417,18 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMappingExposure = 1.2;
 
-const hemi = new THREE.HemisphereLight(0x4466aa, 0x221408, 0.65);
+const hemi = new THREE.HemisphereLight(0x88aacc, 0x332211, 1.2);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff5e0, 1.4);
+const sun = new THREE.DirectionalLight(0xfff8ee, 2.2);
 sun.position.set(7, 16, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0005;
 scene.add(sun);
-const rim = new THREE.DirectionalLight(0x2255aa, 0.5);
-rim.position.set(-6, -2, -9);
+const rim = new THREE.DirectionalLight(0x4499ff, 0.8);
+rim.position.set(-6, 3, -9);
 scene.add(rim);
 
 let topFaceIndices = null;
@@ -452,7 +452,7 @@ function buildTopFaceIndex() {
 function createMesh() {
     if (mesh) scene.remove(mesh);
     const geo = new THREE.BoxGeometry(boardW, boardT, boardL, nx - 1, 1, ny - 1);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x2a3d52, roughness: 0.22, metalness: 0.10 });
+    const mat = new THREE.MeshPhongMaterial({ color: 0x1a6080, shininess: 120, specular: 0x88ccff, emissive: 0x050d14 });
     mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
