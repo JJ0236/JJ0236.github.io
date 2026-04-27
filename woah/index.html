@@ -312,7 +312,7 @@
             <span class="val-badge" id="dropForceValue">8.00</span>
         </div>
         <div class="row" style="margin-top:4px">
-            <button class="btn" id="btn-bordermode" style="flex:1">&#8634; Reflect Walls</button>
+            <button class="btn active" id="btn-bordermode" style="flex:1">&#8856; Absorb Walls</button>
         </div>
     </div>
 
@@ -416,19 +416,20 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 
-scene.add(new THREE.AmbientLight(0x8888bb, 0.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-sun.position.set(8, 14, 6);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const hemi = new THREE.HemisphereLight(0x4466aa, 0x221408, 0.65);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff5e0, 1.4);
+sun.position.set(7, 16, 5);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0005;
 scene.add(sun);
-const fill = new THREE.DirectionalLight(0x4444aa, 0.4);
-fill.position.set(-5, 4, -8);
-scene.add(fill);
-
-const gridHelper = new THREE.GridHelper(50, 50, 0x1a1a2a, 0x1a1a2a);
-gridHelper.position.y = -0.01;
-scene.add(gridHelper);
+const rim = new THREE.DirectionalLight(0x2255aa, 0.5);
+rim.position.set(-6, -2, -9);
+scene.add(rim);
 
 let topFaceIndices = null;
 let mesh;
@@ -451,7 +452,7 @@ function buildTopFaceIndex() {
 function createMesh() {
     if (mesh) scene.remove(mesh);
     const geo = new THREE.BoxGeometry(boardW, boardT, boardL, nx - 1, 1, ny - 1);
-    const mat = new THREE.MeshPhongMaterial({ color: 0x9a7a5a, shininess: 20, specular: 0x333322 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0x2a3d52, roughness: 0.22, metalness: 0.10 });
     mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -494,7 +495,7 @@ let selectedTool = 'pull';
 let brushRadius = 0.5, brushStrength = 0.3;
 let dampFactor = 0.9995, waveSpeed = 0.4;
 let dropSize = 0.5, dropForce = 8.0;
-let borderMode = 'reflect';
+let borderMode = 'absorb';
 const DT = 0.016;
 
 // ─── History / scrub ───
@@ -762,7 +763,7 @@ function stepWave(steps) {
                 if (newH > maxRelief)  { newH = maxRelief;  if (velocities[idx] > 0) velocities[idx] = 0; }
                 if (newH < -boardT)    { newH = -boardT;    if (velocities[idx] < 0) velocities[idx] = 0; }
                 heights[idx] = newH;
-                // Absorb mode: thin sponge damps velocity only at edge; reflect = full hard wall
+                // Absorb mode: sponge damps velocity near edge so waves die out
                 if (borderMode === 'absorb') {
                     const edgeDist = Math.min(i, nx - 1 - i, j, ny - 1 - j);
                     if (edgeDist < spongeW) {
@@ -771,6 +772,20 @@ function stepWave(steps) {
                     }
                 }
             }
+        }
+        // Neumann (free) boundary: edge cells mirror their inner neighbor so brush
+        // strokes near the edge don't stick permanently and participate in the wave.
+        for (let j = 0; j < ny; j++) {
+            heights[0 * ny + j]        = heights[1 * ny + j];
+            heights[(nx-1) * ny + j]   = heights[(nx-2) * ny + j];
+            velocities[0 * ny + j]     = velocities[1 * ny + j];
+            velocities[(nx-1) * ny + j]= velocities[(nx-2) * ny + j];
+        }
+        for (let i = 0; i < nx; i++) {
+            heights[i * ny + 0]        = heights[i * ny + 1];
+            heights[i * ny + (ny-1)]   = heights[i * ny + (ny-2)];
+            velocities[i * ny + 0]     = velocities[i * ny + 1];
+            velocities[i * ny + (ny-1)]= velocities[i * ny + (ny-2)];
         }
     }
 }
@@ -912,7 +927,7 @@ slider('strengthSlider',    'strengthValue',    2, v => brushStrength = v);
 slider('dampSlider',        'dampValue',        4, v => dampFactor = v);
 
 document.getElementById('btn-bordermode').addEventListener('click', () => {
-    borderMode = borderMode === 'reflect' ? 'absorb' : 'reflect';
+    borderMode = borderMode === 'absorb' ? 'reflect' : 'absorb';
     const btn = document.getElementById('btn-bordermode');
     if (borderMode === 'absorb') {
         btn.innerHTML = '&#8856; Absorb Walls';
