@@ -742,7 +742,7 @@ function stepWave(steps) {
     const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
-    const spongeW = Math.max(6, Math.round(Math.min(nx, ny) * 0.08));
+    const spongeW = Math.max(8, Math.round(Math.min(nx, ny) * 0.10));
 
     for (let s = 0; s < steps; s++) {
         // Interior-only Laplacian — border waveH is always 0 (Dirichlet) for both modes.
@@ -757,13 +757,16 @@ function stepWave(steps) {
         }
 
         if (borderMode === 'absorb') {
-            // Velocity-only sponge: quadratic rolloff near border, no height modification = no dead zone
+            // Absorb sponge: damp both waveH and velocity every sub-step.
+            // Linear survival (0.88 at border → 1.0 at edge) prevents frozen-height
+            // sticking and gently dissipates outgoing wave energy without hard reflection.
             for (let i = 1; i < nx - 1; i++) {
                 for (let j = 1; j < ny - 1; j++) {
                     const ed = Math.min(i, nx - 1 - i, j, ny - 1 - j);
                     if (ed < spongeW) {
-                        const t = ed / spongeW;
-                        velocities[i * ny + j] *= t * t;
+                        const surv = 1 - 0.12 * (1 - ed / spongeW);
+                        heights[i * ny + j] *= surv;
+                        velocities[i * ny + j] *= surv;
                     }
                 }
             }
