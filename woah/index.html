@@ -740,47 +740,43 @@ function stepWave(steps) {
     const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
-    // Sponge: ~14% of grid. Wide enough to fully kill wave energy before the wall.
-    const spongeW = Math.max(10, Math.round(Math.min(nx, ny) * 0.14));
 
     for (let s = 0; s < steps; s++) {
-        // Full-grid Laplacian. At boundaries we clamp the neighbour index to itself
-        // (Neumann: zero-gradient ghost cell). No separate copy step — that was causing
-        // a visible seam where adjacent vertices had identical heights.
-        for (let i = 0; i < nx; i++) {
-            const iL = i > 0    ? i - 1 : 0;
-            const iR = i < nx-1 ? i + 1 : nx-1;
-            for (let j = 0; j < ny; j++) {
-                const jD = j > 0    ? j - 1 : 0;
-                const jU = j < ny-1 ? j + 1 : ny-1;
-                const idx = i * ny + j;
-                const lapX = heights[iL*ny+j] + heights[iR*ny+j] - 2*heights[idx];
-                const lapZ = heights[i*ny+jD] + heights[i*ny+jU] - 2*heights[idx];
-                velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
-            }
-        }
-
+        // Absorb: full-grid Laplacian with clamped (Neumann) neighbour access.
+        //   heights[iL] = heights[i] at wall → zero pressure gradient → no reflection force.
+        // Reflect: interior-only loop, boundary heights stay 0 (Dirichlet) → reflection.
         if (borderMode === 'absorb') {
-            // Velocity-only sponge, cubic rolloff. Heights are never touched so there is
-            // no visible dead zone and sculpted peaks survive right up to the edge.
             for (let i = 0; i < nx; i++) {
+                const iL = i > 0    ? i - 1 : 0;
+                const iR = i < nx-1 ? i + 1 : nx-1;
                 for (let j = 0; j < ny; j++) {
-                    const edgeDist = Math.min(i, nx-1-i, j, ny-1-j);
-                    if (edgeDist < spongeW) {
-                        const t = edgeDist / spongeW; // 0 at wall → 1 at inner edge
-                        velocities[i*ny+j] *= t * t * t;
-                    }
+                    const jD = j > 0    ? j - 1 : 0;
+                    const jU = j < ny-1 ? j + 1 : ny-1;
+                    const idx = i * ny + j;
+                    const lapX = heights[iL*ny+j] + heights[iR*ny+j] - 2*heights[idx];
+                    const lapZ = heights[i*ny+jD] + heights[i*ny+jU] - 2*heights[idx];
+                    velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
                 }
             }
-        } else {
-            // Hard reflect: zero velocity at the four border rows/cols.
+            // Zero velocity at the border — wave arrives, energy terminates. No sponge,
+            // no wide dead zone. Wave goes all the way to the edge and just stops.
             for (let j = 0; j < ny; j++) {
-                velocities[j]          = 0;
+                velocities[j] = 0;
                 velocities[(nx-1)*ny+j] = 0;
             }
             for (let i = 0; i < nx; i++) {
-                velocities[i*ny]        = 0;
+                velocities[i*ny] = 0;
                 velocities[i*ny+(ny-1)] = 0;
+            }
+        } else {
+            // Reflect: interior only, border stays 0
+            for (let i = 1; i < nx - 1; i++) {
+                for (let j = 1; j < ny - 1; j++) {
+                    const idx = i * ny + j;
+                    const lapX = heights[(i-1)*ny+j] + heights[(i+1)*ny+j] - 2*heights[idx];
+                    const lapZ = heights[i*ny+(j-1)] + heights[i*ny+(j+1)] - 2*heights[idx];
+                    velocities[idx] = (velocities[idx] + lapX * Kx + lapZ * Kz) * dampFactor;
+                }
             }
         }
 
