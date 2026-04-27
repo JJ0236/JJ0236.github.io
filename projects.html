@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="canonical" href="/projects/" />
+  <meta http-equiv="refresh" content="0; url=/projects/" />
+  <script>
+    window.location.replace('/projects/');
+  </script>
   <title>Projects – Josh’s Corner</title>
   <!-- Google Font -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet"/>
@@ -107,7 +112,7 @@
 </head>
 <body>
   <!-- Home icon -->
-  <a href="/" class="home-icon" title="Home">
+  <a href="index.html" class="home-icon" title="Home">
     <svg viewBox="0 0 24 24" fill="currentColor">
       <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
       <path d="M9 21V12H15V21"/>
@@ -116,7 +121,6 @@
 
   <!-- Featured project -->
   <section class="featured-project">
-    <img src="path/to/tunes-thumb.jpg" alt="TunesInYourCity screenshot">
     <div class="featured-info">
       <h2>TunesInYourCity</h2>
       <p>Automates scraping of ~15 venue websites to build and update curated Spotify playlists and weekly Instagram posts.</p>
@@ -142,6 +146,12 @@
       <p class="tech">
         Skills: Curriculum Development • STEM Instruction • 3D Printing • Digital Tech Education • Lesson Design
       </p>
+    </article>
+
+    <article class="project-card">
+      <h3><a href="/woah/">Interactive 3D Box Demo</a></h3>
+      <p>An experimental page showcasing a WebGL box that you can reshape and manipulate directly in the browser.</p>
+      <p class="tech">Skills: JavaScript • Three.js • WebGL</p>
     </article>
   </section>
 </body>
