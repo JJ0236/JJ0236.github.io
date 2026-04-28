@@ -388,14 +388,15 @@ let currentUnit = 'in';
 let boardW = 5, boardL = 5, boardT = 2, maxRelief = 1.5;
 
 const MIN_PTS = 60, MAX_PTS = 400, DENSITY = 20;
-let nx, ny, heights, velocities, sculptH;
+let nx, ny, heights, velocities, sculptH, heightsPrev;
 
 function initGrid() {
     nx = Math.max(MIN_PTS, Math.min(MAX_PTS, Math.round(boardW * DENSITY)));
     ny = Math.max(MIN_PTS, Math.min(MAX_PTS, Math.round(boardL * DENSITY)));
-    heights    = new Float32Array(nx * ny);
-    velocities = new Float32Array(nx * ny);
-    sculptH    = new Float32Array(nx * ny);
+    heights      = new Float32Array(nx * ny);
+    velocities   = new Float32Array(nx * ny);
+    sculptH      = new Float32Array(nx * ny);
+    heightsPrev  = new Float32Array(nx * ny);
 }
 initGrid();
 
@@ -745,8 +746,17 @@ function stepWave(steps) {
     const effC = Math.min(waveSpeed, cfl * Math.min(dx, dz) / DT);
     const Kx = effC * effC * DT / (dx * dx);
     const Kz = effC * effC * DT / (dz * dz);
+
+    // Mur first-order ABC coefficient: r = (c*dt - d) / (c*dt + d)
+    // When r≈0 (CFL≈1), border cell = previous neighbor = pure outgoing wave.
+    const murX = (effC * DT - dx) / (effC * DT + dx);
+    const murZ = (effC * DT - dz) / (effC * DT + dz);
+
     for (let s = 0; s < steps; s++) {
-        // Interior-only Laplacian — border waveH is always 0 (Dirichlet) for both modes.
+        // Save current heights before update (needed for Mur formula)
+        heightsPrev.set(heights);
+
+        // Interior Laplacian (Dirichlet: borders stay 0 unless overwritten by Mur below)
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
@@ -756,7 +766,7 @@ function stepWave(steps) {
             }
         }
 
-        // Integrate heights — interior only; border waveH stays 0 (Dirichlet)
+        // Integrate heights (interior only)
         for (let i = 1; i < nx - 1; i++) {
             for (let j = 1; j < ny - 1; j++) {
                 const idx = i * ny + j;
@@ -767,19 +777,29 @@ function stepWave(steps) {
                 heights[idx] = newH;
             }
         }
-    }
 
-    // Absorb: kill waves in the 3-cell inner ring ONCE per frame (outside sub-step loop).
-    // ed=1 → 0 (hard zero), ed=2 → 33%, ed=3 → 67%. Dead zone = 3 cells = ~0.15" — invisible.
-    if (borderMode === 'absorb') {
-        for (let i = 1; i < nx - 1; i++) {
+        if (borderMode === 'absorb') {
+            // Mur first-order ABC: propagate waves OUT through each wall, zero reflection.
+            // Formula: h_new[boundary] = h_old[interior] + r*(h_new[interior] - h_old[boundary])
+            // Left wall (i=0)
             for (let j = 1; j < ny - 1; j++) {
-                const ed = Math.min(i, nx - 1 - i, j, ny - 1 - j);
-                if (ed <= 3) {
-                    const surv = Math.max(0, (ed - 1) / 3);
-                    heights[i * ny + j] *= surv;
-                    velocities[i * ny + j] *= surv;
-                }
+                heights[0*ny+j] = heightsPrev[1*ny+j] + murX * (heights[1*ny+j] - heightsPrev[0*ny+j]);
+                velocities[0*ny+j] = 0;
+            }
+            // Right wall (i=nx-1)
+            for (let j = 1; j < ny - 1; j++) {
+                heights[(nx-1)*ny+j] = heightsPrev[(nx-2)*ny+j] + murX * (heights[(nx-2)*ny+j] - heightsPrev[(nx-1)*ny+j]);
+                velocities[(nx-1)*ny+j] = 0;
+            }
+            // Front wall (j=0)
+            for (let i = 0; i < nx; i++) {
+                heights[i*ny+0] = heightsPrev[i*ny+1] + murZ * (heights[i*ny+1] - heightsPrev[i*ny+0]);
+                velocities[i*ny+0] = 0;
+            }
+            // Back wall (j=ny-1)
+            for (let i = 0; i < nx; i++) {
+                heights[i*ny+(ny-1)] = heightsPrev[i*ny+(ny-2)] + murZ * (heights[i*ny+(ny-2)] - heightsPrev[i*ny+(ny-1)]);
+                velocities[i*ny+(ny-1)] = 0;
             }
         }
     }
@@ -1003,7 +1023,7 @@ scrubSlider.addEventListener('input', () => {
     restoreHistoryFrame(idx);
 });
 document.getElementById('clearButton').addEventListener('click', () => {
-    heights.fill(0); velocities.fill(0); sculptH.fill(0);
+    heights.fill(0); velocities.fill(0); sculptH.fill(0); heightsPrev.fill(0);
     dropQueue = [];
     simHistory = []; historyIdx = -1; historyFrameCount = 0;
     const sl = document.getElementById('scrubSlider');
