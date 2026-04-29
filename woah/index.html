@@ -391,6 +391,7 @@ const UNIT_SCALE = { in: 1, cm: 2.54, mm: 25.4 };
 let currentUnit = 'in';
 
 let boardW = 5, boardL = 5, boardT = 2, maxRelief = 1.5;
+let waveAmp = 2.0;
 
 const MIN_PTS = 60, MAX_PTS = 400, DENSITY = 20;
 let nx, ny, heights, velocities, sculptH, heightsPrev;
@@ -497,7 +498,7 @@ let dropQueue = [];
 let isPaused = false, frameStep = false;
 let selectedTool = 'pull';
 let brushRadius = 0.5, brushStrength = 0.3;
-let dampFactor = 0.9995, waveSpeed = 0.4, waveAmp = 2.0;
+let dampFactor = 0.9995, waveSpeed = 0.4;
 let dropSize = 0.5, dropForce = 8.0;
 let borderMode = 'absorb';
 const DT = 0.016;
