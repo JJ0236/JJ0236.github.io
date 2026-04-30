@@ -2,176 +2,243 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Projects – Josh’s Corner</title>
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projects — Josh Hicks</title>
+  <link rel="stylesheet" href="/styles/main.css" />
   <style>
-    body {
-      margin: 0;
-      background: #F5E7DE;
-      font-family: 'Roboto', sans-serif;
-      color: #333;
+    .projects-wrapper {
+      max-width: var(--content-max);
+    }
+    /* Featured project banner */
+    .featured-banner {
+      background: var(--moss-dark);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      margin-bottom: var(--space-8);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 20px;
-      min-height: 100vh;
-      position: relative;
+      gap: var(--space-4);
+      box-shadow: var(--shadow-md);
     }
-    .home-icon {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 32px;
-      height: 32px;
-      color: #333;
-      text-decoration: none;
-      transition: transform 0.2s ease;
-      z-index: 100;
+    .featured-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-light);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
     }
-    .home-icon:hover {
-      transform: translateX(-50%) scale(1.1);
+    .featured-title {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--sidebar-text);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
     }
-
-    /* ——— FEATURED PROJECT ——— */
-    .featured-project {
+    .featured-desc {
+      font-size: var(--text-base);
+      color: var(--sidebar-muted);
+      line-height: 1.7;
+      max-width: 600px;
+    }
+    .featured-tags {
       display: flex;
       flex-wrap: wrap;
-      gap: 1.5rem;
-      background: #fff;
-      padding: 2rem;
-      border-radius: .5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      max-width: 900px;
-      width: 100%;
-      margin-top: 4rem;
+      gap: var(--space-2);
     }
-    .featured-project img {
-      flex: 1 1 300px;
-      max-width: 100%;
-      border-radius: .5rem;
+    .featured-tags .tag {
+      background: rgba(255,255,255,0.08);
+      color: var(--sidebar-muted);
+      border-color: rgba(255,255,255,0.1);
     }
-    .featured-info {
-      flex: 2 1 300px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+    .featured-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--moss-light);
+      text-decoration: none;
+      transition: color var(--transition);
     }
-    .featured-info h2 {
-      margin: 0 0 .5rem;
-      font-size: 2rem;
-    }
-    .featured-info p {
-      margin: .5rem 0;
-      line-height: 1.4;
-    }
-    .featured-info .tech {
-      color: #666;
-      font-size: .9rem;
-    }
-
-    /* ——— OTHER PROJECTS GRID ——— */
+    .featured-link:hover { color: var(--sidebar-text); }
+    /* Projects grid */
     .projects-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.5rem;
-      max-width: 900px;
-      width: 100%;
-      margin: 3rem 0;
+      grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+      gap: var(--space-4);
     }
     .project-card {
-      background: #fff;
-      border-radius: .5rem;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-      padding: 1.5rem;
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      padding: var(--space-6);
       display: flex;
       flex-direction: column;
-      height: 100%;
+      gap: var(--space-3);
+      box-shadow: var(--shadow-xs);
+      text-decoration: none;
+      transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
     }
-    .project-card h3 {
-      margin: 0 0 .5rem;
-      font-size: 1.4rem;
+    a.project-card:hover {
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-4px);
+      border-color: var(--soil-mid);
     }
-    .project-card p {
-      margin: .5rem 0;
-      line-height: 1.4;
+    .project-card--showcase {
+      cursor: default;
+      opacity: 0.85;
     }
-    .project-card p.tech {
-      margin-top: auto;
-      font-size: .9rem;
-      color: #666;
+    .project-card--showcase:hover {
+      transform: none;
+      box-shadow: var(--shadow-xs);
+      border-color: var(--slate-subtle);
+    }
+    .project-stripe {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--moss-mid);
+      margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .project-stripe--soil  { background: var(--soil-mid); }
+    .project-stripe--slate { background: var(--slate-mid); }
+    .project-stripe--bark  { background: var(--soil-light); }
+    .project-name {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--soil-dark);
+      line-height: 1.3;
+    }
+    .project-desc {
+      font-size: var(--text-sm);
+      color: var(--slate-dark);
+      line-height: 1.6;
+      flex: 1;
+    }
+    .showcase-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--slate-light);
+      letter-spacing: 0.06em;
+    }
+    @media (max-width: 600px) {
+      .featured-banner { padding: var(--space-6); }
+      .featured-title { font-size: var(--text-xl); }
     }
   </style>
 </head>
 <body>
-  <!-- Home icon -->
-  <a href="/" class="home-icon" title="Home">
-    <svg viewBox="0 0 24 24" fill="currentColor">
-      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
-      <path d="M9 21V12H15V21"/>
-    </svg>
-  </a>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Projects</div>
+        <div class="page-subtitle">// software, hardware, and everything in between</div>
+      </div>
 
-  <!-- Featured project -->
-  <section class="featured-project">
-    <div class="featured-info">
-      <h2>TunesInYourCity</h2>
-      <p>Automates scraping of ~15 venue websites to build and update curated Spotify playlists and weekly Instagram posts.</p>
-      <p class="tech">
-        Skills: Selenium • Python • Spotify API • Web Scraping • Data Filtering • Instagram Integration
-      </p>
-    </div>
-  </section>
+      <div class="projects-wrapper">
+        <!-- Featured -->
+        <div class="featured-banner fade-up">
+          <div class="featured-label">Featured Project</div>
+          <div class="featured-title">TunesInYourCity</div>
+          <div class="featured-desc">Automates scraping of ~15 venue websites to build and update curated Spotify playlists and weekly Instagram posts. End-to-end pipeline from raw venue data to published content.</div>
+          <div class="featured-tags">
+            <span class="tag">Selenium</span>
+            <span class="tag">Python</span>
+            <span class="tag">Spotify API</span>
+            <span class="tag">Web Scraping</span>
+            <span class="tag">Data Filtering</span>
+            <span class="tag">Instagram Integration</span>
+          </div>
+          <a href="https://open.spotify.com/user/31rclwfbe3ken4qpxspmc6etyfoa?si=c8987c2b34ee4f88" target="_blank" rel="noopener" class="featured-link">View on Spotify →</a>
+        </div>
 
-  <!-- Other main projects -->
-  <section class="projects-grid">
-    <article class="project-card">
-      <h3><a href="/foraging/">Fayetteville Foraging Map</a></h3>
-      <p>An interactive map for edible plants in Fayetteville with seasonal filtering and plant-type search.</p>
-      <p class="tech">Skills: JavaScript • Leaflet • GIS API Integration • Filtering UI</p>
-    </article>
+        <!-- Grid -->
+        <div class="projects-grid">
 
-    <article class="project-card">
-      <h3>3D Printing + Fabrication Projects</h3>
-      <p>Created beginner-friendly 3D printing guides, visual PDFs, and nature-themed accessories with custom support-wall designs in Fusion 360 & Inkscape.</p>
-      <p class="tech">
-        Skills: Flowchart Design • PDF & Guide Creation • Fusion 360 • Inkscape • 3D Printing
-      </p>
-    </article>
+          <a href="/foraging/" class="project-card fade-up">
+            <div class="project-stripe"></div>
+            <div class="project-name">Fayetteville Foraging Map</div>
+            <div class="project-desc">Interactive map for edible plants in Fayetteville with seasonal filtering and plant-type search.</div>
+            <div class="tags">
+              <span class="tag">JavaScript</span>
+              <span class="tag">Leaflet</span>
+              <span class="tag">GIS</span>
+            </div>
+          </a>
 
-    <article class="project-card">
-      <h3>Scouting / STEM Education Projects</h3>
-      <p>Developed interactive merit-badge programs and taught hands-on STEM lessons at scout camps—no Wi-Fi or A/V gear needed.</p>
-      <p class="tech">
-        Skills: Curriculum Development • STEM Instruction • 3D Printing • Digital Tech Education • Lesson Design
-      </p>
-    </article>
+          <a href="/s1c3r/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--soil"></div>
+            <div class="project-name">s1c3r — STL Sheet Slicer</div>
+            <div class="project-desc">Load any STL, manipulate it in 3D, and slice it into laser-cuttable sheets. Exports a tiled SVG with alignment holes and adjustable thickness settings.</div>
+            <div class="tags">
+              <span class="tag">Three.js</span>
+              <span class="tag">STL Parsing</span>
+              <span class="tag">SVG Export</span>
+            </div>
+          </a>
 
-    <article class="project-card">
-      <h3><a href="/woah/">Interactive 3D Box Demo</a></h3>
-      <p>An experimental page showcasing a WebGL box that you can reshape and manipulate directly in the browser.</p>
-      <p class="tech">Skills: JavaScript • Three.js • WebGL</p>
-    </article>
+          <a href="/transcript-tool/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--slate"></div>
+            <div class="project-name">Video Transcript Tool</div>
+            <div class="project-desc">Upload a video or audio file and generate a transcript entirely in the browser — no API key, no server. Powered by local Whisper inference.</div>
+            <div class="tags">
+              <span class="tag">Whisper</span>
+              <span class="tag">Local AI</span>
+              <span class="tag">Web Audio</span>
+            </div>
+          </a>
 
-    <article class="project-card">
-      <h3><a href="/transcript-tool/">Video Transcript Tool</a></h3>
-      <p>Upload a video or audio file and generate a transcript directly in your browser with no API key required, then export to plain text.</p>
-      <p class="tech">Skills: JavaScript • Local AI Inference • Whisper • File Processing</p>
-    </article>
+          <a href="/instagram-analytics/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--bark"></div>
+            <div class="project-name">Instagram Analytics Dashboard</div>
+            <div class="project-desc">Enter any public handle and get a full analytics dashboard — post breakdowns, hashtag performance, hook pattern analysis, and cadence heatmaps.</div>
+            <div class="tags">
+              <span class="tag">Chart.js</span>
+              <span class="tag">Cloudflare Workers</span>
+              <span class="tag">Data Analysis</span>
+            </div>
+          </a>
 
-    <article class="project-card">
-      <h3><a href="/s1c3r/">s1c3r – STL Sheet Slicer</a></h3>
-      <p>Load any STL, manipulate it in 3D, and slice it into laser-cuttable sheets. Exports all sheets as a single tiled SVG with alignment holes, sheet labels, and adjustable thickness and gap settings.</p>
-      <p class="tech">Skills: JavaScript • Three.js • STL Parsing • SVG Generation • Computational Geometry</p>
-    </article>
+          <a href="/woah/" class="project-card fade-up">
+            <div class="project-stripe"></div>
+            <div class="project-name">Interactive WebGL Demo</div>
+            <div class="project-desc">Experimental browser tool — a WebGL terrain box with real-time wave physics you can sculpt and ripple directly in the viewport.</div>
+            <div class="tags">
+              <span class="tag">Three.js</span>
+              <span class="tag">WebGL</span>
+              <span class="tag">Physics</span>
+            </div>
+          </a>
 
-    <article class="project-card">
-      <h3><a href="/instagram-analytics/">Instagram Analytics Dashboard</a></h3>
-      <p>Enter any public Instagram handle and instantly get a full analytics dashboard — post type breakdown, hashtag performance, caption analysis, hook style patterns, and posting cadence heatmaps. Powered by a Cloudflare Worker proxy.</p>
-      <p class="tech">Skills: JavaScript • Chart.js • Cloudflare Workers • Data Analysis • Instagram Data</p>
-    </article>
-  </section>
+          <div class="project-card project-card--showcase fade-up">
+            <div class="project-stripe project-stripe--soil"></div>
+            <div class="project-name">3D Printing &amp; Fabrication</div>
+            <div class="project-desc">Beginner-friendly guides, visual PDFs, and nature-themed accessories with custom support structures designed in Fusion 360 &amp; Inkscape.</div>
+            <div class="tags">
+              <span class="tag">Fusion 360</span>
+              <span class="tag">Inkscape</span>
+              <span class="tag">3D Printing</span>
+            </div>
+            <div class="showcase-label">showcase — no link</div>
+          </div>
+
+          <div class="project-card project-card--showcase fade-up">
+            <div class="project-stripe project-stripe--slate"></div>
+            <div class="project-name">Scouting / STEM Education</div>
+            <div class="project-desc">Interactive merit-badge programs and hands-on STEM lessons for scout camps — designed to work without Wi-Fi or A/V equipment.</div>
+            <div class="tags">
+              <span class="tag">Curriculum Design</span>
+              <span class="tag">STEM</span>
+              <span class="tag">3D Printing</span>
+            </div>
+            <div class="showcase-label">showcase — no link</div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="/scripts/nav.js"></script>
 </body>
 </html>

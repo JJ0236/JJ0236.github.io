@@ -3,33 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <title>s1c3r – STL Sheet Slicer</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #1a1a2e;
-      color: #e0e0e0;
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #141810;
+      color: #D4CDB8;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
       display: flex;
       flex-direction: column;
       height: 100dvh;
       overflow: hidden;
+      padding-top: 48px;
     }
-
-    /* ── Home icon ───────────────────────────── */
-    .home-icon {
-      position: fixed;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 28px; height: 28px;
-      color: #aaa;
-      text-decoration: none;
-      z-index: 200;
-      transition: color .2s;
-    }
-    .home-icon:hover { color: #fff; }
 
     /* ── Top bar ─────────────────────────────── */
     #topbar {
@@ -37,22 +25,22 @@
       align-items: center;
       gap: 10px;
       padding: 8px 16px 8px 60px;
-      background: #16213e;
-      border-bottom: 1px solid #0f3460;
+      background: #1E2218;
+      border-bottom: 1px solid #2E3A26;
       flex-shrink: 0;
       flex-wrap: wrap;
     }
     #topbar h1 {
       font-size: 1.2rem;
       letter-spacing: .12em;
-      color: #e94560;
+      color: #8FAF6E;
       flex-shrink: 0;
       margin-right: 6px;
     }
     #topbar button, #topbar label.btn {
-      background: #0f3460;
-      border: 1px solid #e94560;
-      color: #e0e0e0;
+      background: #2E3A26;
+      border: 1px solid #5C7A4E;
+      color: #D4CDB8;
       padding: 5px 14px;
       border-radius: 4px;
       cursor: pointer;
@@ -60,7 +48,7 @@
       transition: background .2s;
       white-space: nowrap;
     }
-    #topbar button:hover, #topbar label.btn:hover { background: #e94560; color: #fff; }
+    #topbar button:hover, #topbar label.btn:hover { background: #5C7A4E; color: #F8F4EE; }
     #topbar input[type=file] { display: none; }
 
     /* ── Main layout ─────────────────────────── */
@@ -85,7 +73,7 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #666;
+      color: #4A5545;
       pointer-events: none;
     }
     #drop-overlay svg { width: 64px; height: 64px; margin-bottom: 16px; }
@@ -95,7 +83,7 @@
       position: absolute;
       bottom: 14px; left: 50%;
       transform: translateX(-50%);
-      background: rgba(233,69,96,.85);
+      background: rgba(92,122,78,.9);
       color: #fff;
       padding: 6px 18px;
       border-radius: 20px;
@@ -107,8 +95,8 @@
     /* ── Side panel ──────────────────────────── */
     #panel {
       width: 270px;
-      background: #16213e;
-      border-left: 1px solid #0f3460;
+      background: #1E2218;
+      border-left: 1px solid #2E3A26;
       overflow-y: auto;
       padding: 14px 14px 20px;
       display: flex;
@@ -121,7 +109,7 @@
       font-size: .7rem;
       letter-spacing: .14em;
       text-transform: uppercase;
-      color: #e94560;
+      color: #8FAF6E;
       margin-bottom: 8px;
     }
 
@@ -132,22 +120,22 @@
       font-size: .82rem;
       margin-bottom: 6px;
     }
-    label.row span { color: #aaa; }
+    label.row span { color: #8A8070; }
 
     input[type=number], select {
       width: 96px;
-      background: #0f3460;
-      border: 1px solid #1e4080;
-      color: #e0e0e0;
+      background: #2A3220;
+      border: 1px solid #3A4A2E;
+      color: #D4CDB8;
       padding: 4px 8px;
       border-radius: 4px;
       font-size: .82rem;
     }
-    input[type=number]:focus, select:focus { outline: 1px solid #e94560; }
+    input[type=number]:focus, select:focus { outline: 1px solid #5C7A4E; }
 
     input[type=range] {
       width: 100%;
-      accent-color: #e94560;
+      accent-color: #5C7A4E;
       margin: 4px 0 0;
     }
 
@@ -155,27 +143,27 @@
       width: 100%;
       padding: 8px;
       border-radius: 4px;
-      border: 1px solid #e94560;
-      background: #0f3460;
-      color: #e0e0e0;
+      border: 1px solid #5C7A4E;
+      background: #2E3A26;
+      color: #D4CDB8;
       cursor: pointer;
       font-size: .85rem;
       transition: background .2s;
     }
-    .full-btn:hover { background: #e94560; color: #fff; }
+    .full-btn:hover { background: #5C7A4E; color: #F8F4EE; }
     .full-btn:disabled { opacity: .4; cursor: not-allowed; }
-    .full-btn.accent { background: #e94560; color: #fff; }
-    .full-btn.accent:hover { background: #c73652; }
+    .full-btn.accent { background: #5C7A4E; color: #F8F4EE; }
+    .full-btn.accent:hover { background: #3A4A2C; }
 
     #slice-info {
       font-size: .78rem;
-      color: #aaa;
+      color: #8A8070;
       line-height: 1.6;
     }
 
     #status {
       font-size: .75rem;
-      color: #e94560;
+      color: #8FAF6E;
       min-height: 18px;
     }
 
@@ -187,15 +175,15 @@
       border: 2px solid transparent;
       cursor: pointer;
     }
-    .swatch.active { border-color: #e94560; }
+    .swatch.active { border-color: #5C7A4E; }
 
     /* ── Sheet scrubber overlay ──────────── */
     #slice-scrubber {
       position: absolute;
       bottom: 48px; left: 50%;
       transform: translateX(-50%);
-      background: rgba(22,33,62,.92);
-      border: 1px solid #0f3460;
+      background: rgba(22,28,16,.92);
+      border: 1px solid #2E3A26;
       border-radius: 8px;
       padding: 8px 18px 6px;
       display: none;
@@ -209,7 +197,7 @@
     #slice-scrubber input[type=range] { width: 240px; margin: 0; }
     #sld-label {
       font-size: .78rem;
-      color: #e94560;
+      color: #8FAF6E;
       letter-spacing: .06em;
     }
     #sld-row {
@@ -221,24 +209,61 @@
     #sld-row button {
       background: none;
       border: none;
-      color: #aaa;
+      color: #8A8070;
       cursor: pointer;
       font-size: 1rem;
       padding: 0 2px;
       line-height: 1;
     }
-    #sld-row button:hover { color: #e94560; }
+    #sld-row button:hover { color: #8FAF6E; }
+  </style>
+
+  <!-- Tool header styles -->
+  <style>
+    .tool-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: #3A4A2C;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 2000;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-family: system-ui, sans-serif;
+    }
+    .tool-header-back {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #8A8070;
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-site {
+      font-size: 0.68rem;
+      color: #6B6055;
+      letter-spacing: 0.06em;
+    }
   </style>
 </head>
 <body>
-
-<!-- Home icon -->
-<a href="/" class="home-icon" title="Home">
-  <svg viewBox="0 0 24 24" fill="currentColor">
-    <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
-    <path d="M9 21V12H15V21"/>
-  </svg>
-</a>
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
 
 <!-- Top bar -->
 <div id="topbar">

@@ -3,220 +3,201 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Josh's Corner - Desktop</title>
-  <!-- Google Font (Roboto) -->
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-  
-  <!-- Mobile Detection: Check on load and on resize -->
-  <script>
-    function checkMobile() {
-      if (window.innerWidth < 768) {
-        if (!location.pathname.endsWith("mobile.html")) {
-          window.location.href = "mobile.html";
-        }
-      }
-    }
-    window.addEventListener("load", checkMobile);
-    window.addEventListener("resize", checkMobile);
-  </script>
-  
+  <title>Josh Hicks — Information Systems</title>
+  <link rel="stylesheet" href="/styles/main.css" />
   <style>
-    /* Global Styles */
-    body {
-      margin: 0;
-      background-color: #F5E7DE;
-      font-family: 'Roboto', sans-serif;
-      overflow: hidden;
-      position: relative;
+    .hub-intro {
+      margin-bottom: var(--space-5);
+      flex-shrink: 0;
     }
-    .container {
-      position: relative;
-      width: 100vw;
+    .hub-intro .name {
+      font-size: var(--text-3xl);
+      font-weight: 700;
+      color: var(--soil-dark);
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+    .hub-intro .role {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--slate-mid);
+      margin-top: var(--space-2);
+    }
+    /* Fill viewport */
+    body, .site-layout { height: 100vh; overflow: hidden; }
+    .site-content {
+      display: flex !important;
+      flex-direction: column;
       height: 100vh;
+      overflow: hidden;
+      padding-bottom: var(--space-6) !important;
     }
-    /* Centered Heading */
-    h1 {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #333;
-      font-size: 3rem;
-      text-align: center;
-      margin: 0;
-      z-index: 20;
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: 1fr 1fr;
+      gap: var(--space-4);
+      max-width: 900px;
+      flex: 1;
+      min-height: 0;
     }
-    h1 .subtitle {
-      display: block;
-      font-size: 1.5rem;
-      font-weight: 400;
-    }
-    /* Floating Animation: 5s duration to create a sequential wave effect */
-    @keyframes float {
-      0%   { transform: translate(-50%, -50%) translateY(0); }
-      50%  { transform: translate(-50%, -50%) translateY(-15px); }
-      100% { transform: translate(-50%, -50%) translateY(0); }
-    }
-    /* Navigation Box Outer Styles */
-    .nav-box {
-      position: absolute;
-      width: 160px;
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: white;
-      border-radius: 10px;
+    .hub-card { height: 100%; }
+    .hub-card {
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      padding: var(--space-6);
       text-decoration: none;
-      box-shadow: 2px 2px 10px rgba(0,0,0,0.2);
-      transform: translate(-50%, -50%);
-      animation: float 5s ease-in-out infinite;
-      transition: box-shadow 0.3s ease, background-color 0.3s ease;
-      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      box-shadow: var(--shadow-xs);
+      transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
     }
-    /* Sequential Delays for Wave Effect */
-    .nav-box:nth-of-type(1) { animation-delay: 0s; }
-    .nav-box:nth-of-type(2) { animation-delay: 1s; }
-    .nav-box:nth-of-type(3) { animation-delay: 2s; }
-    .nav-box:nth-of-type(4) { animation-delay: 3s; }
-    .nav-box:nth-of-type(5) { animation-delay: 4s; }
-    
-    .nav-box:hover {
-      /* On hover, we do not pause the float (so the wave continues) but the inner element scales */
-      box-shadow: 3px 3px 12px rgba(0,0,0,0.3);
+    .hub-card:hover {
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-4px);
+      border-color: var(--soil-mid);
     }
-    /* Positions and Colors for Each Nav Box */
-    .nav-box:nth-of-type(1) {
-      left: 50%;
-      top: calc(50% - 200px);
-      background-color: #8FAF8F; /* Soft Olive */
-    }
-    .nav-box:nth-of-type(2) {
-      left: calc(50% + 220px);
-      top: calc(50% - 80px);
-      background-color: #6699CC; /* Soft Sky Blue */
-    }
-    .nav-box:nth-of-type(3) {
-      left: calc(50% + 180px);
-      top: calc(50% + 160px);
-      background-color: #FFB07C; /* Soft Peach */
-    }
-    .nav-box:nth-of-type(4) {
-      left: calc(50% - 180px);
-      top: calc(50% + 160px);
-      background-color: #66B2B2; /* Soft Teal */
-    }
-    .nav-box:nth-of-type(5) {
-      left: calc(50% - 220px);
-      top: calc(50% - 80px);
-      background-color: #E57373; /* Soft Salmon */
-    }
-    /* Inner content for scaling on hover and perfect centering using flexbox */
-    .nav-inner {
+    .hub-card-icon {
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 100%;
-      height: 100%;
-      border-radius: 10px;
-      transition: transform 0.3s ease;
+      background: var(--bark-light);
+      border-radius: var(--radius-sm);
+      color: var(--moss-dark);
     }
-    .nav-box:hover .nav-inner {
-      transform: scale(1.05);
+    .hub-card-icon svg {
+      width: 20px;
+      height: 20px;
     }
-    /* Optional: SVG Overlay with 5 Equal Wedges for Hover Glow Effect */
-    .sectors {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 10;
-      pointer-events: none;
+    .hub-card-title {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--soil-dark);
+      line-height: 1.2;
     }
-    .sector {
-      fill: transparent;
-      transition: fill 0.3s ease, filter 0.3s ease;
+    .hub-card-desc {
+      font-size: var(--text-sm);
+      color: var(--slate-mid);
+      line-height: 1.5;
+      flex: 1;
     }
-    .nav-box:nth-of-type(1):hover ~ .sectors #sector1 {
-      fill: rgba(143,175,143,0.3);
-      filter: drop-shadow(0 0 8px #8FAF8F);
+    .hub-card-arrow {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-mid);
+      margin-top: var(--space-2);
     }
-    .nav-box:nth-of-type(2):hover ~ .sectors #sector2 {
-      fill: rgba(102,153,204,0.3);
-      filter: drop-shadow(0 0 8px #6699CC);
+    .hub-card--featured {
+      grid-column: span 2;
+      background: var(--moss-dark);
+      border-color: transparent;
     }
-    .nav-box:nth-of-type(3):hover ~ .sectors #sector3 {
-      fill: rgba(255,176,124,0.3);
-      filter: drop-shadow(0 0 8px #FFB07C);
+    .hub-card--featured:hover {
+      border-color: var(--moss-mid);
     }
-    .nav-box:nth-of-type(4):hover ~ .sectors #sector4 {
-      fill: rgba(102,178,178,0.3);
-      filter: drop-shadow(0 0 8px #66B2B2);
+    .hub-card--featured .hub-card-icon {
+      background: rgba(255,255,255,0.1);
+      color: var(--moss-light);
     }
-    .nav-box:nth-of-type(5):hover ~ .sectors #sector5 {
-      fill: rgba(229,115,115,0.3);
-      filter: drop-shadow(0 0 8px #E57373);
+    .hub-card--featured .hub-card-title {
+      color: var(--sidebar-text);
+    }
+    .hub-card--featured .hub-card-desc {
+      color: var(--sidebar-muted);
+    }
+    .hub-card--featured .hub-card-arrow {
+      color: var(--moss-light);
+    }
+    .hub-card--lazar {
+      background: var(--bark-light);
+      border-color: var(--soil-light);
+    }
+    @media (max-width: 700px) {
+      body, .site-layout { height: auto; overflow: auto; }
+      .site-content { height: auto !important; overflow: auto; }
+      .hub-grid { grid-template-columns: 1fr 1fr; grid-template-rows: none; }
+      .hub-card--featured { grid-column: span 2; }
+    }
+    @media (max-width: 480px) {
+      .hub-grid { grid-template-columns: 1fr; grid-template-rows: none; }
+      .hub-card--featured { grid-column: span 1; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Center Heading -->
-    <h1>Josh Hicks<br><span class="subtitle">Information Systems</span></h1>
-    
-    <!-- Navigation Boxes with Nested Inner Elements -->
-    <a href="/contact/" class="nav-box">
-      <div class="nav-inner">Contact Me</div>
-    </a>
-    <a href="/about/" class="nav-box">
-      <div class="nav-inner">About Me</div>
-    </a>
-    <a href="/experience/" class="nav-box">
-      <div class="nav-inner">Experience</div>
-    </a>
-    <a href="/projects/" class="nav-box">
-      <div class="nav-inner">Projects</div>
-    </a>
-    <a href="/lazar/" class="nav-box">
-      <div class="nav-inner">LAZAR</div>
-    </a>
-    
-    <!-- Optional SVG Overlay -->
-    <svg class="sectors" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <path id="sector1" class="sector" d="
-        M50,50 
-        L -450,-816 
-        A1000,1000 0 0,1 550,-816 
-        Z
-      "/>
-      <path id="sector2" class="sector" d="
-        M50,50 
-        L 550,-816 
-        A1000,1000 0 0,1 963.5,456.7 
-        Z
-      "/>
-      <path id="sector3" class="sector" d="
-        M50,50 
-        L 1001.1,359 
-        A1000,1000 0 0,1 50,1050 
-        Z
-      "/>
-      <path id="sector4" class="sector" d="
-        M50,50 
-        L 50,1050 
-        A1000,1000 0 0,1 -901.1,359 
-        Z
-      "/>
-      <path id="sector5" class="sector" d="
-        M50,50 
-        L -863.5,456.7 
-        A1000,1000 0 0,1 -450,-816 
-        Z
-      "/>
-    </svg>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="hub-intro">
+        <div class="name">Josh Hicks</div>
+        <div class="role">// Information Systems · University of Arkansas</div>
+      </div>
+      <div class="hub-grid">
+        <a href="/projects/" class="hub-card hub-card--featured fade-up">
+          <div class="hub-card-icon">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="7" height="7" rx="1"/>
+              <rect x="11" y="3" width="7" height="7" rx="1"/>
+              <rect x="2" y="12" width="7" height="6" rx="1"/>
+              <rect x="11" y="12" width="7" height="6" rx="1"/>
+            </svg>
+          </div>
+          <div class="hub-card-title">Projects</div>
+          <div class="hub-card-desc">Interactive maps, browser-based AI tools, laser-cutter utilities, and more — built with plain JS and a lot of curiosity.</div>
+          <div class="hub-card-arrow">View all projects →</div>
+        </a>
+        <a href="/about/" class="hub-card fade-up">
+          <div class="hub-card-icon">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="10" cy="7" r="3.5"/>
+              <path d="M2.5 18c0-3.866 3.358-7 7.5-7s7.5 3.134 7.5 7"/>
+            </svg>
+          </div>
+          <div class="hub-card-title">About</div>
+          <div class="hub-card-desc">Who I am, what drives me, and how I think about technology and the natural world.</div>
+          <div class="hub-card-arrow">Learn more →</div>
+        </a>
+        <a href="/experience/" class="hub-card fade-up">
+          <div class="hub-card-icon">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="7" width="16" height="11" rx="1.5"/>
+              <path d="M7 7V5.5A2.5 2.5 0 0112 5.5V7"/>
+              <line x1="2" y1="11" x2="18" y2="11"/>
+            </svg>
+          </div>
+          <div class="hub-card-title">Experience</div>
+          <div class="hub-card-desc">Maker lab generalist, Geek Squad agent, IT intern — hands-on work across hardware, software, and education.</div>
+          <div class="hub-card-arrow">See my history →</div>
+        </a>
+        <a href="/contact/" class="hub-card fade-up">
+          <div class="hub-card-icon">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 4h14a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1z"/>
+              <polyline points="3,4 10,11 17,4"/>
+            </svg>
+          </div>
+          <div class="hub-card-title">Contact</div>
+          <div class="hub-card-desc">Email, LinkedIn, or GitHub — reach out however works best.</div>
+          <div class="hub-card-arrow">Get in touch →</div>
+        </a>
+        <a href="/lazar/" class="hub-card hub-card--lazar fade-up">
+          <div class="hub-card-icon">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 2L2 7v6l8 5 8-5V7L10 2z"/>
+              <polyline points="2,7 10,12 18,7"/>
+              <line x1="10" y1="12" x2="10" y2="19"/>
+            </svg>
+          </div>
+          <div class="hub-card-title">LAZAR</div>
+          <div class="hub-card-desc">Laser engraving image prep — dithering, depth maps, upscaling, and more. Runs entirely in the browser.</div>
+          <div class="hub-card-arrow">Open tool →</div>
+        </a>
+      </div>
+    </main>
   </div>
+  <script src="/scripts/nav.js"></script>
 </body>
 </html>

@@ -5,40 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fayetteville Food Foraging Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <style>
     :root {
-      --green-dark: #1f3c29;
-      --green-mid: #2f7d57;
-      --green-light: #5ac38a;
-      --green-pale: #1b2a22;
-      --orange: #d89b38;
-      --orange-light: #2a2418;
-      --brown: #8a6b41;
-      --bg: #0f1418;
-      --panel: #171e24;
-      --panel-2: #1d262d;
-      --border: #2c3740;
-      --text: #e6edf3;
-      --muted: #9eb0bf;
-      --shadow: 0 8px 20px rgba(0,0,0,0.35);
+      --green-dark: #3A4A2C;
+      --green-mid: #5C7A4E;
+      --green-light: #8FAF6E;
+      --green-pale: #EAF0E2;
+      --orange: #8B6340;
+      --orange-light: #FFF4E8;
+      --brown: #8B6340;
+      --bg: #F0EBE0;
+      --panel: #F8F4EE;
+      --panel-2: #EDE8DC;
+      --border: #C8CAD0;
+      --text: #3C4148;
+      --muted: #5A6068;
+      --shadow: 0 4px 16px rgba(60,65,72,0.12);
       --radius: 12px;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
       height: 100vh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      padding-top: 48px;
     }
 
     /* Header */
     header {
-      background: linear-gradient(135deg, #1a2a20, #223126);
+      background: var(--green-dark);
       color: white;
       padding: 12px 20px;
       display: flex;
@@ -121,7 +123,7 @@
     .toggle-slider {
       position: absolute;
       inset: 0;
-      background: #4a5863;
+      background: #B0B5BC;
       border-radius: 26px;
       transition: 0.3s;
     }
@@ -132,7 +134,7 @@
       height: 20px;
       left: 3px;
       bottom: 3px;
-      background: #eef6f0;
+      background: #F8F4EE;
       border-radius: 50%;
       transition: 0.3s;
     }
@@ -157,7 +159,7 @@
     .season-badge {
       display: inline-block;
       background: var(--orange);
-      color: #1a140a;
+      color: #F8F4EE;
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 0.75rem;
@@ -201,7 +203,7 @@
       gap: 10px;
     }
     .plant-item:hover { background: var(--green-pale); }
-    .plant-item.selected { background: #203227; border: 1px solid var(--green-light); }
+    .plant-item.selected { background: var(--green-pale); border: 1px solid var(--green-light); }
     .plant-item .checkbox {
       width: 20px;
       height: 20px;
@@ -234,12 +236,12 @@
       margin-top: 2px;
     }
     .plant-count {
-      background: #2a343d;
+      background: var(--border);
       padding: 1px 7px;
       border-radius: 10px;
       font-size: 0.72rem;
       font-weight: 600;
-      color: #d6dee5;
+      color: var(--text);
       flex-shrink: 0;
     }
     .producing-dot {
@@ -336,18 +338,18 @@
       font-size: 0.8rem;
     }
     .popup-season.in-season {
-      background: #1b2f23;
-      color: #b7f5cf;
+      background: var(--green-pale);
+      color: var(--green-dark);
       border: 1px solid var(--green-light);
     }
     .popup-season.off-season {
-      background: #242c33;
+      background: var(--panel-2);
       color: var(--muted);
       border: 1px solid var(--border);
     }
     .leaflet-popup-content-wrapper,
     .leaflet-popup-tip {
-      background: var(--panel-2) !important;
+      background: var(--panel) !important;
       color: var(--text) !important;
     }
 
@@ -355,7 +357,7 @@
     .loading-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(15,20,24,0.95);
+      background: rgba(240,235,224,0.95);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -370,7 +372,7 @@
     .loading-spinner {
       width: 50px;
       height: 50px;
-      border: 4px solid #2a343d;
+      border: 4px solid var(--border);
       border-top: 4px solid var(--green-mid);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
@@ -389,8 +391,8 @@
       bottom: 20px;
       left: 20px;
       z-index: 1000;
-      background: var(--green-mid);
-      color: white;
+      background: var(--green-dark);
+      color: #D9D0C1;
       border: none;
       width: 50px;
       height: 50px;
@@ -405,12 +407,13 @@
       position: fixed;
       bottom: 20px;
       right: 20px;
-      background: var(--panel-2);
+      background: var(--panel);
       border-radius: var(--radius);
       padding: 12px 16px;
       box-shadow: var(--shadow);
       z-index: 1000;
       font-size: 0.8rem;
+      border: 1px solid var(--border);
       max-height: 200px;
       overflow-y: auto;
     }
@@ -435,6 +438,7 @@
       border: 1px solid rgba(255,255,255,0.45);
     }
     .legend-item span { color: var(--text); }
+    .legend-dot { border: 1px solid rgba(0,0,0,0.15); }
     .no-results {
       padding: 12px;
       border: 1px dashed var(--border);
@@ -443,7 +447,7 @@
       color: var(--muted);
       text-align: center;
       margin-top: 8px;
-      background: var(--panel-2);
+      background: var(--panel);
     }
 
     /* Responsive */
@@ -461,7 +465,7 @@
       .sidebar-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(0,0,0,0.4);
+        background: rgba(60,65,72,0.4);
         z-index: 1500;
         display: none;
       }
@@ -471,8 +475,53 @@
       .legend { bottom: 80px; right: 10px; }
     }
   </style>
+
+  <!-- Tool header styles -->
+  <style>
+    .tool-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: #3A4A2C;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 2000;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-family: system-ui, sans-serif;
+    }
+    .tool-header-back {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #8A8070;
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-site {
+      font-size: 0.68rem;
+      color: #6B6055;
+      letter-spacing: 0.06em;
+    }
+  </style>
 </head>
 <body>
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
   <!-- Loading -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>

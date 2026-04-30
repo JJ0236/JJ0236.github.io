@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Video Transcript Tool - Josh's Corner</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --bg: #f5e7de;
-      --card: #ffffff;
-      --ink: #2f2f2f;
-      --muted: #666;
-      --border: #d8c2b5;
-      --accent: #8f4c2f;
-      --accent-hover: #753e26;
-      --success: #205d2b;
+      --bg: #F0EBE0;
+      --card: #F8F4EE;
+      --ink: #3C4148;
+      --muted: #5A6068;
+      --border: #C8CAD0;
+      --accent: #5C7A4E;
+      --accent-hover: #3A4A2C;
+      --success: #3A4A2C;
       --error: #8c1d18;
     }
 
@@ -22,19 +22,20 @@
 
     body {
       margin: 0;
-      background: radial-gradient(circle at top right, #fff4ed, var(--bg) 42%);
+      background: var(--bg);
       color: var(--ink);
-      font-family: 'Roboto', sans-serif;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
       min-height: 100vh;
       padding: 24px;
       display: flex;
       justify-content: center;
+      padding-top: 48px;
     }
 
     .wrap {
       width: 100%;
       max-width: 920px;
-      margin: 48px 0;
+      margin: 24px 0;
     }
 
     .home-icon {
@@ -172,9 +173,9 @@
     }
 
     .status.ok {
-      background: #eaf6ed;
+      background: #E8F0E4;
       color: var(--success);
-      border-color: #badcbf;
+      border-color: #AECBA3;
     }
 
     .status.error {
@@ -184,9 +185,9 @@
     }
 
     .status.info {
-      background: #f5f2ff;
-      color: #4a3b80;
-      border-color: #d9d0f7;
+      background: #EEF0E8;
+      color: #3C4148;
+      border-color: #C8CAD0;
     }
 
     .footnote {
@@ -215,14 +216,53 @@
       .wrap { margin: 56px 0 18px; }
     }
   </style>
+
+  <!-- Tool header styles -->
+  <style>
+    .tool-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      background: #3A4A2C;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 2000;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-family: system-ui, sans-serif;
+    }
+    .tool-header-back {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #8A8070;
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-site {
+      font-size: 0.68rem;
+      color: #6B6055;
+      letter-spacing: 0.06em;
+    }
+  </style>
 </head>
 <body>
-  <a href="/projects/" class="home-icon" title="Projects">
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M3 9.5L12 3L21 9.5V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.5Z"/>
-      <path d="M9 21V12H15V21"/>
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
     </svg>
+    Projects
   </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
 
   <main class="wrap">
     <section class="panel">
