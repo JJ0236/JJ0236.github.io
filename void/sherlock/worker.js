@@ -15,10 +15,20 @@
  *     → { hasMX: bool }
  *
  * All origins allowed (site is already auth-gated client-side).
+ *
+ *   GET /crt?domain=<encoded>
+ *     → raw crt.sh JSON array
+ *
+ *   GET /ipintel?ip=<optional>
+ *     → ip-api.com JSON (omit ip to resolve the caller's IP)
+ *
+ *   GET /phone?number=<encoded>
+ *     → { valid, country, carrier, line_type, ... } via numverify
+ *        requires NUMVERIFY_KEY env var; returns { error } without it
  */
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === 'OPTIONS') {
       return cors(new Response(null, { status: 204 }));
     }
@@ -30,6 +40,9 @@ export default {
     if (path === '/gravatar') return cors(await handleGravatar(url));
     if (path === '/emailrep') return cors(await handleEmailrep(url));
     if (path === '/dns')      return cors(await handleDns(url));
+    if (path === '/crt')      return cors(await handleCrt(url));
+    if (path === '/ipintel')  return cors(await handleIpIntel(url));
+    if (path === '/phone')    return cors(await handlePhone(url, env));
 
     return cors(json({ error: 'Unknown endpoint' }, 404));
   },
@@ -128,6 +141,67 @@ async function handleDns(url) {
   const data = await res.json();
   const hasMX = Array.isArray(data?.Answer) && data.Answer.length > 0;
   return json({ hasMX });
+}
+
+// ── /crt ──────────────────────────────────────────────────
+async function handleCrt(url) {
+  const domain = url.searchParams.get('domain');
+  if (!domain || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*\.[a-zA-Z]{2,}$/.test(domain)) {
+    return json({ error: 'Invalid domain' }, 400);
+  }
+  let res;
+  try {
+    res = await fetch(`https://crt.sh/?q=%25.${encodeURIComponent(domain)}&output=json`, {
+      headers: { 'User-Agent': 'void-subdomains/1.0', 'Accept': 'application/json' },
+    });
+  } catch {
+    return json({ error: 'crt.sh fetch failed' }, 502);
+  }
+  if (!res.ok) return json({ error: `crt.sh returned ${res.status}` }, 502);
+  let data;
+  try { data = await res.json(); } catch { return json({ error: 'crt.sh returned invalid JSON' }, 502); }
+  return json(data);
+}
+
+// ── /ipintel ──────────────────────────────────────────────
+async function handleIpIntel(url) {
+  const ip = url.searchParams.get('ip') || '';
+  if (ip && !/^[0-9a-fA-F:.]+$/.test(ip)) {
+    return json({ error: 'Invalid IP address' }, 400);
+  }
+  const fields = 'status,message,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,mobile,proxy,hosting,query';
+  const target = ip
+    ? `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=${fields}`
+    : `http://ip-api.com/json/?fields=${fields}`;
+  let res;
+  try {
+    res = await fetch(target, { headers: { 'User-Agent': 'void-ipintel/1.0' } });
+  } catch {
+    return json({ error: 'ip-api fetch failed' }, 502);
+  }
+  const data = await res.json();
+  return json(data);
+}
+
+// ── /phone ────────────────────────────────────────────────
+async function handlePhone(url, env) {
+  const number = url.searchParams.get('number') || '';
+  if (!number) return json({ error: 'Missing number param' }, 400);
+  if (!/^[\d+\s().,-]{7,20}$/.test(number)) return json({ error: 'Invalid number format' }, 400);
+
+  const key = (env && env.NUMVERIFY_KEY) ? env.NUMVERIFY_KEY : '';
+  const clean = number.replace(/[^\d+]/g, '');
+  if (!key) {
+    return json({ error: 'Phone carrier lookup requires NUMVERIFY_KEY env var (set in Cloudflare Worker)', number: clean }, 422);
+  }
+  let res;
+  try {
+    res = await fetch(`http://apilayer.net/api/validate?access_key=${key}&number=${encodeURIComponent(clean)}`);
+  } catch {
+    return json({ error: 'numverify fetch failed' }, 502);
+  }
+  const data = await res.json();
+  return json(data);
 }
 
 // ── Helpers ───────────────────────────────────────────────

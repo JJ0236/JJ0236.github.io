@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>void — People Finder</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    html, body { margin:0; padding:0; min-height:100%; background:#0d110b; color:var(--sidebar-text); font-family:var(--font-body); }
+
+    #void-bar {
+      position:sticky; top:0; z-index:100; height:40px;
+      background:var(--moss-dark); border-bottom:1px solid rgba(143,175,110,0.18);
+      display:flex; align-items:center; padding:0 1.25rem; gap:1.5rem;
+    }
+    #void-bar a { font-family:var(--font-mono); font-size:0.72rem; color:var(--moss-light); text-decoration:none; letter-spacing:0.06em; transition:color 0.15s; }
+    #void-bar a:hover { color:var(--sidebar-text); }
+    #void-label { font-family:var(--font-mono); font-size:0.72rem; color:var(--sidebar-muted); letter-spacing:0.14em; text-transform:uppercase; margin-left:auto; }
+
+    #page { max-width:860px; margin:0 auto; padding:2.5rem 1.5rem 4rem; }
+    .page-title { font-family:var(--font-mono); font-size:0.7rem; color:var(--sidebar-muted); letter-spacing:0.14em; text-transform:uppercase; margin-bottom:1.5rem; }
+
+    /* Tabs */
+    .tabs { display:flex; gap:0; border:1px solid rgba(143,175,110,0.2); border-radius:8px; overflow:hidden; margin-bottom:1.5rem; width:fit-content; }
+    .tab {
+      font-family:var(--font-mono); font-size:0.76rem; padding:0.55rem 1.15rem;
+      cursor:pointer; border:none; background:transparent; color:var(--sidebar-muted);
+      transition:background 0.15s, color 0.15s; letter-spacing:0.05em; border-right:1px solid rgba(143,175,110,0.15);
+    }
+    .tab:last-child { border-right:none; }
+    .tab.active { background:rgba(143,175,110,0.15); color:var(--moss-light); }
+
+    /* Forms */
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+
+    .field-grid { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.6rem; }
+    .field {
+      flex:1; min-width:140px;
+      background:rgba(0,0,0,0.3); border:1px solid rgba(143,175,110,0.2); border-radius:6px;
+      padding:0.55rem 0.85rem; font-family:var(--font-mono); font-size:0.87rem;
+      color:var(--sidebar-text); outline:none; transition:border-color 0.2s;
+    }
+    .field:focus { border-color:rgba(143,175,110,0.5); }
+    .field::placeholder { color:var(--sidebar-muted); }
+    .btn {
+      background:rgba(143,175,110,0.12); border:1px solid rgba(143,175,110,0.2); border-radius:6px;
+      padding:0.55rem 1.2rem; font-family:var(--font-mono); font-size:0.82rem;
+      color:var(--moss-light); cursor:pointer; transition:background 0.15s, border-color 0.15s; white-space:nowrap;
+    }
+    .btn:hover { background:rgba(143,175,110,0.2); border-color:rgba(143,175,110,0.4); }
+    .hint { font-family:var(--font-mono); font-size:0.7rem; color:var(--sidebar-muted); margin-bottom:1.5rem; }
+
+    /* Results */
+    #results { margin-top:1.5rem; display:none; }
+
+    .results-section { margin-bottom:1.75rem; }
+    .results-section-title {
+      font-family:var(--font-mono); font-size:0.67rem; color:var(--sidebar-muted);
+      letter-spacing:0.13em; text-transform:uppercase; margin-bottom:0.9rem;
+      padding-bottom:0.35rem; border-bottom:1px solid rgba(143,175,110,0.1);
+    }
+
+    /* Quick intel box */
+    .intel-box {
+      background:#141a10; border:1px solid rgba(143,175,110,0.14); border-radius:8px;
+      padding:0.9rem 1.1rem; margin-bottom:1.25rem;
+      font-family:var(--font-mono); font-size:0.8rem; color:var(--sidebar-text); line-height:1.7;
+    }
+    .intel-row { display:flex; gap:0.6rem; }
+    .intel-key { color:var(--sidebar-muted); min-width:130px; flex-shrink:0; }
+    .intel-val { color:var(--sidebar-text); word-break:break-all; }
+
+    /* Search engine buttons */
+    .engine-grid { display:flex; flex-wrap:wrap; gap:0.5rem; }
+    .engine-btn {
+      font-family:var(--font-mono); font-size:0.78rem; padding:0.45rem 0.95rem;
+      border:1px solid rgba(143,175,110,0.18); border-radius:6px;
+      background:rgba(143,175,110,0.06); color:var(--sidebar-muted);
+      text-decoration:none; cursor:pointer;
+      transition:color 0.15s, border-color 0.15s, background 0.15s;
+      display:inline-flex; align-items:center; gap:0.4rem;
+    }
+    .engine-btn:hover { color:var(--moss-light); border-color:rgba(143,175,110,0.35); background:rgba(143,175,110,0.1); }
+    .engine-btn .arrow { font-size:0.65rem; opacity:0.6; }
+
+    .warning-badge {
+      display:inline-block; background:rgba(255,180,50,0.12); color:#ffcc66;
+      border:1px solid rgba(255,180,50,0.2); border-radius:4px; padding:0.2rem 0.55rem;
+      font-family:var(--font-mono); font-size:0.65rem; letter-spacing:0.07em; text-transform:uppercase; margin-bottom:0.75rem;
+    }
+
+    .msg { font-family:var(--font-mono); font-size:0.8rem; color:var(--sidebar-muted); padding:0.5rem 0; }
+
+    #auth-gate { position:fixed; inset:0; z-index:9999; background:#0a0e08; }
+    #auth-gate.hidden { display:none; }
+  </style>
+</head>
+<body>
+
+<div id="auth-gate"></div>
+
+<div id="void-bar">
+  <a href="/void/">← void</a>
+  <span id="void-label">people finder</span>
+</div>
+
+<div id="page">
+  <div class="page-title">// people &amp; identity intelligence</div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="name">Person</button>
+    <button class="tab" data-tab="phone">Phone</button>
+    <button class="tab" data-tab="email">Email</button>
+    <button class="tab" data-tab="address">Address</button>
+  </div>
+
+  <!-- PERSON TAB -->
+  <div class="tab-pane active" id="pane-name">
+    <div class="field-grid">
+      <input class="field" id="n-first"  placeholder="First name" />
+      <input class="field" id="n-last"   placeholder="Last name" />
+      <input class="field" id="n-city"   placeholder="City, State (optional)" />
+      <button class="btn" onclick="searchName()">Search</button>
+    </div>
+    <div class="hint">Opens all major free people-search databases. No account needed.</div>
+  </div>
+
+  <!-- PHONE TAB -->
+  <div class="tab-pane" id="pane-phone">
+    <div class="field-grid">
+      <input class="field" id="p-number" placeholder="+1 555 867 5309" style="max-width:280px;" />
+      <button class="btn" onclick="searchPhone()">Lookup</button>
+    </div>
+    <div class="hint">Carrier info + reverse phone lookup on free public databases.</div>
+  </div>
+
+  <!-- EMAIL TAB -->
+  <div class="tab-pane" id="pane-email">
+    <div class="field-grid">
+      <input class="field" id="e-addr" placeholder="someone@example.com" style="max-width:320px;" />
+      <button class="btn" onclick="searchEmail()">Search</button>
+    </div>
+    <div class="hint">Checks breach databases, linked accounts, and public records.</div>
+  </div>
+
+  <!-- ADDRESS TAB -->
+  <div class="tab-pane" id="pane-address">
+    <div class="field-grid">
+      <input class="field" id="a-street" placeholder="Street address" />
+      <input class="field" id="a-city"   placeholder="City, State ZIP" style="max-width:220px;" />
+      <button class="btn" onclick="searchAddress()">Search</button>
+    </div>
+    <div class="hint">Reverse address lookup — find who lives at a property.</div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+    <div id="results-inner"></div>
+  </div>
+</div>
+
+<script>
+const WORKER = 'https://sherlock.joshua02050236.workers.dev';
+
+(function () {
+  if (sessionStorage.getItem('void_auth') !== '1') {
+    window.location.replace('/projects/');
+    return;
+  }
+  document.getElementById('auth-gate').classList.add('hidden');
+
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('pane-' + tab.dataset.tab).classList.add('active');
+      document.getElementById('results').style.display = 'none';
+    });
+  });
+
+  // Enter key handlers
+  ['n-first','n-last','n-city'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') searchName(); }));
+  document.getElementById('p-number').addEventListener('keydown', e => { if(e.key==='Enter') searchPhone(); });
+  document.getElementById('e-addr').addEventListener('keydown', e => { if(e.key==='Enter') searchEmail(); });
+  ['a-street','a-city'].forEach(id => document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') searchAddress(); }));
+})();
+
+function showResults(html) {
+  const r = document.getElementById('results');
+  document.getElementById('results-inner').innerHTML = html;
+  r.style.display = 'block';
+}
+
+function engineLink(label, url) {
+  return `<a class="engine-btn" href="${url}" target="_blank" rel="noopener">${esc(label)} <span class="arrow">↗</span></a>`;
+}
+
+// ── Person Name ──────────────────────────────────────────
+function searchName() {
+  const first  = document.getElementById('n-first').value.trim();
+  const last   = document.getElementById('n-last').value.trim();
+  const city   = document.getElementById('n-city').value.trim();
+  if (!first && !last) return;
+
+  const full  = [first, last].filter(Boolean).join(' ');
+  const slug  = [first, last].filter(Boolean).join('-').toLowerCase();
+  const firstSlug = first.toLowerCase();
+  const lastSlug  = last.toLowerCase();
+  const gQuery = encodeURIComponent(`"${full}" ${city}`);
+  const csz    = encodeURIComponent(city);
+
+  const engines = [
+    engineLink('TruePeopleSearch', `https://www.truepeoplesearch.com/results?name=${encodeURIComponent(full)}&citystatezip=${csz}`),
+    engineLink('FastPeopleSearch', `https://www.fastpeoplesearch.com/name/${firstSlug}-${lastSlug}`),
+    engineLink('Spokeo', `https://www.spokeo.com/${encodeURIComponent(full.replace(/ /g, '-'))}`),
+    engineLink('WhitePages', `https://www.whitepages.com/name/${slug}`),
+    engineLink('PeopleFinders', `https://www.peoplefinders.com/people/${slug}`),
+    engineLink('BeenVerified', `https://www.beenverified.com/go/public-records/search/`),
+    engineLink('ZabaSearch', `https://www.zabasearch.com/query.php?query=${encodeURIComponent(full)}&state=ALL`),
+    engineLink('PeekYou', `https://www.peekyou.com/${firstSlug.charAt(0)}${lastSlug}`),
+    engineLink('USSearch', `https://www.ussearch.com/person/${slug}/`),
+    engineLink('SearchPeopleFree', `https://www.searchpeoplefree.com/find/${slug}`),
+  ];
+  const social = [
+    engineLink('LinkedIn', `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(full)}`),
+    engineLink('Twitter / X', `https://twitter.com/search?q=${encodeURIComponent('"'+full+'"')}&f=user`),
+    engineLink('Facebook', `https://www.facebook.com/search/people/?q=${encodeURIComponent(full)}`),
+    engineLink('Instagram', `https://www.instagram.com/explore/search/?q=${encodeURIComponent(full)}`),
+    engineLink('Google', `https://www.google.com/search?q=${gQuery}`),
+    engineLink('Bing', `https://www.bing.com/search?q=${gQuery}`),
+  ];
+
+  showResults(`
+    <div class="results-section">
+      <div class="results-section-title">🔎 People Search Databases</div>
+      <div class="warning-badge">⚠ Results open external sites — results may include ads or paywalls</div>
+      <div class="engine-grid">${engines.join('')}</div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">📱 Social Media</div>
+      <div class="engine-grid">${social.join('')}</div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">🔍 Google Dorks</div>
+      <div class="engine-grid">
+        ${engineLink('Name + "email"', `https://www.google.com/search?q=${encodeURIComponent('"'+full+'" email OR contact')}`)}
+        ${engineLink('Name + phone', `https://www.google.com/search?q=${encodeURIComponent('"'+full+'" phone OR "phone number"')}`)}
+        ${engineLink('Name + address', `https://www.google.com/search?q=${encodeURIComponent('"'+full+'" address OR "lives in" OR "located in"')}`)}
+        ${engineLink('Images of name', `https://www.google.com/search?tbm=isch&q=${encodeURIComponent('"'+full+'"')}`)}
+      </div>
+    </div>`);
+}
+
+// ── Phone ────────────────────────────────────────────────
+async function searchPhone() {
+  const raw = document.getElementById('p-number').value.trim();
+  if (!raw) return;
+
+  // Clean the number for display
+  const clean = raw.replace(/[^\d+]/g, '');
+  const display = raw;
+
+  // Basic local parsing
+  let intel = parsePhoneLocal(clean);
+
+  // Try worker for carrier info
+  let carrierHtml = '';
+  try {
+    const res = await fetch(`${WORKER}/phone?number=${encodeURIComponent(clean)}`);
+    if (res.ok) {
+      const d = await res.json();
+      if (!d.error && d.valid) {
+        intel = Object.assign(intel, {
+          valid:       d.valid,
+          country:     d.country_name || intel.country,
+          carrier:     d.carrier || '—',
+          lineType:    d.line_type || '—',
+          localFormat: d.local_format || intel.localFormat,
+          intlFormat:  d.international_format || clean,
+        });
+      }
+    }
+  } catch(e) { /* worker fallback not available */ }
+
+  const encPhone = encodeURIComponent(clean.replace(/^\+/, ''));
+  const encRaw   = encodeURIComponent(display);
+
+  const engines = [
+    engineLink('TruePeopleSearch', `https://www.truepeoplesearch.com/results?phoneno=${encPhone}`),
+    engineLink('FastPeopleSearch', `https://www.fastpeoplesearch.com/phone/${encPhone}`),
+    engineLink('WhitePages', `https://www.whitepages.com/phone/${encPhone}`),
+    engineLink('USPhoneBook', `https://www.usphonebook.com/${encPhone}`),
+    engineLink('FreeCarrierLookup', `https://freecarrierlookup.com/`),
+    engineLink('CallerID Test', `https://calleridtest.com/`),
+    engineLink('SpyDialer', `https://www.spydialer.com/default.aspx?q=${encPhone}`),
+    engineLink('Sync.me', `https://sync.me/search/?number=${encRaw}`),
+  ];
+
+  const intelRows = Object.entries({
+    'Number':      display,
+    'Normalized':  clean,
+    'Country':     intel.country || '—',
+    'Carrier':     intel.carrier || '—',
+    'Line Type':   intel.lineType || '—',
+    'Country Code':intel.countryCode || '—',
+    'Location':    intel.location || '—',
+  }).map(([k,v]) => `<div class="intel-row"><span class="intel-key">${k}</span><span class="intel-val">${esc(String(v))}</span></div>`).join('');
+
+  showResults(`
+    <div class="results-section">
+      <div class="results-section-title">📞 Number Info</div>
+      <div class="intel-box">${intelRows}</div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">🔎 Reverse Phone Lookup</div>
+      <div class="warning-badge">⚠ Free results may be partial — some sites require account</div>
+      <div class="engine-grid">${engines.join('')}</div>
+    </div>`);
+}
+
+function parsePhoneLocal(number) {
+  const intel = {};
+  if (number.startsWith('+1') || (number.length === 10 && !number.startsWith('+'))) {
+    intel.country = 'United States / Canada'; intel.countryCode = '+1';
+    if (number.length >= 10) {
+      const d = number.replace(/^\+1/, '');
+      intel.location = `Area code ${d.slice(0,3)}`;
+    }
+  } else if (number.startsWith('+44')) { intel.country = 'United Kingdom'; intel.countryCode = '+44'; }
+  else if (number.startsWith('+61')) { intel.country = 'Australia'; intel.countryCode = '+61'; }
+  else if (number.startsWith('+33')) { intel.country = 'France'; intel.countryCode = '+33'; }
+  else if (number.startsWith('+49')) { intel.country = 'Germany'; intel.countryCode = '+49'; }
+  else if (number.startsWith('+91')) { intel.country = 'India'; intel.countryCode = '+91'; }
+  else if (number.startsWith('+86')) { intel.country = 'China'; intel.countryCode = '+86'; }
+  else if (number.startsWith('+55')) { intel.country = 'Brazil'; intel.countryCode = '+55'; }
+  else if (number.startsWith('+7'))  { intel.country = 'Russia / Kazakhstan'; intel.countryCode = '+7'; }
+  else if (number.startsWith('+')) {
+    intel.countryCode = number.slice(0, 3);
+  }
+  return intel;
+}
+
+// ── Email ────────────────────────────────────────────────
+function searchEmail() {
+  const email = document.getElementById('e-addr').value.trim();
+  if (!email || !email.includes('@')) return;
+
+  const [user, domain] = email.split('@');
+  const encEmail = encodeURIComponent(email);
+
+  const engines = [
+    engineLink('HaveIBeenPwned', `https://haveibeenpwned.com/account/${encEmail}`),
+    engineLink('Epieos', `https://epieos.com/?q=${encEmail}&t=email`),
+    engineLink('TruePeopleSearch', `https://www.truepeoplesearch.com/results?email=${encEmail}`),
+    engineLink('BeenVerified', `https://www.beenverified.com/go/public-records/search/`),
+    engineLink('EmailRep.io', `https://emailrep.io/${encEmail}`),
+    engineLink('Hunter.io (domain)', `https://hunter.io/search/${encodeURIComponent(domain)}`),
+    engineLink('LinkedIn', `https://www.linkedin.com/search/results/people/?keywords=${encEmail}`),
+    engineLink('Holehe (GitHub)', `https://github.com/megadose/holehe`),
+  ];
+
+  const gDorks = [
+    engineLink(`"${email}" Google`, `https://www.google.com/search?q=${encodeURIComponent('"'+email+'"')}`),
+    engineLink(`"@${domain}" directory`, `https://www.google.com/search?q=${encodeURIComponent('"@'+domain+'" email OR contact')}`),
+    engineLink('Pastebin leaks', `https://www.google.com/search?q=${encodeURIComponent('"'+email+'" site:pastebin.com OR site:hastebin.com OR site:github.com/gist')}`),
+  ];
+
+  showResults(`
+    <div class="results-section">
+      <div class="results-section-title">📧 Email Intelligence</div>
+      <div class="intel-box">
+        <div class="intel-row"><span class="intel-key">Address</span><span class="intel-val">${esc(email)}</span></div>
+        <div class="intel-row"><span class="intel-key">Username</span><span class="intel-val">${esc(user)}</span></div>
+        <div class="intel-row"><span class="intel-key">Domain</span><span class="intel-val">${esc(domain)}</span></div>
+      </div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">🔎 Lookup Tools</div>
+      <div class="engine-grid">${engines.join('')}</div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">🔍 Dork Search</div>
+      <div class="engine-grid">${gDorks.join('')}</div>
+    </div>`);
+}
+
+// ── Address ──────────────────────────────────────────────
+function searchAddress() {
+  const street = document.getElementById('a-street').value.trim();
+  const city   = document.getElementById('a-city').value.trim();
+  if (!street) return;
+
+  const full    = [street, city].filter(Boolean).join(', ');
+  const encAddr = encodeURIComponent(full);
+  const streetSlug = street.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  const engines = [
+    engineLink('TruePeopleSearch', `https://www.truepeoplesearch.com/results?streetaddress=${encodeURIComponent(street)}&citystatezip=${encodeURIComponent(city)}`),
+    engineLink('FastPeopleSearch', `https://www.fastpeoplesearch.com/address/${streetSlug}`),
+    engineLink('WhitePages Reverse', `https://www.whitepages.com/address/${encodeURIComponent(street.replace(/ /g,'-').replace(/#/g,''))}`),
+    engineLink('USSearch', `https://www.ussearch.com/address/search/`),
+    engineLink('Spokeo', `https://www.spokeo.com/reverse-address-lookup`),
+    engineLink('Zillow', `https://www.zillow.com/homes/${encAddr}_rb/`),
+    engineLink('Redfin', `https://www.redfin.com/query/us-address?location=${encAddr}`),
+    engineLink('County Assessor Search', `https://www.google.com/search?q=${encodeURIComponent(full+' property records OR county assessor OR owner')}`),
+  ];
+
+  showResults(`
+    <div class="results-section">
+      <div class="results-section-title">🏠 Address Info</div>
+      <div class="intel-box">
+        <div class="intel-row"><span class="intel-key">Street</span><span class="intel-val">${esc(street)}</span></div>
+        ${city ? `<div class="intel-row"><span class="intel-key">City / ZIP</span><span class="intel-val">${esc(city)}</span></div>` : ''}
+        <div class="intel-row"><span class="intel-key">Google Maps</span><span class="intel-val"><a href="https://www.google.com/maps/search/${encAddr}" target="_blank" rel="noopener">View on map ↗</a></span></div>
+      </div>
+    </div>
+    <div class="results-section">
+      <div class="results-section-title">🔎 Reverse Address Lookup</div>
+      <div class="warning-badge">⚠ Free results may be partial — US addresses work best</div>
+      <div class="engine-grid">${engines.join('')}</div>
+    </div>`);
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
