@@ -132,9 +132,65 @@
   <div class="site-layout">
     <main class="site-content">
       <div class="page-header">
-        <div class="page-title">Projects</div>
+        <div class="page-title">Pr<span id="o-gate" aria-hidden="true">o</span>jects</div>
         <div class="page-subtitle">// software, hardware, and everything in between</div>
       </div>
+
+      <!-- Hidden auth modal -->
+      <div id="void-overlay" role="dialog" aria-modal="true" aria-label="Authentication" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,14,8,0.88);display:none;align-items:center;justify-content:center;">
+        <div id="void-box" style="background:var(--moss-dark);border:1px solid rgba(143,175,110,0.25);border-radius:10px;padding:2rem 2.25rem;width:min(340px,90vw);display:flex;flex-direction:column;gap:1rem;box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--moss-light);letter-spacing:0.12em;text-transform:uppercase;">Access required</div>
+          <input id="void-input" type="password" autocomplete="off" placeholder="passphrase" style="background:rgba(0,0,0,0.35);border:1px solid rgba(143,175,110,0.2);border-radius:6px;padding:0.6rem 0.75rem;font-family:var(--font-mono);font-size:0.9rem;color:var(--sidebar-text);outline:none;transition:border-color 0.2s;" />
+          <div id="void-err" style="font-family:var(--font-mono);font-size:0.72rem;color:#c0524a;display:none;">incorrect</div>
+          <button id="void-submit" style="background:var(--moss-mid);border:none;border-radius:6px;padding:0.55rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:#fff;cursor:pointer;transition:background 0.2s;align-self:flex-end;">enter →</button>
+        </div>
+      </div>
+
+      <script>
+      (function () {
+        const HASH = '46ca78022ce2ea0ca38bf8e4d60c86d672d28dc93629741a2c8f7594f7059107';
+        const gate   = document.getElementById('o-gate');
+        const overlay= document.getElementById('void-overlay');
+        const input  = document.getElementById('void-input');
+        const errMsg = document.getElementById('void-err');
+        const submit = document.getElementById('void-submit');
+
+        gate.style.cssText += 'cursor:default;user-select:none;';
+
+        function showModal() {
+          overlay.style.display = 'flex';
+          input.value = '';
+          errMsg.style.display = 'none';
+          setTimeout(() => input.focus(), 50);
+        }
+
+        function hideModal() {
+          overlay.style.display = 'none';
+        }
+
+        async function attempt() {
+          const val = input.value;
+          if (!val) return;
+          const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(val));
+          const hex  = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+          if (hex === HASH) {
+            sessionStorage.setItem('void_auth', '1');
+            window.location.href = '/void/';
+          } else {
+            errMsg.style.display = 'block';
+            input.style.borderColor = '#c0524a';
+            input.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(-4px)'},{transform:'translateX(0)'}], {duration:260,easing:'ease-out'});
+            setTimeout(() => { input.style.borderColor = 'rgba(143,175,110,0.2)'; }, 800);
+          }
+        }
+
+        gate.addEventListener('click', showModal);
+        submit.addEventListener('click', attempt);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) hideModal(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') hideModal(); });
+      })();
+      </script>
 
       <div class="projects-wrapper">
         <!-- Featured -->
