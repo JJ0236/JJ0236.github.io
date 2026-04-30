@@ -8,95 +8,212 @@
   <link rel="stylesheet" href="/styles/main.css" />
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       min-height: 100%;
       background: #0d110b;
       color: var(--sidebar-text);
       font-family: var(--font-body);
     }
 
+    /* ── Top bar ───────────────────────────────────────── */
     #void-bar {
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      position: sticky; top: 0; z-index: 100;
       height: 40px;
       background: var(--moss-dark);
       border-bottom: 1px solid rgba(143,175,110,0.18);
-      display: flex;
-      align-items: center;
-      padding: 0 1.25rem;
-      gap: 1.5rem;
+      display: flex; align-items: center;
+      padding: 0 1.25rem; gap: 1.5rem;
     }
-
     #void-bar a {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--moss-light);
-      text-decoration: none;
-      letter-spacing: 0.06em;
-      transition: color 0.15s;
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--moss-light); text-decoration: none;
+      letter-spacing: 0.06em; transition: color 0.15s;
     }
-
     #void-bar a:hover { color: var(--sidebar-text); }
-
     #void-label {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--sidebar-muted);
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      margin-left: auto;
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--sidebar-muted); letter-spacing: 0.14em;
+      text-transform: uppercase; margin-left: auto;
     }
 
-    #content {
-      max-width: 600px;
+    /* ── Page layout ───────────────────────────────────── */
+    #page {
+      max-width: 980px;
       margin: 0 auto;
-      padding: 4rem 1.5rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
-      text-align: center;
+      padding: 2.5rem 1.5rem 4rem;
     }
 
-    .wip-icon {
-      font-size: 2.5rem;
+    /* ── Search box ────────────────────────────────────── */
+    .search-header {
+      display: flex; flex-direction: column; gap: 0.5rem;
+      margin-bottom: 1.75rem;
     }
-
-    .wip-title {
-      font-family: var(--font-mono);
-      font-size: 1rem;
-      color: var(--sidebar-text);
-      letter-spacing: 0.06em;
-    }
-
-    .wip-desc {
-      font-size: 0.85rem;
-      color: var(--sidebar-muted);
-      line-height: 1.6;
-      max-width: 380px;
-    }
-
-    .wip-badge {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      letter-spacing: 0.1em;
+    .search-title {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--sidebar-muted); letter-spacing: 0.14em;
       text-transform: uppercase;
-      padding: 0.2rem 0.6rem;
-      border-radius: 4px;
-      background: rgba(143,175,110,0.1);
-      color: var(--moss-light);
+    }
+    .search-row {
+      display: flex; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .search-tabs {
+      display: flex; gap: 0;
+      border: 1px solid rgba(143,175,110,0.2);
+      border-radius: 6px; overflow: hidden;
+    }
+    .search-tab {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      padding: 0.55rem 1rem; cursor: pointer; border: none;
+      background: transparent; color: var(--sidebar-muted);
+      transition: background 0.15s, color 0.15s; letter-spacing: 0.05em;
+    }
+    .search-tab.active {
+      background: rgba(143,175,110,0.15); color: var(--moss-light);
+    }
+    #search-input {
+      flex: 1; min-width: 200px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(143,175,110,0.2); border-radius: 6px;
+      padding: 0.55rem 0.85rem;
+      font-family: var(--font-mono); font-size: 0.88rem;
+      color: var(--sidebar-text); outline: none;
+      transition: border-color 0.2s;
+    }
+    #search-input:focus { border-color: rgba(143,175,110,0.5); }
+    #search-btn {
+      background: var(--moss-mid); border: none; border-radius: 6px;
+      padding: 0.55rem 1.25rem;
+      font-family: var(--font-mono); font-size: 0.8rem;
+      color: #fff; cursor: pointer; transition: background 0.2s;
+      white-space: nowrap;
+    }
+    #search-btn:hover { background: var(--moss-light); color: #1a1a1a; }
+    #search-btn:disabled { opacity: 0.5; cursor: default; }
+
+    /* ── Progress bar ──────────────────────────────────── */
+    #progress-wrap {
+      display: none; margin-bottom: 1.25rem;
+      flex-direction: column; gap: 0.4rem;
+    }
+    #progress-wrap.visible { display: flex; }
+    #progress-bar-bg {
+      height: 3px; background: rgba(143,175,110,0.12);
+      border-radius: 2px; overflow: hidden;
+    }
+    #progress-bar-fill {
+      height: 100%; width: 0%;
+      background: var(--moss-light);
+      transition: width 0.2s ease;
+    }
+    #progress-label {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--sidebar-muted);
     }
 
+    /* ── Summary strip ─────────────────────────────────── */
+    #summary {
+      display: none; margin-bottom: 1.25rem;
+      font-family: var(--font-mono); font-size: 0.75rem;
+      color: var(--sidebar-muted);
+      gap: 1.25rem; flex-wrap: wrap;
+    }
+    #summary.visible { display: flex; }
+    .sum-found  { color: #6dbf6d; }
+    .sum-miss   { color: var(--sidebar-muted); }
+    .sum-err    { color: #c0a84a; }
+
+    /* ── Results grid ──────────────────────────────────── */
+    #results-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+      gap: 0.6rem;
+    }
+
+    .r-card {
+      background: #141a10;
+      border: 1px solid rgba(143,175,110,0.1);
+      border-radius: 8px;
+      padding: 0.75rem 0.85rem;
+      display: flex; flex-direction: column; gap: 0.3rem;
+      opacity: 0; transform: translateY(6px);
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    .r-card.show { opacity: 1; transform: none; }
+
+    .r-card.found  { border-color: rgba(109,191,109,0.35); background: #101d10; }
+    .r-card.miss   { opacity: 0.38 !important; }
+    .r-card.err    { border-color: rgba(192,168,74,0.25); }
+
+    .r-platform {
+      font-family: var(--font-mono); font-size: 0.75rem;
+      font-weight: 500; color: var(--sidebar-text);
+    }
+    .r-category {
+      font-size: 0.65rem; color: var(--sidebar-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .r-status {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      margin-top: 0.2rem;
+    }
+    .r-card.found  .r-status { color: #6dbf6d; }
+    .r-card.miss   .r-status { color: var(--sidebar-muted); }
+    .r-card.err    .r-status { color: #c0a84a; }
+    .r-link {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--moss-light); text-decoration: none;
+      word-break: break-all;
+    }
+    .r-link:hover { color: var(--sidebar-text); }
+
+    /* ── Email section ─────────────────────────────────── */
+    #email-section {
+      margin-top: 2rem; display: none;
+    }
+    #email-section.visible { display: block; }
+    .email-heading {
+      font-family: var(--font-mono); font-size: 0.7rem;
+      color: var(--sidebar-muted); letter-spacing: 0.14em;
+      text-transform: uppercase; margin-bottom: 1rem;
+    }
+    #email-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.6rem;
+    }
+    .e-card {
+      background: #141a10;
+      border: 1px solid rgba(143,175,110,0.1);
+      border-radius: 8px; padding: 0.85rem 1rem;
+      display: flex; flex-direction: column; gap: 0.3rem;
+    }
+    .e-label {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--sidebar-text); font-weight: 500;
+    }
+    .e-val {
+      font-size: 0.78rem; color: var(--sidebar-muted); line-height: 1.4;
+    }
+    .e-val.pos { color: #6dbf6d; }
+    .e-val.neg { color: var(--sidebar-muted); }
+    .e-val.warn { color: #c0a84a; }
+
+    /* ── Auth gate ─────────────────────────────────────── */
     #auth-gate {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: #0a0e08;
+      position: fixed; inset: 0; z-index: 9999; background: #0a0e08;
     }
-
     #auth-gate.hidden { display: none; }
+
+    /* ── No-worker warning ─────────────────────────────── */
+    #worker-warn {
+      display: none;
+      background: rgba(192,168,74,0.08);
+      border: 1px solid rgba(192,168,74,0.25);
+      border-radius: 8px; padding: 0.85rem 1rem;
+      font-family: var(--font-mono); font-size: 0.75rem;
+      color: #c0a84a; margin-bottom: 1.5rem; line-height: 1.6;
+    }
+    #worker-warn.visible { display: block; }
   </style>
 </head>
 <body>
@@ -108,20 +225,483 @@
     <span id="void-label">sherlock</span>
   </div>
 
-  <div id="content">
-    <div class="wip-icon">🔍</div>
-    <div class="wip-title">Sherlock</div>
-    <div class="wip-desc">Username &amp; email OSINT lookup across 100+ platforms. Under construction — check back soon.</div>
-    <span class="wip-badge">in progress</span>
+  <div id="page">
+
+    <div class="search-header">
+      <div class="search-title">// identity lookup</div>
+      <div class="search-row">
+        <div class="search-tabs">
+          <button class="search-tab active" data-mode="username">Username</button>
+          <button class="search-tab" data-mode="email">Email</button>
+          <button class="search-tab" data-mode="both">Both</button>
+        </div>
+        <input id="search-input" type="text" placeholder="enter username or email…" autocomplete="off" spellcheck="false" />
+        <button id="search-btn">search →</button>
+      </div>
+    </div>
+
+    <div id="worker-warn">
+      ⚠ No worker URL configured. Open the page source and set <code>WORKER_URL</code> to your deployed Cloudflare Worker.
+      Results will be limited to direct platform links (no live checking).
+    </div>
+
+    <div id="progress-wrap">
+      <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+      <div id="progress-label">Checking 0 / 0…</div>
+    </div>
+
+    <div id="summary">
+      <span class="sum-found" id="sum-found">0 found</span>
+      <span class="sum-miss"  id="sum-miss">0 not found</span>
+      <span class="sum-err"   id="sum-err">0 errors</span>
+    </div>
+
+    <div id="results-grid"></div>
+
+    <div id="email-section">
+      <div class="email-heading">// email intel</div>
+      <div id="email-cards"></div>
+    </div>
+
   </div>
 
   <script>
   (function () {
+    // ── Auth ──────────────────────────────────────────────
     if (sessionStorage.getItem('void_auth') !== '1') {
       window.location.replace('/projects/');
       return;
     }
     document.getElementById('auth-gate').classList.add('hidden');
+
+    // ── Config ────────────────────────────────────────────
+    // Deploy worker.js to Cloudflare Workers and paste your worker URL here.
+    const WORKER_URL = '';   // e.g. 'https://sherlock.yourname.workers.dev'
+
+    if (!WORKER_URL) {
+      document.getElementById('worker-warn').classList.add('visible');
+    }
+
+    // ── Platform definitions ──────────────────────────────
+    // mode: 'status' → HTTP 2xx = found, 404 = not found
+    // mode: 'body'   → 200 + body does NOT contain needle = found
+    const PLATFORMS = [
+      // Social
+      { name:'Twitter / X',     cat:'Social',       url:'https://x.com/{u}',                              mode:'status' },
+      { name:'Instagram',       cat:'Social',       url:'https://www.instagram.com/{u}/',                 mode:'body',  needle:'Sorry, this page' },
+      { name:'TikTok',          cat:'Social',       url:'https://www.tiktok.com/@{u}',                    mode:'body',  needle:"Couldn't find this account" },
+      { name:'Snapchat',        cat:'Social',       url:'https://www.snapchat.com/add/{u}',               mode:'status' },
+      { name:'Pinterest',       cat:'Social',       url:'https://www.pinterest.com/{u}/',                 mode:'body',  needle:'This page isn\u2019t available' },
+      { name:'Tumblr',          cat:'Social',       url:'https://{u}.tumblr.com/',                        mode:'status' },
+      { name:'Reddit',          cat:'Social',       url:'https://www.reddit.com/user/{u}/',               mode:'body',  needle:'page not found' },
+      { name:'Bluesky',         cat:'Social',       url:'https://bsky.app/profile/{u}.bsky.social',       mode:'status' },
+      { name:'Threads',         cat:'Social',       url:'https://www.threads.net/@{u}',                   mode:'status' },
+      { name:'Mastodon',        cat:'Social',       url:'https://mastodon.social/@{u}',                   mode:'status' },
+      { name:'VK',              cat:'Social',       url:'https://vk.com/{u}',                             mode:'body',  needle:'This page doesn\u2019t exist' },
+      { name:'Facebook',        cat:'Social',       url:'https://www.facebook.com/{u}',                   mode:'status' },
+
+      // Dev
+      { name:'GitHub',          cat:'Dev',          url:'https://github.com/{u}',                         mode:'status' },
+      { name:'GitLab',          cat:'Dev',          url:'https://gitlab.com/{u}',                         mode:'status' },
+      { name:'Bitbucket',       cat:'Dev',          url:'https://bitbucket.org/{u}/',                     mode:'status' },
+      { name:'npm',             cat:'Dev',          url:'https://www.npmjs.com/~{u}',                     mode:'status' },
+      { name:'PyPI',            cat:'Dev',          url:'https://pypi.org/user/{u}/',                     mode:'status' },
+      { name:'HackerNews',      cat:'Dev',          url:'https://news.ycombinator.com/user?id={u}',       mode:'body',  needle:'No such user.' },
+      { name:'CodePen',         cat:'Dev',          url:'https://codepen.io/{u}',                         mode:'status' },
+      { name:'Replit',          cat:'Dev',          url:'https://replit.com/@{u}',                        mode:'status' },
+      { name:'Stack Overflow',  cat:'Dev',          url:'https://stackoverflow.com/users?tab=Reputation&q={u}', mode:'status' },
+      { name:'Dev.to',          cat:'Dev',          url:'https://dev.to/{u}',                             mode:'status' },
+      { name:'Hashnode',        cat:'Dev',          url:'https://hashnode.com/@{u}',                      mode:'status' },
+      { name:'Kaggle',          cat:'Dev',          url:'https://www.kaggle.com/{u}',                     mode:'status' },
+      { name:'HuggingFace',     cat:'Dev',          url:'https://huggingface.co/{u}',                     mode:'status' },
+      { name:'Docker Hub',      cat:'Dev',          url:'https://hub.docker.com/u/{u}',                   mode:'status' },
+
+      // Gaming
+      { name:'Twitch',          cat:'Gaming',       url:'https://www.twitch.tv/{u}',                      mode:'status' },
+      { name:'Kick',            cat:'Gaming',       url:'https://kick.com/{u}',                           mode:'status' },
+      { name:'Steam',           cat:'Gaming',       url:'https://steamcommunity.com/id/{u}',              mode:'body',  needle:'The specified profile could not be found.' },
+      { name:'Roblox',          cat:'Gaming',       url:'https://www.roblox.com/user.aspx?username={u}',  mode:'body',  needle:'Page cannot be found' },
+      { name:'Chess.com',       cat:'Gaming',       url:'https://www.chess.com/member/{u}',               mode:'status' },
+      { name:'Lichess',         cat:'Gaming',       url:'https://lichess.org/@/{u}',                      mode:'status' },
+      { name:'Speedrun.com',    cat:'Gaming',       url:'https://www.speedrun.com/user/{u}',              mode:'status' },
+      { name:'itch.io',         cat:'Gaming',       url:'https://{u}.itch.io/',                           mode:'status' },
+      { name:'Minecraft',       cat:'Gaming',       url:'https://namemc.com/profile/{u}',                 mode:'body',  needle:'Not Found' },
+
+      // Professional
+      { name:'LinkedIn',        cat:'Professional', url:'https://www.linkedin.com/in/{u}',                mode:'status' },
+      { name:'Behance',         cat:'Professional', url:'https://www.behance.net/{u}',                    mode:'status' },
+      { name:'Dribbble',        cat:'Professional', url:'https://dribbble.com/{u}',                       mode:'status' },
+      { name:'AngelList',       cat:'Professional', url:'https://wellfound.com/u/{u}',                    mode:'status' },
+      { name:'Freelancer',      cat:'Professional', url:'https://www.freelancer.com/u/{u}',               mode:'status' },
+      { name:'Upwork',          cat:'Professional', url:'https://www.upwork.com/freelancers/~{u}',        mode:'status' },
+      { name:'Fiverr',          cat:'Professional', url:'https://www.fiverr.com/{u}',                     mode:'status' },
+      { name:'ProductHunt',     cat:'Professional', url:'https://www.producthunt.com/@{u}',               mode:'status' },
+
+      // Media / Music
+      { name:'YouTube',         cat:'Media',        url:'https://www.youtube.com/@{u}',                   mode:'status' },
+      { name:'Spotify',         cat:'Media',        url:'https://open.spotify.com/user/{u}',              mode:'status' },
+      { name:'SoundCloud',      cat:'Media',        url:'https://soundcloud.com/{u}',                     mode:'status' },
+      { name:'Bandcamp',        cat:'Media',        url:'https://{u}.bandcamp.com/',                      mode:'status' },
+      { name:'Last.fm',         cat:'Media',        url:'https://www.last.fm/user/{u}',                   mode:'status' },
+      { name:'Mixcloud',        cat:'Media',        url:'https://www.mixcloud.com/{u}/',                  mode:'status' },
+      { name:'Vimeo',           cat:'Media',        url:'https://vimeo.com/{u}',                          mode:'status' },
+      { name:'Dailymotion',     cat:'Media',        url:'https://www.dailymotion.com/{u}',                mode:'status' },
+      { name:'Flickr',          cat:'Media',        url:'https://www.flickr.com/people/{u}/',             mode:'status' },
+
+      // Publishing
+      { name:'Medium',          cat:'Publishing',   url:'https://medium.com/@{u}',                        mode:'status' },
+      { name:'Substack',        cat:'Publishing',   url:'https://{u}.substack.com/',                      mode:'status' },
+      { name:'Patreon',         cat:'Publishing',   url:'https://www.patreon.com/{u}',                    mode:'status' },
+      { name:'Ko-fi',           cat:'Publishing',   url:'https://ko-fi.com/{u}',                          mode:'status' },
+      { name:'Buy Me a Coffee', cat:'Publishing',   url:'https://www.buymeacoffee.com/{u}',               mode:'status' },
+
+      // Community / Forums
+      { name:'Quora',           cat:'Community',    url:'https://www.quora.com/profile/{u}',              mode:'status' },
+      { name:'Letterboxd',      cat:'Community',    url:'https://letterboxd.com/{u}/',                    mode:'status' },
+      { name:'Goodreads',       cat:'Community',    url:'https://www.goodreads.com/{u}',                  mode:'status' },
+      { name:'MyAnimeList',     cat:'Community',    url:'https://myanimelist.net/profile/{u}',            mode:'status' },
+      { name:'Disqus',          cat:'Community',    url:'https://disqus.com/by/{u}/',                     mode:'status' },
+      { name:'Twitch Clips',    cat:'Community',    url:'https://www.twitch.tv/{u}/clips',                mode:'status' },
+      { name:'Strava',          cat:'Community',    url:'https://www.strava.com/athletes/{u}',            mode:'status' },
+
+      // Identity / Link-in-bio
+      { name:'Keybase',         cat:'Identity',     url:'https://keybase.io/{u}',                         mode:'status' },
+      { name:'About.me',        cat:'Identity',     url:'https://about.me/{u}',                           mode:'status' },
+      { name:'Linktree',        cat:'Identity',     url:'https://linktr.ee/{u}',                          mode:'status' },
+      { name:'Carrd',           cat:'Identity',     url:'https://{u}.carrd.co/',                          mode:'status' },
+      { name:'Gravatar',        cat:'Identity',     url:'https://gravatar.com/{u}',                       mode:'status' },
+
+      // Shopping / Maker
+      { name:'Etsy',            cat:'Shopping',     url:'https://www.etsy.com/shop/{u}',                  mode:'status' },
+      { name:'Depop',           cat:'Shopping',     url:'https://www.depop.com/{u}',                      mode:'status' },
+      { name:'Poshmark',        cat:'Shopping',     url:'https://poshmark.com/closet/{u}',                mode:'status' },
+
+      // Misc / Other
+      { name:'Telegram',        cat:'Misc',         url:'https://t.me/{u}',                               mode:'status' },
+      { name:'Slack',           cat:'Misc',         url:'https://{u}.slack.com/',                         mode:'status' },
+      { name:'GitBook',         cat:'Misc',         url:'https://app.gitbook.com/@{u}',                   mode:'status' },
+      { name:'Notion',          cat:'Misc',         url:'https://www.notion.so/@{u}',                     mode:'status' },
+      { name:'Trello',          cat:'Misc',         url:'https://trello.com/{u}',                         mode:'status' },
+      { name:'Wattpad',         cat:'Misc',         url:'https://www.wattpad.com/user/{u}',               mode:'status' },
+      { name:'Lego Ideas',      cat:'Misc',         url:'https://ideas.lego.com/profile/{u}',             mode:'status' },
+      { name:'500px',           cat:'Misc',         url:'https://500px.com/p/{u}',                        mode:'status' },
+      { name:'Instructables',   cat:'Misc',         url:'https://www.instructables.com/member/{u}/',      mode:'status' },
+      { name:'Thingiverse',     cat:'Misc',         url:'https://www.thingiverse.com/{u}',                mode:'status' },
+      { name:'Coroflot',        cat:'Misc',         url:'https://www.coroflot.com/{u}',                   mode:'status' },
+      { name:'Diigo',           cat:'Misc',         url:'https://www.diigo.com/profile/{u}',              mode:'status' },
+      { name:'Foursquare',      cat:'Misc',         url:'https://foursquare.com/{u}',                     mode:'status' },
+    ];
+
+    // ── State ─────────────────────────────────────────────
+    let mode = 'username';
+    let running = false;
+
+    // ── UI refs ───────────────────────────────────────────
+    const input       = document.getElementById('search-input');
+    const btn         = document.getElementById('search-btn');
+    const grid        = document.getElementById('results-grid');
+    const progressWrap= document.getElementById('progress-wrap');
+    const progressFill= document.getElementById('progress-bar-fill');
+    const progressLbl = document.getElementById('progress-label');
+    const summary     = document.getElementById('summary');
+    const sumFound    = document.getElementById('sum-found');
+    const sumMiss     = document.getElementById('sum-miss');
+    const sumErr      = document.getElementById('sum-err');
+    const emailSec    = document.getElementById('email-section');
+    const emailCards  = document.getElementById('email-cards');
+
+    // ── Tab switching ─────────────────────────────────────
+    document.querySelectorAll('.search-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.search-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        mode = tab.dataset.mode;
+        const isEmail = mode === 'email';
+        input.placeholder = isEmail ? 'enter email address…' : 'enter username…';
+      });
+    });
+
+    // ── Search trigger ────────────────────────────────────
+    btn.addEventListener('click', startSearch);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') startSearch(); });
+
+    async function startSearch() {
+      if (running) return;
+      const val = input.value.trim();
+      if (!val) return;
+
+      const doUsername = mode === 'username' || mode === 'both';
+      const doEmail    = mode === 'email'    || mode === 'both';
+
+      // Detect if "both" was passed as a single value
+      const isEmail = val.includes('@');
+      const username = doUsername && !isEmail ? val : (doUsername && isEmail ? val.split('@')[0] : null);
+      const email    = doEmail && isEmail ? val : null;
+
+      if (doUsername && !username) {
+        input.style.borderColor = '#c0524a';
+        setTimeout(() => input.style.borderColor = '', 800);
+        return;
+      }
+      if (doEmail && !email && mode !== 'username') {
+        input.style.borderColor = '#c0524a';
+        setTimeout(() => input.style.borderColor = '', 800);
+        return;
+      }
+
+      // Reset UI
+      running = true;
+      btn.disabled = true;
+      grid.innerHTML = '';
+      emailSec.classList.remove('visible');
+      emailCards.innerHTML = '';
+      summary.classList.remove('visible');
+      progressWrap.classList.add('visible');
+
+      let total = 0, done = 0, found = 0, miss = 0, err = 0;
+
+      // ── Username checks ───────────────────────────────
+      if (username) {
+        total += PLATFORMS.length;
+        updateProgress(done, total);
+
+        const promises = PLATFORMS.map(async (p) => {
+          const url = p.url.replace('{u}', encodeURIComponent(username));
+          const card = createCard(p);
+          grid.appendChild(card);
+          // Trigger entrance animation on next frame
+          requestAnimationFrame(() => requestAnimationFrame(() => card.classList.add('show')));
+
+          let result = { found: false, status: 0, error: null };
+
+          if (WORKER_URL) {
+            try {
+              const workerUrl = new URL(WORKER_URL + '/check');
+              workerUrl.searchParams.set('url', url);
+              workerUrl.searchParams.set('mode', p.mode);
+              if (p.mode === 'body') workerUrl.searchParams.set('needle', p.needle || '');
+              const res = await fetch(workerUrl.toString());
+              result = await res.json();
+            } catch {
+              result = { found: false, status: 0, error: 'worker error' };
+            }
+          } else {
+            // No worker: just mark as unknown (link only)
+            result = { found: null, status: 0, error: 'no worker' };
+          }
+
+          done++;
+          if (result.error && result.found === false && result.status === 0) {
+            err++;
+          } else if (result.found === null) {
+            // unknown — show as link
+            err++;
+          } else if (result.found) {
+            found++;
+          } else {
+            miss++;
+          }
+
+          updateCard(card, p, url, result);
+          updateProgress(done, total);
+          updateSummary(found, miss, err);
+        });
+
+        await Promise.allSettled(promises);
+      }
+
+      // ── Email checks ───────────────────────────────────
+      if (email && WORKER_URL) {
+        emailSec.classList.add('visible');
+        emailCards.innerHTML = '<div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--sidebar-muted);">Checking…</div>';
+
+        const [gravatarRes, emailrepRes, dnsRes] = await Promise.allSettled([
+          checkGravatar(email),
+          checkEmailrep(email),
+          checkDns(email.split('@')[1]),
+        ]);
+
+        emailCards.innerHTML = '';
+        renderEmailCard('Gravatar', gravatarRes.value);
+        renderEmailrepCards(emailrepRes.value);
+        renderDnsCard(dnsRes.value);
+      } else if (email && !WORKER_URL) {
+        emailSec.classList.add('visible');
+        emailCards.innerHTML = '<div style="font-family:var(--font-mono);font-size:0.72rem;color:#c0a84a;">Worker not configured — email checks require the Cloudflare Worker.</div>';
+      }
+
+      running = false;
+      btn.disabled = false;
+      progressWrap.classList.remove('visible');
+      summary.classList.add('visible');
+    }
+
+    // ── Card builders ─────────────────────────────────────
+    function createCard(p) {
+      const card = document.createElement('div');
+      card.className = 'r-card';
+      card.innerHTML = `
+        <div class="r-platform">${esc(p.name)}</div>
+        <div class="r-category">${esc(p.cat)}</div>
+        <div class="r-status">checking…</div>
+      `;
+      return card;
+    }
+
+    function updateCard(card, p, url, result) {
+      let statusText, cls;
+      if (result.found === null || (result.error && result.status === 0)) {
+        cls = 'err';
+        statusText = WORKER_URL ? 'timeout / error' : '→ link only';
+      } else if (result.found) {
+        cls = 'found';
+        statusText = '✓ found';
+      } else {
+        cls = 'miss';
+        statusText = '✗ not found';
+      }
+      card.classList.add(cls);
+      card.querySelector('.r-status').textContent = statusText;
+      if (result.found || result.found === null) {
+        const a = document.createElement('a');
+        a.className = 'r-link';
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.textContent = url.replace(/^https?:\/\//, '').slice(0, 40) + (url.length > 46 ? '…' : '');
+        card.appendChild(a);
+      }
+    }
+
+    // ── Progress / summary ────────────────────────────────
+    function updateProgress(done, total) {
+      const pct = total ? Math.round(done / total * 100) : 0;
+      progressFill.style.width = pct + '%';
+      progressLbl.textContent = `Checking ${done} / ${total}…`;
+    }
+
+    function updateSummary(f, m, e) {
+      sumFound.textContent = f + ' found';
+      sumMiss.textContent  = m + ' not found';
+      sumErr.textContent   = e + ' unknown';
+    }
+
+    // ── Email helpers ─────────────────────────────────────
+    async function checkGravatar(email) {
+      // MD5 hash the email client-side
+      const hash = await md5(email.trim().toLowerCase());
+      try {
+        const res = await fetch(`${WORKER_URL}/gravatar?hash=${hash}`);
+        return await res.json();
+      } catch { return { found: false }; }
+    }
+
+    async function checkEmailrep(email) {
+      try {
+        const res = await fetch(`${WORKER_URL}/emailrep?email=${encodeURIComponent(email)}`);
+        return await res.json();
+      } catch { return null; }
+    }
+
+    async function checkDns(domain) {
+      try {
+        const res = await fetch(`${WORKER_URL}/dns?domain=${encodeURIComponent(domain)}`);
+        return await res.json();
+      } catch { return { hasMX: false }; }
+    }
+
+    function renderEmailCard(label, data) {
+      const card = document.createElement('div');
+      card.className = 'e-card';
+      if (!data) {
+        card.innerHTML = `<div class="e-label">${esc(label)}</div><div class="e-val warn">lookup failed</div>`;
+      } else {
+        const found = data.found;
+        card.innerHTML = `<div class="e-label">${esc(label)}</div>
+          <div class="e-val ${found ? 'pos' : 'neg'}">${found ? '✓ avatar found' : '✗ no avatar'}</div>`;
+      }
+      emailCards.appendChild(card);
+    }
+
+    function renderEmailrepCards(data) {
+      if (!data) return;
+      const fields = [
+        { label: 'Reputation',     val: data.reputation,            pos: ['high'], neg: ['low'] },
+        { label: 'Suspicious',     val: data.suspicious ? 'yes' : 'no', pos: [], neg: ['yes'] },
+        { label: 'Blacklisted',    val: data.blacklisted ? 'yes' : 'no', pos: [], neg: ['yes'] },
+        { label: 'Spam',           val: data.details?.spam ? 'yes' : 'no', pos: [], neg: ['yes'] },
+        { label: 'Free Provider',  val: data.details?.free_provider ? 'yes' : 'no', pos: [], neg: [] },
+        { label: 'Profiles',       val: data.details?.profiles?.join(', ') || 'none', pos: [], neg: ['none'] },
+        { label: 'Credentials Leaked', val: data.details?.credentials_leaked ? 'yes' : 'no', pos: [], neg: ['yes'] },
+        { label: 'Data Breach',    val: data.details?.data_breach ? 'yes' : 'no', pos: [], neg: ['yes'] },
+      ];
+      fields.forEach(f => {
+        if (f.val === undefined || f.val === null) return;
+        const card = document.createElement('div');
+        card.className = 'e-card';
+        const cls = f.pos.includes(f.val) ? 'pos' : f.neg.includes(f.val) ? 'neg' : 'warn';
+        card.innerHTML = `<div class="e-label">${esc(f.label)}</div><div class="e-val ${cls}">${esc(String(f.val))}</div>`;
+        emailCards.appendChild(card);
+      });
+    }
+
+    function renderDnsCard(data) {
+      const card = document.createElement('div');
+      card.className = 'e-card';
+      const has = data?.hasMX;
+      card.innerHTML = `<div class="e-label">MX Records</div>
+        <div class="e-val ${has ? 'pos' : 'neg'}">${has ? '✓ domain accepts mail' : '✗ no MX records found'}</div>`;
+      emailCards.appendChild(card);
+    }
+
+    // ── MD5 (for Gravatar — runs client-side, no server needed) ──
+    // Classic MD5 implementation (no external libs)
+    function md5(str) {
+      return new Promise(resolve => resolve(_md5(str)));
+    }
+
+    function _md5(string) {
+      function safeAdd(x, y) { const lsw=(x&0xFFFF)+(y&0xFFFF); return (((x>>16)+(y>>16)+(lsw>>16))<<16)|(lsw&0xFFFF); }
+      function bitRotateLeft(num, cnt) { return (num<<cnt)|(num>>>(32-cnt)); }
+      function md5cmn(q,a,b,x,s,t) { return safeAdd(bitRotateLeft(safeAdd(safeAdd(a,q),safeAdd(x,t)),s),b); }
+      function md5ff(a,b,c,d,x,s,t) { return md5cmn((b&c)|((~b)&d),a,b,x,s,t); }
+      function md5gg(a,b,c,d,x,s,t) { return md5cmn((b&d)|(c&(~d)),a,b,x,s,t); }
+      function md5hh(a,b,c,d,x,s,t) { return md5cmn(b^c^d,a,b,x,s,t); }
+      function md5ii(a,b,c,d,x,s,t) { return md5cmn(c^(b|(~d)),a,b,x,s,t); }
+      const msg = unescape(encodeURIComponent(string));
+      const len8 = msg.length;
+      const arr = [];
+      for (let i=0;i<len8;i++) arr[i>>2]|=msg.charCodeAt(i)<<((i%4)*8);
+      arr[len8>>2]|=0x80<<((len8%4)*8);
+      arr[((len8+64>>9)<<4)+14]=len8*8;
+      let a=1732584193,b=-271733879,c=-1732584194,d=271733878;
+      for (let i=0;i<arr.length;i+=16){
+        const [oa,ob,oc,od]=[a,b,c,d];
+        a=md5ff(a,b,c,d,arr[i+0],7,-680876936);d=md5ff(d,a,b,c,arr[i+1],12,-389564586);c=md5ff(c,d,a,b,arr[i+2],17,606105819);b=md5ff(b,c,d,a,arr[i+3],22,-1044525330);
+        a=md5ff(a,b,c,d,arr[i+4],7,-176418897);d=md5ff(d,a,b,c,arr[i+5],12,1200080426);c=md5ff(c,d,a,b,arr[i+6],17,-1473231341);b=md5ff(b,c,d,a,arr[i+7],22,-45705983);
+        a=md5ff(a,b,c,d,arr[i+8],7,1770035416);d=md5ff(d,a,b,c,arr[i+9],12,-1958414417);c=md5ff(c,d,a,b,arr[i+10],17,-42063);b=md5ff(b,c,d,a,arr[i+11],22,-1990404162);
+        a=md5ff(a,b,c,d,arr[i+12],7,1804603682);d=md5ff(d,a,b,c,arr[i+13],12,-40341101);c=md5ff(c,d,a,b,arr[i+14],17,-1502002290);b=md5ff(b,c,d,a,arr[i+15],22,1236535329);
+        a=md5gg(a,b,c,d,arr[i+1],5,-165796510);d=md5gg(d,a,b,c,arr[i+6],9,-1069501632);c=md5gg(c,d,a,b,arr[i+11],14,643717713);b=md5gg(b,c,d,a,arr[i+0],20,-373897302);
+        a=md5gg(a,b,c,d,arr[i+5],5,-701558691);d=md5gg(d,a,b,c,arr[i+10],9,38016083);c=md5gg(c,d,a,b,arr[i+15],14,-660478335);b=md5gg(b,c,d,a,arr[i+4],20,-405537848);
+        a=md5gg(a,b,c,d,arr[i+9],5,568446438);d=md5gg(d,a,b,c,arr[i+14],9,-1019803690);c=md5gg(c,d,a,b,arr[i+3],14,-187363961);b=md5gg(b,c,d,a,arr[i+8],20,1163531501);
+        a=md5gg(a,b,c,d,arr[i+13],5,-1444681467);d=md5gg(d,a,b,c,arr[i+2],9,-51403784);c=md5gg(c,d,a,b,arr[i+7],14,1735328473);b=md5gg(b,c,d,a,arr[i+12],20,-1926607734);
+        a=md5hh(a,b,c,d,arr[i+5],4,-378558);d=md5hh(d,a,b,c,arr[i+8],11,-2022574463);c=md5hh(c,d,a,b,arr[i+11],16,1839030562);b=md5hh(b,c,d,a,arr[i+14],23,-35309556);
+        a=md5hh(a,b,c,d,arr[i+1],4,-1530992060);d=md5hh(d,a,b,c,arr[i+4],11,1272893353);c=md5hh(c,d,a,b,arr[i+7],16,-155497632);b=md5hh(b,c,d,a,arr[i+10],23,-1094730640);
+        a=md5hh(a,b,c,d,arr[i+13],4,681279174);d=md5hh(d,a,b,c,arr[i+0],11,-358537222);c=md5hh(c,d,a,b,arr[i+3],16,-722521979);b=md5hh(b,c,d,a,arr[i+6],23,76029189);
+        a=md5hh(a,b,c,d,arr[i+9],4,-640364487);d=md5hh(d,a,b,c,arr[i+12],11,-421815835);c=md5hh(c,d,a,b,arr[i+15],16,530742520);b=md5hh(b,c,d,a,arr[i+2],23,-995338651);
+        a=md5ii(a,b,c,d,arr[i+0],6,-198630844);d=md5ii(d,a,b,c,arr[i+7],10,1126891415);c=md5ii(c,d,a,b,arr[i+14],15,-1416354905);b=md5ii(b,c,d,a,arr[i+5],21,-57434055);
+        a=md5ii(a,b,c,d,arr[i+12],6,1700485571);d=md5ii(d,a,b,c,arr[i+3],10,-1894986606);c=md5ii(c,d,a,b,arr[i+10],15,-1051523);b=md5ii(b,c,d,a,arr[i+1],21,-2054922799);
+        a=md5ii(a,b,c,d,arr[i+8],6,1873313359);d=md5ii(d,a,b,c,arr[i+15],10,-30611744);c=md5ii(c,d,a,b,arr[i+6],15,-1560198380);b=md5ii(b,c,d,a,arr[i+13],21,1309151649);
+        a=md5ii(a,b,c,d,arr[i+4],6,-145523070);d=md5ii(d,a,b,c,arr[i+11],10,-1120210379);c=md5ii(c,d,a,b,arr[i+2],15,718787259);b=md5ii(b,c,d,a,arr[i+9],21,-343485551);
+        a=safeAdd(a,oa);b=safeAdd(b,ob);c=safeAdd(c,oc);d=safeAdd(d,od);
+      }
+      return [a,b,c,d].map(n => ('0000000' + (n < 0 ? n + 4294967296 : n).toString(16)).slice(-8).match(/.{2}/g).reverse().join('')).join('');
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
   })();
   </script>
 
