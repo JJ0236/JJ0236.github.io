@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>void — Sherlock</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: #0d110b;
+      color: var(--sidebar-text);
+      font-family: var(--font-body);
+    }
+
+    #void-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 40px;
+      background: var(--moss-dark);
+      border-bottom: 1px solid rgba(143,175,110,0.18);
+      display: flex;
+      align-items: center;
+      padding: 0 1.25rem;
+      gap: 1.5rem;
+    }
+
+    #void-bar a {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--moss-light);
+      text-decoration: none;
+      letter-spacing: 0.06em;
+      transition: color 0.15s;
+    }
+
+    #void-bar a:hover { color: var(--sidebar-text); }
+
+    #void-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--sidebar-muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+
+    #content {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 4rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      text-align: center;
+    }
+
+    .wip-icon {
+      font-size: 2.5rem;
+    }
+
+    .wip-title {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      color: var(--sidebar-text);
+      letter-spacing: 0.06em;
+    }
+
+    .wip-desc {
+      font-size: 0.85rem;
+      color: var(--sidebar-muted);
+      line-height: 1.6;
+      max-width: 380px;
+    }
+
+    .wip-badge {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      background: rgba(143,175,110,0.1);
+      color: var(--moss-light);
+    }
+
+    #auth-gate {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #0a0e08;
+    }
+
+    #auth-gate.hidden { display: none; }
+  </style>
+</head>
+<body>
+
+  <div id="auth-gate"></div>
+
+  <div id="void-bar">
+    <a href="/void/">← void</a>
+    <span id="void-label">sherlock</span>
+  </div>
+
+  <div id="content">
+    <div class="wip-icon">🔍</div>
+    <div class="wip-title">Sherlock</div>
+    <div class="wip-desc">Username &amp; email OSINT lookup across 100+ platforms. Under construction — check back soon.</div>
+    <span class="wip-badge">in progress</span>
+  </div>
+
+  <script>
+  (function () {
+    if (sessionStorage.getItem('void_auth') !== '1') {
+      window.location.replace('/projects/');
+      return;
+    }
+    document.getElementById('auth-gate').classList.add('hidden');
+  })();
+  </script>
+
+</body>
+</html>
