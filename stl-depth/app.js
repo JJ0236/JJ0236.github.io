@@ -227,8 +227,13 @@ async function generateDepthMap() {
   offCam.lookAt(0, 0, 0);
   offCam.updateProjectionMatrix();
 
-  // Offscreen render target
-  const rt = new THREE.WebGLRenderTarget(res, res, {
+  // Supersample: render at 2× resolution then box-filter downsample.
+  // This gives each output pixel 4 depth samples, smoothing hard geometry edges.
+  const SS = 2;
+  const ssRes = res * SS;
+
+  // Offscreen render target at supersample resolution
+  const rt = new THREE.WebGLRenderTarget(ssRes, ssRes, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     type: THREE.UnsignedByteType,
@@ -242,66 +247,71 @@ async function generateDepthMap() {
   });
   state.mesh.material = depthMat;
 
-  // Render to target
+  // Render to supersample target
   renderer.setRenderTarget(rt);
   renderer.setClearColor(0xffffff, 1);
   renderer.render(scene, offCam);
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x0F1209, 1);
 
-  // Read pixels
-  const pixels = new Uint8Array(res * res * 4);
-  renderer.readRenderTargetPixels(rt, 0, 0, res, res, pixels);
+  // Read pixels at ssRes × ssRes
+  const pixels = new Uint8Array(ssRes * ssRes * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, ssRes, ssRes, pixels);
 
   // Restore
   state.mesh.material = origMat;
   depthMat.dispose();
   rt.dispose();
 
-  // Unpack RGBADepthPacking → float
-  // THREE.js RGBADepthPacking: depth = dot(RGBA / 255, [1, 1/255, 1/65025, 1/16581375])
-  const depth = new Float32Array(res * res);
+  // Unpack RGBADepthPacking → float for all supersample pixels
   const inv = 1.0 / 255.0;
-  for (let i = 0; i < res * res; i++) {
+  const ssDepth = new Float32Array(ssRes * ssRes);
+  for (let i = 0; i < ssRes * ssRes; i++) {
     const idx = i * 4;
     const r = pixels[idx]     * inv;
     const g = pixels[idx + 1] * inv;
     const b = pixels[idx + 2] * inv;
     const a = pixels[idx + 3] * inv;
-    depth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
+    ssDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
   }
 
-  // Clamp [0,1] and flip Y (WebGL reads bottom-to-top)
-  // Also linearise: depth is already linear from OrthographicCamera,
-  // and approximately linear from Perspective for small FOV.
-  // We remap to the actual min/max occupied depth to use full range.
+  // Find depth range from model pixels only (exclude background ≈ 1.0)
   let dMin = Infinity, dMax = -Infinity;
-  for (let i = 0; i < depth.length; i++) {
-    if (depth[i] < 0.9999) { // ignore background (white pixels)
-      if (depth[i] < dMin) dMin = depth[i];
-      if (depth[i] > dMax) dMax = depth[i];
+  for (let i = 0; i < ssDepth.length; i++) {
+    if (ssDepth[i] < 0.9999) {
+      if (ssDepth[i] < dMin) dMin = ssDepth[i];
+      if (ssDepth[i] > dMax) dMax = ssDepth[i];
     }
   }
   if (!isFinite(dMin) || dMax === dMin) { dMin = 0; dMax = 1; }
   const dRange = dMax - dMin;
 
-  const normalised = new Float32Array(res * res);
-  for (let row = 0; row < res; row++) {
-    for (let col = 0; col < res; col++) {
-      // Flip Y
-      const srcIdx = (res - 1 - row) * res + col;
-      const dstIdx = row * res + col;
-      const raw = depth[srcIdx];
-      let v;
-      if (raw >= 0.9999) {
-        v = 0; // background → black
-      } else {
-        v = (raw - dMin) / dRange;
-        // near = white → invert so closest surface = 1.0
-        v = 1.0 - v;
-      }
+  // Normalize all supersample pixels (Y-flipped).
+  // Background pixels (raw ≈ 1.0) fall outside [dMin,dMax] and naturally clamp to 0,
+  // so edge pixels average correctly between background (0) and model depth.
+  const ssNorm = new Float32Array(ssRes * ssRes);
+  for (let row = 0; row < ssRes; row++) {
+    for (let col = 0; col < ssRes; col++) {
+      const srcIdx = (ssRes - 1 - row) * ssRes + col; // flip Y
+      const raw = ssDepth[srcIdx];
+      let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
       if (state.polarity === 'far') v = 1.0 - v;
-      normalised[dstIdx] = Math.max(0, Math.min(1, v));
+      ssNorm[row * ssRes + col] = v;
+    }
+  }
+
+  // Box-filter downsample SS×SS → 1×1 per output pixel
+  const normalised = new Float32Array(res * res);
+  const ssInv = 1.0 / (SS * SS);
+  for (let y = 0; y < res; y++) {
+    for (let x = 0; x < res; x++) {
+      let sum = 0;
+      for (let dy = 0; dy < SS; dy++) {
+        for (let dx = 0; dx < SS; dx++) {
+          sum += ssNorm[(y * SS + dy) * ssRes + (x * SS + dx)];
+        }
+      }
+      normalised[y * res + x] = sum * ssInv;
     }
   }
 
