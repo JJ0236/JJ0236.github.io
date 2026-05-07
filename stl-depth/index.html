@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>STL to Depth Map</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #141810;
+      color: #D4CDB8;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      padding-top: 48px;
+    }
+
+    /* ── Top bar ─────────────────────────────── */
+    .tool-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 48px;
+      background: #3A4A2C;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      z-index: 2000;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-family: system-ui, sans-serif;
+    }
+    .tool-header-back {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: #8A8070;
+      font-size: 0.82rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-site {
+      font-size: 0.68rem;
+      color: #6B6055;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Main layout ─────────────────────────── */
+    #main {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    /* ── 3-D viewport ────────────────────────── */
+    #viewport {
+      flex: 1;
+      position: relative;
+      min-width: 0;
+      background: #0F1209;
+    }
+    #viewport canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    #drop-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #4A5545;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    #drop-overlay.hidden { opacity: 0; }
+    #drop-overlay svg { width: 56px; height: 56px; margin-bottom: 14px; }
+    #drop-overlay p { font-size: 1rem; }
+    #drop-overlay small {
+      font-size: 0.78rem;
+      color: #353D2F;
+      margin-top: 6px;
+    }
+
+    #viewport.drag-over { outline: 2px dashed #5C7A4E; outline-offset: -4px; }
+
+    /* ── Side panel ──────────────────────────── */
+    #panel {
+      width: 290px;
+      background: #1E2218;
+      border-left: 1px solid #2E3A26;
+      overflow-y: auto;
+      padding: 16px 14px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex-shrink: 0;
+    }
+
+    .panel-section {
+      border-bottom: 1px solid #2E3A26;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+    .panel-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .section-title {
+      font-size: 0.68rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #8FAF6E;
+      margin-bottom: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* ── Depth map preview ───────────────────── */
+    #depth-preview-wrap {
+      width: 100%;
+      aspect-ratio: 1;
+      background: #0F1209;
+      border: 1px solid #2E3A26;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #depth-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    #depth-placeholder {
+      font-size: 0.75rem;
+      color: #3A4030;
+      text-align: center;
+      padding: 1rem;
+      pointer-events: none;
+    }
+    #depth-spinner {
+      position: absolute;
+      inset: 0;
+      background: rgba(15,18,9,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    #depth-spinner.active { display: flex; }
+    .spinner-ring {
+      width: 28px; height: 28px;
+      border: 3px solid #2E3A26;
+      border-top-color: #5C7A4E;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Axis buttons ────────────────────────── */
+    .axis-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 5px;
+    }
+    .axis-btn {
+      background: #252B1E;
+      border: 1px solid #3A4A2E;
+      color: #9A9580;
+      border-radius: 5px;
+      padding: 6px 4px;
+      font-size: 0.75rem;
+      font-family: 'IBM Plex Mono', monospace;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+      text-align: center;
+    }
+    .axis-btn:hover { background: #2E3A26; color: #D4CDB8; border-color: #5C7A4E; }
+    .axis-btn.active { background: #3A4A2C; color: #8FAF6E; border-color: #5C7A4E; }
+
+    /* ── Toggle row ──────────────────────────── */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      margin-bottom: 8px;
+      color: #9A9580;
+    }
+
+    .toggle-group {
+      display: flex;
+      border: 1px solid #3A4A2E;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .toggle-opt {
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-family: 'IBM Plex Mono', monospace;
+      background: transparent;
+      border: none;
+      color: #6B6055;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .toggle-opt + .toggle-opt { border-left: 1px solid #3A4A2E; }
+    .toggle-opt.active { background: #3A4A2C; color: #8FAF6E; }
+
+    /* ── Resolution select ───────────────────── */
+    select {
+      background: #252B1E;
+      border: 1px solid #3A4A2E;
+      color: #D4CDB8;
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 0.8rem;
+    }
+    select:focus { outline: 1px solid #5C7A4E; }
+
+    /* ── Buttons ─────────────────────────────── */
+    .full-btn {
+      width: 100%;
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #5C7A4E;
+      background: #2E3A26;
+      color: #D4CDB8;
+      cursor: pointer;
+      font-size: 0.84rem;
+      transition: background 0.15s;
+    }
+    .full-btn:hover { background: #5C7A4E; color: #F8F4EE; }
+    .full-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .full-btn.accent { background: #5C7A4E; color: #F8F4EE; }
+    .full-btn.accent:hover { background: #3A4A2C; }
+
+    /* ── Info strip ──────────────────────────── */
+    #info-strip {
+      font-size: 0.72rem;
+      color: #5A5A48;
+      font-family: 'IBM Plex Mono', monospace;
+      line-height: 1.7;
+    }
+
+    /* ── Status ──────────────────────────────── */
+    #status {
+      font-size: 0.72rem;
+      font-family: 'IBM Plex Mono', monospace;
+      color: #5C7A4E;
+      min-height: 16px;
+    }
+
+    @media (max-width: 680px) {
+      #main { flex-direction: column; }
+      #panel { width: 100%; border-left: none; border-top: 1px solid #2E3A26; max-height: 55vh; }
+      #viewport { flex: 0 0 45vh; }
+    }
+  </style>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<div id="main">
+
+  <!-- 3D Viewport -->
+  <div id="viewport">
+    <div id="drop-overlay">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      <p>Drop an STL file here</p>
+      <small>or use the Load button →</small>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div id="panel">
+
+    <!-- Load -->
+    <div class="panel-section">
+      <div class="section-title">File</div>
+      <label class="full-btn" style="display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;" for="stl-input">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Load STL
+      </label>
+      <input type="file" id="stl-input" accept=".stl" style="display:none" />
+      <div id="status" style="margin-top:6px;"></div>
+    </div>
+
+    <!-- Depth map preview -->
+    <div class="panel-section">
+      <div class="section-title">Depth Map Preview</div>
+      <div id="depth-preview-wrap">
+        <canvas id="depth-canvas" width="512" height="512"></canvas>
+        <div id="depth-placeholder">Load an STL to generate a depth map</div>
+        <div id="depth-spinner"><div class="spinner-ring"></div></div>
+      </div>
+    </div>
+
+    <!-- Depth axis -->
+    <div class="panel-section">
+      <div class="section-title">Depth Axis</div>
+      <div class="axis-grid">
+        <button class="axis-btn" data-axis="pz">Front<br><span style="font-size:0.65rem;opacity:0.6">+Z</span></button>
+        <button class="axis-btn" data-axis="py">Top<br><span style="font-size:0.65rem;opacity:0.6">+Y</span></button>
+        <button class="axis-btn" data-axis="px">Right<br><span style="font-size:0.65rem;opacity:0.6">+X</span></button>
+        <button class="axis-btn" data-axis="nz">Back<br><span style="font-size:0.65rem;opacity:0.6">-Z</span></button>
+        <button class="axis-btn" data-axis="ny">Bottom<br><span style="font-size:0.65rem;opacity:0.6">-Y</span></button>
+        <button class="axis-btn" data-axis="nx">Left<br><span style="font-size:0.65rem;opacity:0.6">-X</span></button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="panel-section">
+      <div class="section-title">Settings</div>
+
+      <div class="toggle-row">
+        <span>Projection</span>
+        <div class="toggle-group">
+          <button class="toggle-opt active" data-proj="ortho">Ortho</button>
+          <button class="toggle-opt" data-proj="persp">Persp</button>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <span>Polarity</span>
+        <div class="toggle-group">
+          <button class="toggle-opt active" data-pol="near">Near=White</button>
+          <button class="toggle-opt" data-pol="far">Far=White</button>
+        </div>
+      </div>
+
+      <div class="toggle-row" style="margin-bottom:0">
+        <span>Resolution</span>
+        <select id="sel-res">
+          <option value="512">512 px</option>
+          <option value="1024" selected>1024 px</option>
+          <option value="2048">2048 px</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Export -->
+    <div class="panel-section">
+      <div class="section-title">Export</div>
+      <button class="full-btn accent" id="btn-download" disabled>Download 16-bit PNG</button>
+    </div>
+
+    <!-- Info -->
+    <div class="panel-section" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
+      <div id="info-strip">No model loaded</div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module" src="/stl-depth/app.js"></script>
+</body>
+</html>
