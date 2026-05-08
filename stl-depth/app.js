@@ -185,6 +185,61 @@ function axisToCamera(axis, bbox) {
   return dirs[axis] || dirs['pz'];
 }
 
+// Separable Gaussian blur on a Float32Array depth map.
+// Background pixels (value === 0) are excluded from the weighted average so
+// the blur never "pulls" foreground depth toward the black background —
+// instead the edge pixels naturally feather toward 0 as model coverage decreases.
+function gaussianBlur(data, w, h, sigma) {
+  const r = Math.max(1, Math.ceil(sigma * 3));
+  // Build 1-D kernel
+  const kernel = new Float32Array(2 * r + 1);
+  let ksum = 0;
+  for (let i = -r; i <= r; i++) {
+    kernel[i + r] = Math.exp(-(i * i) / (2 * sigma * sigma));
+    ksum += kernel[i + r];
+  }
+  for (let i = 0; i < kernel.length; i++) kernel[i] /= ksum;
+
+  const tmp = new Float32Array(w * h);
+  const out = new Float32Array(w * h);
+
+  // Horizontal pass
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, weight = 0;
+      for (let k = -r; k <= r; k++) {
+        const nx = x + k;
+        if (nx < 0 || nx >= w) continue;
+        const v = data[y * w + nx];
+        if (v === 0) continue; // skip background
+        const kw = kernel[k + r];
+        sum += v * kw;
+        weight += kw;
+      }
+      tmp[y * w + x] = weight > 0 ? sum / weight : 0;
+    }
+  }
+
+  // Vertical pass
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let sum = 0, weight = 0;
+      for (let k = -r; k <= r; k++) {
+        const ny = y + k;
+        if (ny < 0 || ny >= h) continue;
+        const v = tmp[ny * w + x];
+        if (v === 0) continue; // skip background
+        const kw = kernel[k + r];
+        sum += v * kw;
+        weight += kw;
+      }
+      out[y * w + x] = weight > 0 ? sum / weight : 0;
+    }
+  }
+
+  return out;
+}
+
 async function generateDepthMap() {
   if (!state.modelLoaded || !state.mesh) return;
 
@@ -201,33 +256,42 @@ async function generateDepthMap() {
   const size = new THREE.Vector3();
   bbox.getSize(size);
 
-  // 3D bounding sphere radius of the (already-scaled) model
-  const modelRadius = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z) / 2;
-
   const { pos, up } = axisToCamera(state.depthAxis, bbox);
 
-  // Build offscreen camera
+  // ── Camera setup ──────────────────────────────────────────────────────────
+  // For perspective: use the per-axis *projected* face half-size to compute
+  // camera distance, so the model fills the frame regardless of its aspect ratio.
+  // For ortho: tight half-extents per axis (unchanged — already worked).
   let dist, offCam;
+
   if (state.projection === 'ortho') {
-    dist = modelRadius * 2 + 2; // just needs to be outside the model
     let hw, hh;
     switch (state.depthAxis) {
-      case 'pz': case 'nz': hw = size.x / 2 + 0.3; hh = size.y / 2 + 0.3; break;
-      case 'py': case 'ny': hw = size.x / 2 + 0.3; hh = size.z / 2 + 0.3; break;
-      case 'px': case 'nx': hw = size.z / 2 + 0.3; hh = size.y / 2 + 0.3; break;
-      default:              hw = Math.max(size.x, size.z) / 2 + 0.3; hh = size.y / 2 + 0.3;
+      case 'pz': case 'nz': hw = size.x / 2 + 0.25; hh = size.y / 2 + 0.25; break;
+      case 'py': case 'ny': hw = size.x / 2 + 0.25; hh = size.z / 2 + 0.25; break;
+      case 'px': case 'nx': hw = size.z / 2 + 0.25; hh = size.y / 2 + 0.25; break;
+      default:              hw = Math.max(size.x, size.z) / 2 + 0.25; hh = size.y / 2 + 0.25;
     }
-    offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.1, dist * 2);
+    // dist just needs to be outside the model; tight near/far keeps depth in 0.4-0.6 NDC
+    const depthHalf = Math.max(size.x, size.y, size.z) / 2;
+    dist = depthHalf * 3 + 2;
+    offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, dist - depthHalf - 0.5, dist + depthHalf + 0.5);
+
   } else {
-    // Position camera so the model fills ~85% of the frame.
-    // dist = modelRadius / tan(halfFOV) * padding
-    // With FOV=45, halfFOV=22.5°, tan(22.5°)≈0.4142
-    const halfFOV = 22.5 * Math.PI / 180;
-    dist = (modelRadius * 1.15) / Math.tan(halfFOV);
-    // Tight near/far keeps the model in the middle of the depth range (not near 1.0)
-    // so RGBA quantisation noise is orders of magnitude below the depth signal.
-    const camNear = Math.max(0.01, dist - modelRadius - 0.2);
-    const camFar  = dist + modelRadius + 0.2;
+    // FOV=45, halfFOV=22.5°, tan(22.5°)≈0.4142
+    // Use the larger of the two visible face dimensions as the constraining half-size
+    let faceHalf;
+    switch (state.depthAxis) {
+      case 'pz': case 'nz': faceHalf = Math.max(size.x, size.y) / 2; break;
+      case 'py': case 'ny': faceHalf = Math.max(size.x, size.z) / 2; break;
+      case 'px': case 'nx': faceHalf = Math.max(size.y, size.z) / 2; break;
+      default:              faceHalf = Math.max(size.x, size.y) / 2;
+    }
+    const halfFOV = 22.5 * Math.PI / 180; // FOV 45 → halfFOV 22.5
+    dist = (faceHalf * 1.08) / Math.tan(halfFOV); // 1.08 → 4% margin each side
+    const depthHalf = Math.max(size.x, size.y, size.z) / 2;
+    const camNear = Math.max(0.01, dist - depthHalf - 0.3);
+    const camFar  = dist + depthHalf + 0.3;
     offCam = new THREE.PerspectiveCamera(45, 1, camNear, camFar);
   }
 
@@ -236,16 +300,12 @@ async function generateDepthMap() {
   offCam.lookAt(0, 0, 0);
   offCam.updateProjectionMatrix();
 
-  // Proven approach: MeshDepthMaterial + RGBADepthPacking + UnsignedByteType.
-  // Float render targets are not universally supported (need EXT_color_buffer_float).
-  // Background cleared to WHITE → unpacks to ~1.0, safely above any model depth.
-  // 2× SS with model-only downsample: edge pixels average only the model subsamples,
-  // so background=0 never contaminates depth and creates blurry halos.
-  // No DoubleSide: front-face-only avoids back-face z-fighting speckle.
-  const SS = 2;
-  const ssRes = res * SS;
-
-  const rt = new THREE.WebGLRenderTarget(ssRes, ssRes, {
+  // ── Render depth ──────────────────────────────────────────────────────────
+  // MeshDepthMaterial + RGBADepthPacking + UnsignedByteType (universally supported).
+  // Background cleared to WHITE so it unpacks to ~1.0 (above any model depth).
+  // Single render at target resolution — no supersampling; Gaussian blur below
+  // handles both edge aliasing and surface quantisation grain.
+  const rt = new THREE.WebGLRenderTarget(res, res, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
     type: THREE.UnsignedByteType,
@@ -253,88 +313,72 @@ async function generateDepthMap() {
   });
 
   const origMat = state.mesh.material;
-  const depthMat = new THREE.MeshDepthMaterial({
-    depthPacking: THREE.RGBADepthPacking,
-  });
+  const depthMat = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
   state.mesh.material = depthMat;
 
   renderer.setRenderTarget(rt);
-  renderer.setClearColor(0xffffff, 1);   // background → depth ~1.0
+  renderer.setClearColor(0xffffff, 1);
   renderer.render(scene, offCam);
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x0F1209, 1);
 
-  const pixels = new Uint8Array(ssRes * ssRes * 4);
-  renderer.readRenderTargetPixels(rt, 0, 0, ssRes, ssRes, pixels);
+  const pixels = new Uint8Array(res * res * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, res, res, pixels);
 
   state.mesh.material = origMat;
   depthMat.dispose();
   rt.dispose();
 
-  // Unpack RGBADepthPacking → float [0,1]
+  // ── Unpack RGBA depth → float [0,1] ──────────────────────────────────────
+  // Three.js RGBADepthPacking: depth ≈ r + g/255 + b/65025 + a/16581375
   const inv = 1.0 / 255.0;
-  const ssDepth = new Float32Array(ssRes * ssRes);
-  for (let i = 0; i < ssRes * ssRes; i++) {
+  const rawDepth = new Float32Array(res * res);
+  for (let i = 0; i < res * res; i++) {
     const idx = i * 4;
     const r = pixels[idx]     * inv;
     const g = pixels[idx + 1] * inv;
     const b = pixels[idx + 2] * inv;
     const a = pixels[idx + 3] * inv;
-    ssDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
+    rawDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
   }
 
-  // Find depth range from model pixels only (background ≥ 0.9999 excluded)
+  // ── Find model depth range (exclude background ≥ 0.9999) ─────────────────
   let dMin = Infinity, dMax = -Infinity;
-  for (let i = 0; i < ssDepth.length; i++) {
-    if (ssDepth[i] < 0.9999) {
-      if (ssDepth[i] < dMin) dMin = ssDepth[i];
-      if (ssDepth[i] > dMax) dMax = ssDepth[i];
+  for (let i = 0; i < rawDepth.length; i++) {
+    if (rawDepth[i] < 0.9999) {
+      if (rawDepth[i] < dMin) dMin = rawDepth[i];
+      if (rawDepth[i] > dMax) dMax = rawDepth[i];
     }
   }
   if (!isFinite(dMin) || dMax <= dMin) { dMin = 0; dMax = 1; }
   const dRange = dMax - dMin;
 
-  // Normalize + flip Y + tag background
-  const ssNorm = new Float32Array(ssRes * ssRes);
-  const isBg   = new Uint8Array(ssRes * ssRes);
-  for (let row = 0; row < ssRes; row++) {
-    for (let col = 0; col < ssRes; col++) {
-      const srcIdx = (ssRes - 1 - row) * ssRes + col; // flip Y
-      const raw = ssDepth[srcIdx];
-      const dst = row * ssRes + col;
-      if (raw >= 0.9999) {
-        isBg[dst]   = 1;
-        ssNorm[dst] = 0;
-      } else {
-        // smaller raw = closer camera = near=white → invert
-        let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
-        if (state.polarity === 'far') v = 1.0 - v;
-        ssNorm[dst] = v;
-      }
-    }
-  }
-
-  // Model-only downsample: average only non-background subsamples per output pixel
+  // ── Normalize + flip Y ────────────────────────────────────────────────────
+  // raw < value = closer to camera; invert so near surfaces = bright (value 1).
   const normalised = new Float32Array(res * res);
-  for (let y = 0; y < res; y++) {
-    for (let x = 0; x < res; x++) {
-      let sum = 0, count = 0;
-      for (let dy = 0; dy < SS; dy++) {
-        for (let dx = 0; dx < SS; dx++) {
-          const si = (y * SS + dy) * ssRes + (x * SS + dx);
-          if (!isBg[si]) { sum += ssNorm[si]; count++; }
-        }
+  for (let row = 0; row < res; row++) {
+    for (let col = 0; col < res; col++) {
+      const srcIdx = (res - 1 - row) * res + col; // flip Y (WebGL bottom-up)
+      const raw = rawDepth[srcIdx];
+      let v = 0;
+      if (raw < 0.9999) {
+        v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
+        if (state.polarity === 'far') v = 1.0 - v;
       }
-      normalised[y * res + x] = count > 0 ? sum / count : 0;
+      normalised[row * res + col] = v;
     }
   }
 
-  state.depthBuffer = normalised;
+  // ── Gaussian blur (sigma 1.2) — smooths RGBA quantisation banding + edges ─
+  // Skips background (v=0) in the weighted average so model depth never bleeds
+  // into the surrounding void; the silhouette simply feathers toward 0.
+  const blurred = gaussianBlur(normalised, res, res, 1.2);
+
+  state.depthBuffer = blurred;
   state.depthWidth  = res;
   state.depthHeight = res;
 
-  // Draw 8-bit preview
-  drawPreview(normalised, res, res);
+  drawPreview(blurred, res, res);
 
   depthSpinner.classList.remove('active');
   depthPlaceholder.style.display = 'none';
