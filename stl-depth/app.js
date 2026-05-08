@@ -201,15 +201,15 @@ async function generateDepthMap() {
   const size = new THREE.Vector3();
   bbox.getSize(size);
 
-  // Half-diagonal of the scaled model bounding box + margin
-  const modelRadius = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z) / 2 + 0.5;
+  // 3D bounding sphere radius of the (already-scaled) model
+  const modelRadius = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z) / 2;
 
   const { pos, up } = axisToCamera(state.depthAxis, bbox);
-  const dist = 10;
 
   // Build offscreen camera
-  let offCam;
+  let dist, offCam;
   if (state.projection === 'ortho') {
+    dist = modelRadius * 2 + 2; // just needs to be outside the model
     let hw, hh;
     switch (state.depthAxis) {
       case 'pz': case 'nz': hw = size.x / 2 + 0.3; hh = size.y / 2 + 0.3; break;
@@ -217,10 +217,17 @@ async function generateDepthMap() {
       case 'px': case 'nx': hw = size.z / 2 + 0.3; hh = size.y / 2 + 0.3; break;
       default:              hw = Math.max(size.x, size.z) / 2 + 0.3; hh = size.y / 2 + 0.3;
     }
-    offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.01, 40);
+    offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.1, dist * 2);
   } else {
-    const camNear = Math.max(0.01, dist - modelRadius);
-    const camFar  = dist + modelRadius;
+    // Position camera so the model fills ~85% of the frame.
+    // dist = modelRadius / tan(halfFOV) * padding
+    // With FOV=45, halfFOV=22.5°, tan(22.5°)≈0.4142
+    const halfFOV = 22.5 * Math.PI / 180;
+    dist = (modelRadius * 1.15) / Math.tan(halfFOV);
+    // Tight near/far keeps the model in the middle of the depth range (not near 1.0)
+    // so RGBA quantisation noise is orders of magnitude below the depth signal.
+    const camNear = Math.max(0.01, dist - modelRadius - 0.2);
+    const camFar  = dist + modelRadius + 0.2;
     offCam = new THREE.PerspectiveCamera(45, 1, camNear, camFar);
   }
 
