@@ -229,83 +229,59 @@ async function generateDepthMap() {
   offCam.lookAt(0, 0, 0);
   offCam.updateProjectionMatrix();
 
-  // Float render target: write linear view-space depth directly to R channel.
-  // Previous approach (RGBA uint8 packing) failed because:
-  //   - Clear color alpha=1 → A=255 in uint8 → contaminates background unpack
-  //     to ~6e-8 (non-zero), so background is wrongly treated as geometry.
-  //   - Float texture eliminates all packing/unpacking entirely. Background
-  //     pixels are exactly 0.0 from the clear; model pixels are > 0.
-  const camNear = offCam.near;
-  const camFar  = offCam.far;
-
-  const linearDepthMat = new THREE.ShaderMaterial({
-    side: THREE.FrontSide,
-    uniforms: {
-      uNear: { value: camNear },
-      uFar:  { value: camFar  },
-    },
-    vertexShader: `
-      varying float vLinearDepth;
-      void main() {
-        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-        vLinearDepth = -mvPos.z;
-        gl_Position = projectionMatrix * mvPos;
-      }
-    `,
-    fragmentShader: `
-      varying float vLinearDepth;
-      uniform float uNear;
-      uniform float uFar;
-      void main() {
-        float d = clamp((vLinearDepth - uNear) / (uFar - uNear), 0.0, 1.0);
-        gl_FragColor = vec4(d, 0.0, 0.0, 1.0);
-      }
-    `,
-  });
-
-  // 4× supersample for clean silhouette edges
-  const SS = 4;
+  // Proven approach: MeshDepthMaterial + RGBADepthPacking + UnsignedByteType.
+  // Float render targets are not universally supported (need EXT_color_buffer_float).
+  // Background cleared to WHITE → unpacks to ~1.0, safely above any model depth.
+  // 2× SS with model-only downsample: edge pixels average only the model subsamples,
+  // so background=0 never contaminates depth and creates blurry halos.
+  // No DoubleSide: front-face-only avoids back-face z-fighting speckle.
+  const SS = 2;
   const ssRes = res * SS;
 
   const rt = new THREE.WebGLRenderTarget(ssRes, ssRes, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
-    type: THREE.FloatType,   // float readback — no packing, no ambiguity
+    type: THREE.UnsignedByteType,
     format: THREE.RGBAFormat,
   });
 
   const origMat = state.mesh.material;
-  state.mesh.material = linearDepthMat;
+  const depthMat = new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking,
+  });
+  state.mesh.material = depthMat;
 
   renderer.setRenderTarget(rt);
-  renderer.setClearColor(0x000000, 1);
-  renderer.clear();
+  renderer.setClearColor(0xffffff, 1);   // background → depth ~1.0
   renderer.render(scene, offCam);
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x0F1209, 1);
 
-  // Float32Array readback — R channel = linear depth [0,1], background = 0.0
-  const pixels = new Float32Array(ssRes * ssRes * 4);
+  const pixels = new Uint8Array(ssRes * ssRes * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, ssRes, ssRes, pixels);
 
   state.mesh.material = origMat;
-  linearDepthMat.dispose();
+  depthMat.dispose();
   rt.dispose();
 
-  // Extract R channel directly
-  const BG = 1e-7; // epsilon: anything below this is background
+  // Unpack RGBADepthPacking → float [0,1]
+  const inv = 1.0 / 255.0;
   const ssDepth = new Float32Array(ssRes * ssRes);
   for (let i = 0; i < ssRes * ssRes; i++) {
-    ssDepth[i] = pixels[i * 4]; // R channel
+    const idx = i * 4;
+    const r = pixels[idx]     * inv;
+    const g = pixels[idx + 1] * inv;
+    const b = pixels[idx + 2] * inv;
+    const a = pixels[idx + 3] * inv;
+    ssDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
   }
 
-  // Depth range from model pixels only
+  // Find depth range from model pixels only (background ≥ 0.9999 excluded)
   let dMin = Infinity, dMax = -Infinity;
   for (let i = 0; i < ssDepth.length; i++) {
-    const v = ssDepth[i];
-    if (v > BG) {
-      if (v < dMin) dMin = v;
-      if (v > dMax) dMax = v;
+    if (ssDepth[i] < 0.9999) {
+      if (ssDepth[i] < dMin) dMin = ssDepth[i];
+      if (ssDepth[i] > dMax) dMax = ssDepth[i];
     }
   }
   if (!isFinite(dMin) || dMax <= dMin) { dMin = 0; dMax = 1; }
@@ -319,11 +295,11 @@ async function generateDepthMap() {
       const srcIdx = (ssRes - 1 - row) * ssRes + col; // flip Y
       const raw = ssDepth[srcIdx];
       const dst = row * ssRes + col;
-      if (raw <= BG) {
+      if (raw >= 0.9999) {
         isBg[dst]   = 1;
         ssNorm[dst] = 0;
       } else {
-        // Small raw = closer to camera. Invert → near = 1.0 (white).
+        // smaller raw = closer camera = near=white → invert
         let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
         if (state.polarity === 'far') v = 1.0 - v;
         ssNorm[dst] = v;
@@ -331,7 +307,7 @@ async function generateDepthMap() {
     }
   }
 
-  // Model-only downsample: never mix background into edge averages
+  // Model-only downsample: average only non-background subsamples per output pixel
   const normalised = new Float32Array(res * res);
   for (let y = 0; y < res; y++) {
     for (let x = 0; x < res; x++) {
