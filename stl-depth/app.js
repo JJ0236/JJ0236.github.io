@@ -200,8 +200,9 @@ async function generateDepthMap() {
 
   const size = new THREE.Vector3();
   bbox.getSize(size);
-  const halfW = Math.max(size.x, size.z) / 2 + 0.3;
-  const halfH = size.y / 2 + 0.3;
+
+  // Half-diagonal of the scaled model bounding box + margin
+  const modelRadius = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z) / 2 + 0.5;
 
   const { pos, up } = axisToCamera(state.depthAxis, bbox);
   const dist = 10;
@@ -209,17 +210,22 @@ async function generateDepthMap() {
   // Build offscreen camera
   let offCam;
   if (state.projection === 'ortho') {
-    // Determine half-extents based on the axis to get tight framing
     let hw, hh;
     switch (state.depthAxis) {
       case 'pz': case 'nz': hw = size.x / 2 + 0.3; hh = size.y / 2 + 0.3; break;
       case 'py': case 'ny': hw = size.x / 2 + 0.3; hh = size.z / 2 + 0.3; break;
       case 'px': case 'nx': hw = size.z / 2 + 0.3; hh = size.y / 2 + 0.3; break;
-      default:              hw = halfW; hh = halfH;
+      default:              hw = Math.max(size.x, size.z) / 2 + 0.3; hh = size.y / 2 + 0.3;
     }
     offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.01, 40);
   } else {
-    offCam = new THREE.PerspectiveCamera(45, 1, 0.01, 40);
+    // Clamp near/far tightly around the model.
+    // With near=0.01 / far=40 the model only occupies ~8% of the NDC depth range,
+    // wasting 92% of RGBA precision and causing visible banding.
+    // Tight clipping uses ~85% of the range → ~10× better precision.
+    const camNear = Math.max(0.01, dist - modelRadius);
+    const camFar  = dist + modelRadius;
+    offCam = new THREE.PerspectiveCamera(45, 1, camNear, camFar);
   }
 
   offCam.position.copy(pos).normalize().multiplyScalar(dist);
@@ -227,12 +233,13 @@ async function generateDepthMap() {
   offCam.lookAt(0, 0, 0);
   offCam.updateProjectionMatrix();
 
-  // Supersample: render at 2× resolution then box-filter downsample.
-  // This gives each output pixel 4 depth samples, smoothing hard geometry edges.
-  const SS = 2;
+  // 4× supersample: render at 4× resolution.
+  // Each output pixel maps to 16 sub-samples — silhouette edges get natural
+  // sub-pixel coverage. Model-only averaging (below) prevents background=0
+  // from contaminating depth values and creating blurry halos.
+  const SS = 4;
   const ssRes = res * SS;
 
-  // Offscreen render target at supersample resolution
   const rt = new THREE.WebGLRenderTarget(ssRes, ssRes, {
     minFilter: THREE.NearestFilter,
     magFilter: THREE.NearestFilter,
@@ -240,30 +247,28 @@ async function generateDepthMap() {
     format: THREE.RGBAFormat,
   });
 
-  // Swap to depth material
+  // DoubleSide prevents holes in open meshes or flipped-normal geometry
   const origMat = state.mesh.material;
   const depthMat = new THREE.MeshDepthMaterial({
     depthPacking: THREE.RGBADepthPacking,
+    side: THREE.DoubleSide,
   });
   state.mesh.material = depthMat;
 
-  // Render to supersample target
   renderer.setRenderTarget(rt);
   renderer.setClearColor(0xffffff, 1);
   renderer.render(scene, offCam);
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x0F1209, 1);
 
-  // Read pixels at ssRes × ssRes
   const pixels = new Uint8Array(ssRes * ssRes * 4);
   renderer.readRenderTargetPixels(rt, 0, 0, ssRes, ssRes, pixels);
 
-  // Restore
   state.mesh.material = origMat;
   depthMat.dispose();
   rt.dispose();
 
-  // Unpack RGBADepthPacking → float for all supersample pixels
+  // Unpack RGBADepthPacking → float
   const inv = 1.0 / 255.0;
   const ssDepth = new Float32Array(ssRes * ssRes);
   for (let i = 0; i < ssRes * ssRes; i++) {
@@ -275,7 +280,7 @@ async function generateDepthMap() {
     ssDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
   }
 
-  // Find depth range from model pixels only (exclude background ≈ 1.0)
+  // Depth range from model pixels only (background ≈ 1.0 excluded)
   let dMin = Infinity, dMax = -Infinity;
   for (let i = 0; i < ssDepth.length; i++) {
     if (ssDepth[i] < 0.9999) {
@@ -286,32 +291,40 @@ async function generateDepthMap() {
   if (!isFinite(dMin) || dMax === dMin) { dMin = 0; dMax = 1; }
   const dRange = dMax - dMin;
 
-  // Normalize all supersample pixels (Y-flipped).
-  // Background pixels (raw ≈ 1.0) fall outside [dMin,dMax] and naturally clamp to 0,
-  // so edge pixels average correctly between background (0) and model depth.
+  // Normalize supersample pixels (Y-flipped), tagging background separately
   const ssNorm = new Float32Array(ssRes * ssRes);
+  const isBg   = new Uint8Array(ssRes * ssRes);
   for (let row = 0; row < ssRes; row++) {
     for (let col = 0; col < ssRes; col++) {
       const srcIdx = (ssRes - 1 - row) * ssRes + col; // flip Y
       const raw = ssDepth[srcIdx];
-      let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
-      if (state.polarity === 'far') v = 1.0 - v;
-      ssNorm[row * ssRes + col] = v;
+      const dst = row * ssRes + col;
+      if (raw >= 0.9999) {
+        isBg[dst]   = 1;
+        ssNorm[dst] = 0;
+      } else {
+        let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
+        if (state.polarity === 'far') v = 1.0 - v;
+        ssNorm[dst] = v;
+      }
     }
   }
 
-  // Box-filter downsample SS×SS → 1×1 per output pixel
+  // Model-only downsample: average only non-background subsamples.
+  // This prevents background=0 from diluting edge pixels into blurry halos.
+  // A pixel with partial model coverage gets the average depth of the
+  // covered portion — hard, accurate silhouette with no halo artefacts.
   const normalised = new Float32Array(res * res);
-  const ssInv = 1.0 / (SS * SS);
   for (let y = 0; y < res; y++) {
     for (let x = 0; x < res; x++) {
-      let sum = 0;
+      let sum = 0, count = 0;
       for (let dy = 0; dy < SS; dy++) {
         for (let dx = 0; dx < SS; dx++) {
-          sum += ssNorm[(y * SS + dy) * ssRes + (x * SS + dx)];
+          const si = (y * SS + dy) * ssRes + (x * SS + dx);
+          if (!isBg[si]) { sum += ssNorm[si]; count++; }
         }
       }
-      normalised[y * res + x] = sum * ssInv;
+      normalised[y * res + x] = count > 0 ? sum / count : 0;
     }
   }
 
