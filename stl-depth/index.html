@@ -295,9 +295,9 @@
     <div class="panel">
       <div class="panel-title">3D Preview Angle</div>
       <div class="btn-grid cols-3">
-        <button class="grid-btn active" data-view="top">Top<span class="sub">+Y</span></button>
+        <button class="grid-btn" data-view="top">Top<span class="sub">+Y</span></button>
         <button class="grid-btn" data-view="bottom">Bot<span class="sub">-Y</span></button>
-        <button class="grid-btn" data-view="front">Front<span class="sub">+Z</span></button>
+        <button class="grid-btn active" data-view="front">Front<span class="sub">+Z</span></button>
         <button class="grid-btn" data-view="back">Back<span class="sub">-Z</span></button>
         <button class="grid-btn" data-view="left">Left<span class="sub">-X</span></button>
         <button class="grid-btn" data-view="right">Right<span class="sub">+X</span></button>
@@ -308,9 +308,9 @@
     <div class="panel">
       <div class="panel-title">Depth Map Axis</div>
       <div class="btn-grid cols-2">
-        <button class="grid-btn depth-axis-btn active" data-axis="+y">Top<span class="sub">+Y</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="+y">Top<span class="sub">+Y</span></button>
         <button class="grid-btn depth-axis-btn" data-axis="-y">Bot<span class="sub">-Y</span></button>
-        <button class="grid-btn depth-axis-btn" data-axis="+z">Front<span class="sub">+Z</span></button>
+        <button class="grid-btn depth-axis-btn active" data-axis="+z">Front<span class="sub">+Z</span></button>
         <button class="grid-btn depth-axis-btn" data-axis="-z">Back<span class="sub">-Z</span></button>
         <button class="grid-btn depth-axis-btn" data-axis="+x">Right<span class="sub">+X</span></button>
         <button class="grid-btn depth-axis-btn" data-axis="-x">Left<span class="sub">-X</span></button>
@@ -447,7 +447,7 @@ const depthMat = new THREE.ShaderMaterial({
 
 /* --- State ------------------------------------------- */
 let mesh = null;
-let currentDepthAxis = '+y';
+let currentDepthAxis = '+z';
 let fitDist = 3;
 let invertDepth = false;
 let exportRes = 1024;
@@ -541,7 +541,7 @@ function loadSTL(buffer) {
   viewCam.far  = fitDist * 20;
   viewCam.updateProjectionMatrix();
 
-  setViewPreset('top');
+  setViewPreset('front');
   fitDepthCamera(currentDepthAxis);
 
   document.getElementById('export-btn').disabled = false;
