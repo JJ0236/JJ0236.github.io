@@ -219,10 +219,6 @@ async function generateDepthMap() {
     }
     offCam = new THREE.OrthographicCamera(-hw, hw, hh, -hh, 0.01, 40);
   } else {
-    // Clamp near/far tightly around the model.
-    // With near=0.01 / far=40 the model only occupies ~8% of the NDC depth range,
-    // wasting 92% of RGBA precision and causing visible banding.
-    // Tight clipping uses ~85% of the range → ~10× better precision.
     const camNear = Math.max(0.01, dist - modelRadius);
     const camFar  = dist + modelRadius;
     offCam = new THREE.PerspectiveCamera(45, 1, camNear, camFar);
@@ -233,10 +229,46 @@ async function generateDepthMap() {
   offCam.lookAt(0, 0, 0);
   offCam.updateProjectionMatrix();
 
-  // 4× supersample: render at 4× resolution.
-  // Each output pixel maps to 16 sub-samples — silhouette edges get natural
-  // sub-pixel coverage. Model-only averaging (below) prevents background=0
-  // from contaminating depth values and creating blurry halos.
+  // Linear depth shader — writes view-space depth normalised to [0,1] into RGBA.
+  // This replaces MeshDepthMaterial which stores nonlinear NDC depth.
+  // Nonlinear depth causes two problems on flat/shallow objects:
+  //   1. Precision noise: the entire flat surface lands in a tiny slice of
+  //      the NDC range; RGBA unpacking errors dominate and produce speckle.
+  //   2. DoubleSide Z-fighting: back faces at ~same depth as front faces fight.
+  // Linear view-space depth: every fragment computes -mvPosition.z which is
+  // constant across a flat surface → zero noise, zero fighting.
+  const camNear = offCam.near;
+  const camFar  = offCam.far;
+
+  const linearDepthMat = new THREE.ShaderMaterial({
+    side: THREE.FrontSide,
+    uniforms: {
+      uNear: { value: camNear },
+      uFar:  { value: camFar  },
+    },
+    vertexShader: `
+      varying float vLinearDepth;
+      void main() {
+        vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+        vLinearDepth = -mvPos.z;
+        gl_Position = projectionMatrix * mvPos;
+      }
+    `,
+    fragmentShader: `
+      varying float vLinearDepth;
+      uniform float uNear;
+      uniform float uFar;
+      void main() {
+        float d = clamp((vLinearDepth - uNear) / (uFar - uNear), 0.0, 1.0);
+        // Pack normalised linear depth into RGBA for ~24-bit precision readback
+        vec4 enc = fract(d * vec4(1.0, 255.0, 65025.0, 16581375.0));
+        enc -= enc.yzww * vec4(1.0/255.0, 1.0/255.0, 1.0/255.0, 0.0);
+        gl_FragColor = enc;
+      }
+    `,
+  });
+
+  // 4× supersample for smooth silhouette edges
   const SS = 4;
   const ssRes = res * SS;
 
@@ -247,16 +279,12 @@ async function generateDepthMap() {
     format: THREE.RGBAFormat,
   });
 
-  // DoubleSide prevents holes in open meshes or flipped-normal geometry
   const origMat = state.mesh.material;
-  const depthMat = new THREE.MeshDepthMaterial({
-    depthPacking: THREE.RGBADepthPacking,
-    side: THREE.DoubleSide,
-  });
-  state.mesh.material = depthMat;
+  state.mesh.material = linearDepthMat;
 
   renderer.setRenderTarget(rt);
-  renderer.setClearColor(0xffffff, 1);
+  // Background clear = 0 → unpacked depth = 0 → easy to detect as bg
+  renderer.setClearColor(0x000000, 1);
   renderer.render(scene, offCam);
   renderer.setRenderTarget(null);
   renderer.setClearColor(0x0F1209, 1);
@@ -265,10 +293,11 @@ async function generateDepthMap() {
   renderer.readRenderTargetPixels(rt, 0, 0, ssRes, ssRes, pixels);
 
   state.mesh.material = origMat;
-  depthMat.dispose();
+  linearDepthMat.dispose();
   rt.dispose();
 
-  // Unpack RGBADepthPacking → float
+  // Unpack RGBA → linear depth float [0,1]
+  // Background pixels cleared to 0 unpack to exactly 0.0
   const inv = 1.0 / 255.0;
   const ssDepth = new Float32Array(ssRes * ssRes);
   for (let i = 0; i < ssRes * ssRes; i++) {
@@ -280,18 +309,20 @@ async function generateDepthMap() {
     ssDepth[i] = r + g / 255.0 + b / 65025.0 + a / 16581375.0;
   }
 
-  // Depth range from model pixels only (background ≈ 1.0 excluded)
+  // Background pixels are exactly 0.0; model pixels are > 0.
+  // Find depth range from model pixels only (background excluded).
   let dMin = Infinity, dMax = -Infinity;
   for (let i = 0; i < ssDepth.length; i++) {
-    if (ssDepth[i] < 0.9999) {
-      if (ssDepth[i] < dMin) dMin = ssDepth[i];
-      if (ssDepth[i] > dMax) dMax = ssDepth[i];
+    const v = ssDepth[i];
+    if (v > 0.0) {
+      if (v < dMin) dMin = v;
+      if (v > dMax) dMax = v;
     }
   }
   if (!isFinite(dMin) || dMax === dMin) { dMin = 0; dMax = 1; }
   const dRange = dMax - dMin;
 
-  // Normalize supersample pixels (Y-flipped), tagging background separately
+  // Normalize + flip Y, tagging background (depth === 0) separately
   const ssNorm = new Float32Array(ssRes * ssRes);
   const isBg   = new Uint8Array(ssRes * ssRes);
   for (let row = 0; row < ssRes; row++) {
@@ -299,10 +330,12 @@ async function generateDepthMap() {
       const srcIdx = (ssRes - 1 - row) * ssRes + col; // flip Y
       const raw = ssDepth[srcIdx];
       const dst = row * ssRes + col;
-      if (raw >= 0.9999) {
+      if (raw === 0.0) {
         isBg[dst]   = 1;
         ssNorm[dst] = 0;
       } else {
+        // Near surfaces → high raw depth (closer to far plane in view space)
+        // Invert so near = 1.0 (white) when polarity = near
         let v = Math.max(0, Math.min(1, 1.0 - (raw - dMin) / dRange));
         if (state.polarity === 'far') v = 1.0 - v;
         ssNorm[dst] = v;
@@ -310,10 +343,8 @@ async function generateDepthMap() {
     }
   }
 
-  // Model-only downsample: average only non-background subsamples.
-  // This prevents background=0 from diluting edge pixels into blurry halos.
-  // A pixel with partial model coverage gets the average depth of the
-  // covered portion — hard, accurate silhouette with no halo artefacts.
+  // Model-only downsample: average only non-background subsamples so
+  // background=0 never dilutes edge pixels into blurry halos.
   const normalised = new Float32Array(res * res);
   for (let y = 0; y < res; y++) {
     for (let x = 0; x < res; x++) {
