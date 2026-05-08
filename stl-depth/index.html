@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>STL to Depth Map</title>
+  <title>STL to Depth Map — joshhicks.info</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -11,26 +14,22 @@
       background: #141810;
       color: #D4CDB8;
       font-family: 'Space Grotesk', system-ui, sans-serif;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
       overflow: hidden;
-      padding-top: 48px;
     }
 
-    /* ── Top bar ─────────────────────────────── */
+    /* ── Tool header ─────────────────────────────────────── */
     .tool-header {
-      position: fixed;
-      top: 0; left: 0; right: 0;
       height: 48px;
       background: #3A4A2C;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 1.5rem;
-      z-index: 2000;
+      flex-shrink: 0;
       border-bottom: 1px solid rgba(255,255,255,0.06);
-      font-family: system-ui, sans-serif;
     }
     .tool-header-back {
       display: flex;
@@ -44,350 +43,702 @@
     }
     .tool-header-back:hover { color: #D9D0C1; }
     .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
-    .tool-header-site {
-      font-size: 0.68rem;
-      color: #6B6055;
-      letter-spacing: 0.06em;
-    }
+    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
 
-    /* ── Main layout ─────────────────────────── */
-    #main {
-      display: flex;
-      flex: 1;
-      min-height: 0;
-    }
+    /* ── Body layout ─────────────────────────────────────── */
+    .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
-    /* ── 3-D viewport ────────────────────────── */
-    #viewport {
-      flex: 1;
-      position: relative;
-      min-width: 0;
-      background: #0F1209;
-    }
-    #viewport canvas {
-      display: block;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    #drop-overlay {
-      position: absolute;
-      inset: 0;
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .sidebar {
+      width: 248px;
+      background: #191E12;
+      border-right: 1px solid #252E1A;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #4A5545;
-      pointer-events: none;
-      transition: opacity 0.2s;
-    }
-    #drop-overlay.hidden { opacity: 0; }
-    #drop-overlay svg { width: 56px; height: 56px; margin-bottom: 14px; }
-    #drop-overlay p { font-size: 1rem; }
-    #drop-overlay small {
-      font-size: 0.78rem;
-      color: #353D2F;
-      margin-top: 6px;
-    }
-
-    #viewport.drag-over { outline: 2px dashed #5C7A4E; outline-offset: -4px; }
-
-    /* ── Side panel ──────────────────────────── */
-    #panel {
-      width: 290px;
-      background: #1E2218;
-      border-left: 1px solid #2E3A26;
       overflow-y: auto;
-      padding: 16px 14px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
       flex-shrink: 0;
     }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #2A3320; border-radius: 4px; }
 
-    .panel-section {
-      border-bottom: 1px solid #2E3A26;
-      padding-bottom: 14px;
-      margin-bottom: 14px;
-    }
-    .panel-section:last-child {
-      border-bottom: none;
-      margin-bottom: 0;
-    }
-
-    .section-title {
-      font-size: 0.68rem;
-      letter-spacing: 0.14em;
+    .panel { border-bottom: 1px solid #232B18; padding: 14px 16px; }
+    .panel-title {
+      font-size: 0.65rem;
+      font-weight: 700;
       text-transform: uppercase;
-      color: #8FAF6E;
+      letter-spacing: 0.1em;
+      color: #4E5A40;
       margin-bottom: 10px;
       font-family: 'IBM Plex Mono', monospace;
     }
 
-    /* ── Depth map preview ───────────────────── */
-    #depth-preview-wrap {
-      width: 100%;
-      aspect-ratio: 1;
-      background: #0F1209;
-      border: 1px solid #2E3A26;
-      border-radius: 6px;
-      overflow: hidden;
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #depth-canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      image-rendering: pixelated;
-    }
-    #depth-placeholder {
-      font-size: 0.75rem;
-      color: #3A4030;
+    /* Dropzone */
+    #dropzone {
+      border: 2px dashed #2E3824;
+      border-radius: 8px;
+      padding: 18px 12px;
       text-align: center;
-      padding: 1rem;
-      pointer-events: none;
-    }
-    #depth-spinner {
-      position: absolute;
-      inset: 0;
-      background: rgba(15,18,9,0.7);
-      display: none;
-      align-items: center;
-      justify-content: center;
-    }
-    #depth-spinner.active { display: flex; }
-    .spinner-ring {
-      width: 28px; height: 28px;
-      border: 3px solid #2E3A26;
-      border-top-color: #5C7A4E;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Axis buttons ────────────────────────── */
-    .axis-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 5px;
-    }
-    .axis-btn {
-      background: #252B1E;
-      border: 1px solid #3A4A2E;
-      color: #9A9580;
-      border-radius: 5px;
-      padding: 6px 4px;
-      font-size: 0.75rem;
-      font-family: 'IBM Plex Mono', monospace;
       cursor: pointer;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-      text-align: center;
+      transition: border-color 0.2s, background 0.2s;
     }
-    .axis-btn:hover { background: #2E3A26; color: #D4CDB8; border-color: #5C7A4E; }
-    .axis-btn.active { background: #3A4A2C; color: #8FAF6E; border-color: #5C7A4E; }
+    #dropzone:hover, #dropzone.drag-over { border-color: #4A5E34; background: #1E2415; }
+    #dropzone svg { opacity: 0.3; margin-bottom: 6px; }
+    #dropzone p { font-size: 0.76rem; color: #4E5A40; line-height: 1.5; }
+    #dropzone strong { color: #8A8070; }
+    #file-input { display: none; }
+    #file-name { margin-top: 8px; font-size: 0.71rem; color: #8FAF6E; text-align: center; word-break: break-all; display: none; font-family: 'IBM Plex Mono', monospace; }
 
-    /* ── Toggle row ──────────────────────────── */
+    /* Slider labels */
+    label.ctrl-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.76rem;
+      color: #8A8070;
+      margin-bottom: 5px;
+    }
+    label.ctrl-label span { color: #C8BEA8; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; }
+    input[type=range] {
+      width: 100%;
+      margin-bottom: 12px;
+      accent-color: #8FAF6E;
+      cursor: pointer;
+    }
+
+    /* Button grid */
+    .btn-grid { display: grid; gap: 5px; margin-bottom: 8px; }
+    .btn-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .btn-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+
+    .grid-btn {
+      background: #1F2416;
+      border: 1px solid #2A3320;
+      color: #8A8070;
+      font-size: 0.69rem;
+      padding: 7px 4px 5px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+      text-align: center;
+      line-height: 1.3;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+    .grid-btn .sub { display: block; font-size: 0.58rem; color: #4E5A40; margin-top: 1px; font-family: 'IBM Plex Mono', monospace; }
+    .grid-btn:hover { background: #252D18; border-color: #384A25; color: #B8AD9A; }
+    .grid-btn:hover .sub { color: #6A7A58; }
+    .grid-btn.active { background: #233018; border-color: #5C7A4E; color: #8FAF6E; }
+    .grid-btn.active .sub { color: #5C7A4E; }
+
+    /* Toggle */
     .toggle-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.82rem;
-      margin-bottom: 8px;
-      color: #9A9580;
+      font-size: 0.76rem;
+      color: #8A8070;
+      margin-bottom: 12px;
+    }
+    .toggle { position: relative; width: 34px; height: 18px; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: #252E1A; border-radius: 18px; cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 12px; height: 12px; left: 3px; top: 3px;
+      background: #4E5A40; border-radius: 50%;
+      transition: transform 0.2s, background 0.2s;
+    }
+    .toggle input:checked + .toggle-slider { background: #2D4A1F; }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); background: #8FAF6E; }
+
+    /* Seg control */
+    .seg-control {
+      display: flex;
+      background: #181E12;
+      border: 1px solid #252E1A;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .seg-control button {
+      flex: 1; background: none; border: none;
+      color: #4E5A40; font-size: 0.69rem; padding: 6px 2px;
+      cursor: pointer; transition: background 0.12s, color 0.12s;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .seg-control button.active { background: #233018; color: #8FAF6E; }
+
+    /* Export button */
+    #export-btn {
+      width: 100%; padding: 9px;
+      background: #233018; border: 1px solid #3A5A2C;
+      color: #8FAF6E; font-size: 0.8rem; font-weight: 600;
+      border-radius: 7px; cursor: pointer;
+      transition: background 0.15s; letter-spacing: 0.03em;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+    }
+    #export-btn:hover { background: #2A3D1E; }
+    #export-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* ── Viewport ─────────────────────────────────────────── */
+    .viewport-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      min-width: 0;
     }
 
-    .toggle-group {
+    .panel-labels {
       display: flex;
-      border: 1px solid #3A4A2E;
-      border-radius: 5px;
+      background: #141810;
+      border-bottom: 1px solid #252E1A;
+      flex-shrink: 0;
+    }
+    .panel-label {
+      flex: 1;
+      padding: 7px 0;
+      text-align: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .panel-label.left  { color: #8FAF6E; border-right: 1px solid #252E1A; }
+    .panel-label.right { color: #4E5A40; }
+
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
       overflow: hidden;
     }
-    .toggle-opt {
-      padding: 4px 10px;
-      font-size: 0.75rem;
+    #canvas-wrap canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+    }
+
+    .divider {
+      position: absolute;
+      top: 0; bottom: 0; left: 50%;
+      width: 1px;
+      background: #252E1A;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 14px; left: 25%;
+      transform: translateX(-50%);
+      background: rgba(20,24,16,0.75);
+      backdrop-filter: blur(6px);
+      border: 1px solid #252E1A;
+      border-radius: 20px;
+      padding: 5px 13px;
+      font-size: 0.68rem;
+      color: #4E5A40;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 3;
       font-family: 'IBM Plex Mono', monospace;
-      background: transparent;
-      border: none;
-      color: #6B6055;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .toggle-opt + .toggle-opt { border-left: 1px solid #3A4A2E; }
-    .toggle-opt.active { background: #3A4A2C; color: #8FAF6E; }
-
-    /* ── Resolution select ───────────────────── */
-    select {
-      background: #252B1E;
-      border: 1px solid #3A4A2E;
-      color: #D4CDB8;
-      padding: 5px 8px;
-      border-radius: 5px;
-      font-size: 0.8rem;
-    }
-    select:focus { outline: 1px solid #5C7A4E; }
-
-    /* ── Buttons ─────────────────────────────── */
-    .full-btn {
-      width: 100%;
-      padding: 8px;
-      border-radius: 5px;
-      border: 1px solid #5C7A4E;
-      background: #2E3A26;
-      color: #D4CDB8;
-      cursor: pointer;
-      font-size: 0.84rem;
-      transition: background 0.15s;
-    }
-    .full-btn:hover { background: #5C7A4E; color: #F8F4EE; }
-    .full-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .full-btn.accent { background: #5C7A4E; color: #F8F4EE; }
-    .full-btn.accent:hover { background: #3A4A2C; }
-
-    /* ── Info strip ──────────────────────────── */
-    #info-strip {
-      font-size: 0.72rem;
-      color: #5A5A48;
-      font-family: 'IBM Plex Mono', monospace;
-      line-height: 1.7;
     }
 
-    /* ── Status ──────────────────────────────── */
-    #status {
-      font-size: 0.72rem;
-      font-family: 'IBM Plex Mono', monospace;
-      color: #5C7A4E;
-      min-height: 16px;
+    #empty-state {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px;
+      pointer-events: none; z-index: 1;
     }
-
-    @media (max-width: 680px) {
-      #main { flex-direction: column; }
-      #panel { width: 100%; border-left: none; border-top: 1px solid #2E3A26; max-height: 55vh; }
-      #viewport { flex: 0 0 45vh; }
-    }
+    #empty-state svg { color: #252E1A; }
+    #empty-state p { font-size: 0.83rem; color: #3A4A2C; }
   </style>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-    }
-  }
-  </script>
 </head>
 <body>
 
 <header class="tool-header">
-  <a href="/projects/" class="tool-header-back">
-    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <polyline points="9,1 4,7 9,13"/>
+  <a class="tool-header-back" href="/projects/">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"/>
     </svg>
-    Projects
+    projects
   </a>
   <span class="tool-header-site">joshhicks.info</span>
 </header>
 
-<div id="main">
+<div class="body-wrap">
 
-  <!-- 3D Viewport -->
-  <div id="viewport">
-    <div id="drop-overlay">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/>
-        <line x1="12" y1="3" x2="12" y2="15"/>
-      </svg>
-      <p>Drop an STL file here</p>
-      <small>or use the Load button →</small>
-    </div>
-  </div>
+  <aside class="sidebar">
 
-  <!-- Side panel -->
-  <div id="panel">
-
-    <!-- Load -->
-    <div class="panel-section">
-      <div class="section-title">File</div>
-      <label class="full-btn" style="display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;" for="stl-input">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Load STL
-      </label>
-      <input type="file" id="stl-input" accept=".stl" style="display:none" />
-      <div id="status" style="margin-top:6px;"></div>
+    <div class="panel">
+      <div class="panel-title">Load Model</div>
+      <div id="dropzone">
+        <input type="file" id="file-input" accept=".stl" />
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p><strong>Click or drag</strong><br/>an STL file here</p>
+      </div>
+      <div id="file-name"></div>
     </div>
 
-    <!-- Depth map preview -->
-    <div class="panel-section">
-      <div class="section-title">Depth Map Preview</div>
-      <div id="depth-preview-wrap">
-        <canvas id="depth-canvas" width="512" height="512"></canvas>
-        <div id="depth-placeholder">Load an STL to generate a depth map</div>
-        <div id="depth-spinner"><div class="spinner-ring"></div></div>
+    <div class="panel">
+      <div class="panel-title">3D Preview Angle</div>
+      <div class="btn-grid cols-3">
+        <button class="grid-btn active" data-view="top">Top<span class="sub">+Y</span></button>
+        <button class="grid-btn" data-view="bottom">Bot<span class="sub">-Y</span></button>
+        <button class="grid-btn" data-view="front">Front<span class="sub">+Z</span></button>
+        <button class="grid-btn" data-view="back">Back<span class="sub">-Z</span></button>
+        <button class="grid-btn" data-view="left">Left<span class="sub">-X</span></button>
+        <button class="grid-btn" data-view="right">Right<span class="sub">+X</span></button>
+        <button class="grid-btn" data-view="iso" style="grid-column:span 3">Isometric</button>
       </div>
     </div>
 
-    <!-- Depth axis -->
-    <div class="panel-section">
-      <div class="section-title">Depth Axis</div>
-      <div class="axis-grid">
-        <button class="axis-btn" data-axis="pz">Front<br><span style="font-size:0.65rem;opacity:0.6">+Z</span></button>
-        <button class="axis-btn" data-axis="py">Top<br><span style="font-size:0.65rem;opacity:0.6">+Y</span></button>
-        <button class="axis-btn" data-axis="px">Right<br><span style="font-size:0.65rem;opacity:0.6">+X</span></button>
-        <button class="axis-btn" data-axis="nz">Back<br><span style="font-size:0.65rem;opacity:0.6">-Z</span></button>
-        <button class="axis-btn" data-axis="ny">Bottom<br><span style="font-size:0.65rem;opacity:0.6">-Y</span></button>
-        <button class="axis-btn" data-axis="nx">Left<br><span style="font-size:0.65rem;opacity:0.6">-X</span></button>
+    <div class="panel">
+      <div class="panel-title">Depth Map Axis</div>
+      <div class="btn-grid cols-2">
+        <button class="grid-btn depth-axis-btn active" data-axis="+y">Top<span class="sub">+Y</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="-y">Bot<span class="sub">-Y</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="+z">Front<span class="sub">+Z</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="-z">Back<span class="sub">-Z</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="+x">Right<span class="sub">+X</span></button>
+        <button class="grid-btn depth-axis-btn" data-axis="-x">Left<span class="sub">-X</span></button>
       </div>
     </div>
 
-    <!-- Settings -->
-    <div class="panel-section">
-      <div class="section-title">Settings</div>
+    <div class="panel">
+      <div class="panel-title">Depth Range</div>
 
       <div class="toggle-row">
-        <span>Projection</span>
-        <div class="toggle-group">
-          <button class="toggle-opt active" data-proj="ortho">Ortho</button>
-          <button class="toggle-opt" data-proj="persp">Persp</button>
-        </div>
+        Invert (white = far)
+        <label class="toggle">
+          <input type="checkbox" id="invert-toggle" />
+          <span class="toggle-slider"></span>
+        </label>
       </div>
 
-      <div class="toggle-row">
-        <span>Polarity</span>
-        <div class="toggle-group">
-          <button class="toggle-opt active" data-pol="near">Near=White</button>
-          <button class="toggle-opt" data-pol="far">Far=White</button>
-        </div>
-      </div>
+      <label class="ctrl-label">Near clip <span id="near-val">--</span></label>
+      <input type="range" id="near-range" min="0.001" max="100" step="0.001" value="1" />
 
-      <div class="toggle-row" style="margin-bottom:0">
-        <span>Resolution</span>
-        <select id="sel-res">
-          <option value="512">512 px</option>
-          <option value="1024" selected>1024 px</option>
-          <option value="2048">2048 px</option>
-        </select>
+      <label class="ctrl-label">Far clip <span id="far-val">--</span></label>
+      <input type="range" id="far-range" min="0.01" max="500" step="0.01" value="10" />
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Export Resolution</div>
+      <div class="seg-control">
+        <button data-res="1024" class="active">1K</button>
+        <button data-res="2048">2K</button>
+        <button data-res="4096">4K</button>
+        <button data-res="8192">8K</button>
+      </div>
+      <button id="export-btn" disabled>Export Depth Map PNG</button>
+    </div>
+
+  </aside>
+
+  <div class="viewport-wrap">
+    <div class="panel-labels">
+      <div class="panel-label left">3D Preview</div>
+      <div class="panel-label right">Depth Map</div>
+    </div>
+
+    <div id="canvas-wrap">
+      <div class="divider"></div>
+      <div id="empty-state">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="0.8">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        </svg>
+        <p>Load an STL file to get started</p>
       </div>
     </div>
 
-    <!-- Export -->
-    <div class="panel-section">
-      <div class="section-title">Export</div>
-      <button class="full-btn accent" id="btn-download" disabled>Download 16-bit PNG</button>
-    </div>
-
-    <!-- Info -->
-    <div class="panel-section" style="border-bottom:none;margin-bottom:0;padding-bottom:0">
-      <div id="info-strip">No model loaded</div>
-    </div>
-
+    <div class="hint">Drag to orbit &middot; Scroll to zoom &middot; Right-drag to pan</div>
   </div>
+
 </div>
 
-<script type="module" src="/stl-depth/app.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const wrap = document.getElementById('canvas-wrap');
+
+/* --- Renderer ---------------------------------------- */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.autoClear = false;
+wrap.appendChild(renderer.domElement);
+
+/* --- Scene ------------------------------------------- */
+const scene = new THREE.Scene();
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+sun.position.set(5, 8, 5);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x8FAF6E, 0.3);
+fill.position.set(-5, -3, -5);
+scene.add(fill);
+
+/* --- Cameras ----------------------------------------- */
+const viewCam  = new THREE.PerspectiveCamera(45, 1, 0.01, 1000);
+const depthCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+
+const controls = new OrbitControls(viewCam, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+/* --- Materials --------------------------------------- */
+const shadedMat = new THREE.MeshPhongMaterial({
+  color: 0x8FAF6E,
+  specular: 0x2A3320,
+  shininess: 28,
+  side: THREE.DoubleSide,
+});
+
+const depthMat = new THREE.ShaderMaterial({
+  uniforms: {
+    nearClip: { value: 0.01 },
+    farClip:  { value: 100.0 },
+    invert:   { value: 0.0 },
+  },
+  vertexShader: `
+    varying float vDepth;
+    uniform float nearClip;
+    uniform float farClip;
+    void main() {
+      vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+      float d = (-mvPos.z - nearClip) / (farClip - nearClip);
+      vDepth = clamp(d, 0.0, 1.0);
+      gl_Position = projectionMatrix * mvPos;
+    }
+  `,
+  fragmentShader: `
+    varying float vDepth;
+    uniform float invert;
+    void main() {
+      float d = mix(vDepth, 1.0 - vDepth, invert);
+      gl_FragColor = vec4(d, d, d, 1.0);
+    }
+  `,
+  side: THREE.DoubleSide,
+});
+
+/* --- State ------------------------------------------- */
+let mesh = null;
+let currentDepthAxis = '+y';
+let fitDist = 3;
+let invertDepth = false;
+let exportRes = 1024;
+
+/* --- Resize ------------------------------------------ */
+function onResize() {
+  const W = wrap.clientWidth;
+  const H = wrap.clientHeight;
+  renderer.setSize(W, H);
+  viewCam.aspect = (W / 2) / H;
+  viewCam.updateProjectionMatrix();
+  updateDepthCamFrustum();
+}
+new ResizeObserver(onResize).observe(wrap);
+onResize();
+
+/* --- Fit depth camera to axis ----------------------- */
+function fitDepthCamera(axis) {
+  if (!mesh) return;
+  currentDepthAxis = axis;
+
+  const box    = new THREE.Box3().setFromObject(mesh);
+  const size   = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const camDist = maxDim * 2.5;
+
+  const cfgs = {
+    '+y': { pos: [center.x, center.y + camDist, center.z], up: [0,0,-1], depthAxis:'y' },
+    '-y': { pos: [center.x, center.y - camDist, center.z], up: [0,0, 1], depthAxis:'y' },
+    '+z': { pos: [center.x, center.y, center.z + camDist], up: [0,1, 0], depthAxis:'z' },
+    '-z': { pos: [center.x, center.y, center.z - camDist], up: [0,1, 0], depthAxis:'z' },
+    '+x': { pos: [center.x + camDist, center.y, center.z], up: [0,1, 0], depthAxis:'x' },
+    '-x': { pos: [center.x - camDist, center.y, center.z], up: [0,1, 0], depthAxis:'x' },
+  };
+
+  const cfg = cfgs[axis];
+  depthCam.position.set(...cfg.pos);
+  depthCam.up.set(...cfg.up);
+  depthCam.lookAt(center);
+
+  const halfDepth = size[cfg.depthAxis] / 2;
+  const margin    = Math.max(maxDim * 0.05, 0.01);
+  depthCam.near   = Math.max(0.001, camDist - halfDepth - margin);
+  depthCam.far    = camDist + halfDepth + margin;
+
+  updateDepthCamFrustum();
+
+  const nr = document.getElementById('near-range');
+  const fr = document.getElementById('far-range');
+  nr.max   = (depthCam.far * 0.999).toFixed(3);
+  fr.max   = (depthCam.far * 3).toFixed(2);
+  nr.value = depthCam.near;
+  fr.value = depthCam.far;
+  document.getElementById('near-val').textContent = depthCam.near.toFixed(3);
+  document.getElementById('far-val').textContent  = depthCam.far.toFixed(2);
+}
+
+function updateDepthCamFrustum() {
+  if (!mesh) return;
+  const box    = new THREE.Box3().setFromObject(mesh);
+  const size   = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const half   = maxDim * 0.6;
+  const W = wrap.clientWidth;
+  const H = wrap.clientHeight;
+  const aspect = (W / 2) / H;
+  depthCam.left   = -half * aspect;
+  depthCam.right  =  half * aspect;
+  depthCam.top    =  half;
+  depthCam.bottom = -half;
+  depthCam.updateProjectionMatrix();
+}
+
+/* --- Load STL --------------------------------------- */
+const loader = new STLLoader();
+
+function loadSTL(buffer) {
+  const geo = loader.parse(buffer);
+  geo.computeVertexNormals();
+  geo.center();
+
+  if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+  mesh = new THREE.Mesh(geo, shadedMat);
+  scene.add(mesh);
+
+  const box  = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3());
+  fitDist = Math.max(size.x, size.y, size.z) / (2 * Math.tan(THREE.MathUtils.degToRad(viewCam.fov / 2)));
+  viewCam.near = fitDist * 0.005;
+  viewCam.far  = fitDist * 20;
+  viewCam.updateProjectionMatrix();
+
+  setViewPreset('top');
+  fitDepthCamera(currentDepthAxis);
+
+  document.getElementById('export-btn').disabled = false;
+  document.getElementById('empty-state').style.display = 'none';
+}
+
+/* --- View preset ------------------------------------ */
+function setViewPreset(name) {
+  const d = fitDist * 2.2;
+  const p = {
+    top:    [0,  d,  0],
+    bottom: [0, -d,  0],
+    front:  [0,  0,  d],
+    back:   [0,  0, -d],
+    left:  [-d,  0,  0],
+    right:  [d,  0,  0],
+    iso:    [d*0.7, d*0.7, d*0.7],
+  }[name] || [0, d, 0];
+
+  viewCam.position.set(...p);
+  viewCam.lookAt(0, 0, 0);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  document.querySelectorAll('[data-view]').forEach(b =>
+    b.classList.toggle('active', b.dataset.view === name)
+  );
+}
+
+document.querySelectorAll('[data-view]').forEach(btn =>
+  btn.addEventListener('click', () => setViewPreset(btn.dataset.view))
+);
+
+/* --- Depth axis ------------------------------------- */
+document.querySelectorAll('.depth-axis-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.depth-axis-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    fitDepthCamera(btn.dataset.axis);
+  });
+});
+
+/* --- Near / Far sliders ----------------------------- */
+document.getElementById('near-range').addEventListener('input', e => {
+  depthCam.near = parseFloat(e.target.value);
+  depthCam.updateProjectionMatrix();
+  document.getElementById('near-val').textContent = depthCam.near.toFixed(3);
+});
+
+document.getElementById('far-range').addEventListener('input', e => {
+  depthCam.far = parseFloat(e.target.value);
+  depthCam.updateProjectionMatrix();
+  document.getElementById('far-val').textContent = depthCam.far.toFixed(2);
+});
+
+/* --- Invert toggle ---------------------------------- */
+document.getElementById('invert-toggle').addEventListener('change', e => {
+  invertDepth = e.target.checked;
+});
+
+/* --- Export resolution ------------------------------ */
+document.querySelectorAll('.seg-control button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.seg-control button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    exportRes = parseInt(btn.dataset.res);
+  });
+});
+
+/* --- Render loop ------------------------------------ */
+function render() {
+  requestAnimationFrame(render);
+  controls.update();
+
+  const W    = wrap.clientWidth;
+  const H    = wrap.clientHeight;
+  const half = Math.floor(W / 2);
+
+  renderer.clear();
+  renderer.setScissorTest(true);
+
+  // Left - shaded 3D
+  renderer.setScissor(0, 0, half, H);
+  renderer.setViewport(0, 0, half, H);
+  renderer.setClearColor(0x0F1209, 1);
+  renderer.clear();
+  if (mesh) mesh.material = shadedMat;
+  renderer.render(scene, viewCam);
+
+  // Right - live depth map
+  renderer.setScissor(half, 0, W - half, H);
+  renderer.setViewport(half, 0, W - half, H);
+  renderer.setClearColor(0x000000, 1);
+  renderer.clear();
+  if (mesh) {
+    depthMat.uniforms.nearClip.value = depthCam.near;
+    depthMat.uniforms.farClip.value  = depthCam.far;
+    depthMat.uniforms.invert.value   = invertDepth ? 1.0 : 0.0;
+    mesh.material = depthMat;
+    renderer.render(scene, depthCam);
+    mesh.material = shadedMat;
+  }
+
+  renderer.setScissorTest(false);
+}
+render();
+
+/* --- Export ----------------------------------------- */
+document.getElementById('export-btn').addEventListener('click', () => {
+  if (!mesh) return;
+
+  const res = exportRes;
+  const off = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
+  off.setSize(res, res);
+  off.setClearColor(0x000000);
+
+  const rt = new THREE.WebGLRenderTarget(res, res, {
+    format: THREE.RGBAFormat,
+    type: THREE.UnsignedByteType,
+  });
+
+  const exportCam = depthCam.clone();
+  const box    = new THREE.Box3().setFromObject(mesh);
+  const size   = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const h      = maxDim * 0.6;
+  exportCam.left   = -h;
+  exportCam.right  =  h;
+  exportCam.top    =  h;
+  exportCam.bottom = -h;
+  exportCam.updateProjectionMatrix();
+
+  const exportMat = depthMat.clone();
+  exportMat.uniforms.nearClip.value = depthCam.near;
+  exportMat.uniforms.farClip.value  = depthCam.far;
+  exportMat.uniforms.invert.value   = invertDepth ? 1.0 : 0.0;
+
+  mesh.material = exportMat;
+  off.setRenderTarget(rt);
+  off.render(scene, exportCam);
+
+  const pixels = new Uint8Array(res * res * 4);
+  off.readRenderTargetPixels(rt, 0, 0, res, res, pixels);
+
+  mesh.material = shadedMat;
+  rt.dispose();
+  exportMat.dispose();
+  off.dispose();
+
+  // Flip Y
+  const canvas = document.createElement('canvas');
+  canvas.width = res; canvas.height = res;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(res, res);
+  for (let y = 0; y < res; y++) {
+    for (let x = 0; x < res; x++) {
+      const s = ((res - 1 - y) * res + x) * 4;
+      const d = (y * res + x) * 4;
+      img.data[d] = img.data[d+1] = img.data[d+2] = pixels[s];
+      img.data[d+3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'depth_' + currentDepthAxis.replace('+','pos').replace('-','neg') + '_' + res + '.png';
+    a.click();
+  }, 'image/png');
+});
+
+/* --- File loading ----------------------------------- */
+const dropzone   = document.getElementById('dropzone');
+const fileInput  = document.getElementById('file-input');
+const fileNameEl = document.getElementById('file-name');
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if (e.target.files[0]) read(e.target.files[0]); });
+dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.name.toLowerCase().endsWith('.stl')) read(f);
+});
+
+function read(file) {
+  const r = new FileReader();
+  r.onload = e => {
+    loadSTL(e.target.result);
+    fileNameEl.textContent = file.name;
+    fileNameEl.style.display = 'block';
+  };
+  r.readAsArrayBuffer(file);
+}
+</script>
 </body>
 </html>
