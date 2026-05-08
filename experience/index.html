@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Experience — Josh Hicks</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .timeline {
+      max-width: 720px;
+      position: relative;
+      padding-left: 32px;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 7px;
+      top: 8px;
+      bottom: 0;
+      width: 2px;
+      background: var(--slate-subtle);
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: var(--space-8);
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -29px;
+      top: 8px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--moss-mid);
+      border: 2px solid var(--parchment);
+      box-shadow: 0 0 0 2px var(--moss-mid);
+    }
+    .timeline-item:nth-child(2)::before { background: var(--soil-mid); box-shadow: 0 0 0 2px var(--soil-mid); }
+    .timeline-item:nth-child(3)::before { background: var(--slate-mid); box-shadow: 0 0 0 2px var(--slate-mid); }
+    .timeline-date {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--slate-mid);
+      margin-bottom: var(--space-2);
+      letter-spacing: 0.04em;
+    }
+    .timeline-card {
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-left: 4px solid var(--moss-mid);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: var(--space-6);
+      box-shadow: var(--shadow-xs);
+      transition: box-shadow var(--transition), transform var(--transition);
+    }
+    .timeline-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateX(4px);
+    }
+    .timeline-item:nth-child(2) .timeline-card { border-left-color: var(--soil-mid); }
+    .timeline-item:nth-child(3) .timeline-card { border-left-color: var(--slate-mid); }
+    .timeline-org {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--soil-dark);
+      margin-bottom: var(--space-1);
+    }
+    .timeline-role {
+      font-size: var(--text-sm);
+      color: var(--moss-mid);
+      font-weight: 500;
+      margin-bottom: var(--space-4);
+    }
+    .timeline-card ul {
+      list-style: disc;
+      padding-left: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+    .timeline-card li {
+      font-size: var(--text-sm);
+      color: var(--slate-dark);
+      line-height: 1.6;
+    }
+    .timeline-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      background: var(--moss-mid);
+      color: #fff;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-left: var(--space-2);
+      vertical-align: middle;
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Experience</div>
+        <div class="page-subtitle">// professional history &amp; roles</div>
+      </div>
+
+      <div class="timeline">
+
+        <div class="timeline-item fade-up">
+          <div class="timeline-date">September 2024 — Present</div>
+          <div class="timeline-card">
+            <div class="timeline-org">JB Hunt Center For Innovation <span class="timeline-badge">current</span></div>
+            <div class="timeline-role">Generalist and Maker · Fayetteville, Arkansas</div>
+            <ul>
+              <li>Assisted patrons in utilizing advanced technological resources, including audio/video studios, simulation labs, fabrication lab, and large-format printing studios.</li>
+              <li>Assisted with scheduling, maintenance, and troubleshooting of various high-tech equipment to ensure optimal functionality and accessibility.</li>
+              <li>Collaborated with library staff to design and implement educational workshops and programs that leverage the center's resources.</li>
+              <li>Developed user guides and online resources to assist patrons in independently navigating the center's offerings.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item fade-up">
+          <div class="timeline-date">December 2023 — April 2024</div>
+          <div class="timeline-card">
+            <div class="timeline-org">Best Buy</div>
+            <div class="timeline-role">Geek Squad Agent · Fayetteville, Arkansas</div>
+            <ul>
+              <li>Diagnosed and repaired issues with computers and consumer electronics, ensuring optimal device performance.</li>
+              <li>Assisted customers with technology-related inquiries, offering knowledgeable solutions and maintaining a positive check-in and check-out experience.</li>
+              <li>Performed delivery, installation, integration, networking, and repair of consumer electronics devices, with a primary focus on computing.</li>
+              <li>Worked closely with fellow agents to provide comprehensive support, sharing insights and strategies to enhance service quality.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="timeline-item fade-up">
+          <div class="timeline-date">August 2022 — May 2023</div>
+          <div class="timeline-card">
+            <div class="timeline-org">Academics Plus Charter Schools</div>
+            <div class="timeline-role">IT Intern · Scott, Arkansas</div>
+            <ul>
+              <li>Repaired and maintained Chromebooks to ensure seamless functionality for students and staff.</li>
+              <li>Assisted teachers with technology issues, providing troubleshooting and training on various devices.</li>
+              <li>Managed IT tickets and server maintenance, resolving technical problems efficiently.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>

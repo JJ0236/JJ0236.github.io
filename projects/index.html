@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Projects — Josh Hicks</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .projects-wrapper {
+      max-width: var(--content-max);
+    }
+    /* Featured project banner */
+    .featured-banner {
+      background: var(--moss-dark);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      margin-bottom: var(--space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      box-shadow: var(--shadow-md);
+    }
+    .featured-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-light);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .featured-title {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--sidebar-text);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+    .featured-desc {
+      font-size: var(--text-base);
+      color: var(--sidebar-muted);
+      line-height: 1.7;
+      max-width: 600px;
+    }
+    .featured-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .featured-tags .tag {
+      background: rgba(255,255,255,0.08);
+      color: var(--sidebar-muted);
+      border-color: rgba(255,255,255,0.1);
+    }
+    .featured-link {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--moss-light);
+      text-decoration: none;
+      transition: color var(--transition);
+    }
+    .featured-link:hover { color: var(--sidebar-text); }
+    /* Projects grid */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+      gap: var(--space-4);
+    }
+    .project-card {
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      box-shadow: var(--shadow-xs);
+      text-decoration: none;
+      transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
+    }
+    a.project-card:hover {
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-4px);
+      border-color: var(--soil-mid);
+    }
+    .project-card--showcase {
+      cursor: default;
+      opacity: 0.85;
+    }
+    .project-card--showcase:hover {
+      transform: none;
+      box-shadow: var(--shadow-xs);
+      border-color: var(--slate-subtle);
+    }
+    .project-stripe {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--moss-mid);
+      margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .project-stripe--soil  { background: var(--soil-mid); }
+    .project-stripe--slate { background: var(--slate-mid); }
+    .project-stripe--bark  { background: var(--soil-light); }
+    .project-name {
+      font-size: var(--text-base);
+      font-weight: 600;
+      color: var(--soil-dark);
+      line-height: 1.3;
+    }
+    .project-desc {
+      font-size: var(--text-sm);
+      color: var(--slate-dark);
+      line-height: 1.6;
+      flex: 1;
+    }
+    .showcase-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--slate-light);
+      letter-spacing: 0.06em;
+    }
+    @media (max-width: 600px) {
+      .featured-banner { padding: var(--space-6); }
+      .featured-title { font-size: var(--text-xl); }
+    }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Pr<span id="o-gate" aria-hidden="true">o</span>jects</div>
+        <div class="page-subtitle">// software, hardware, and everything in between</div>
+      </div>
+
+      <!-- Hidden auth modal -->
+      <div id="void-overlay" role="dialog" aria-modal="true" aria-label="Authentication" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(10,14,8,0.88);display:none;align-items:center;justify-content:center;">
+        <div id="void-box" style="background:var(--moss-dark);border:1px solid rgba(143,175,110,0.25);border-radius:10px;padding:2rem 2.25rem;width:min(340px,90vw);display:flex;flex-direction:column;gap:1rem;box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--moss-light);letter-spacing:0.12em;text-transform:uppercase;">Access required</div>
+          <input id="void-input" type="password" autocomplete="off" placeholder="passphrase" style="background:rgba(0,0,0,0.35);border:1px solid rgba(143,175,110,0.2);border-radius:6px;padding:0.6rem 0.75rem;font-family:var(--font-mono);font-size:0.9rem;color:var(--sidebar-text);outline:none;transition:border-color 0.2s;" />
+          <div id="void-err" style="font-family:var(--font-mono);font-size:0.72rem;color:#c0524a;display:none;">incorrect</div>
+          <button id="void-submit" style="background:var(--moss-mid);border:none;border-radius:6px;padding:0.55rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:#fff;cursor:pointer;transition:background 0.2s;align-self:flex-end;">enter →</button>
+        </div>
+      </div>
+
+      <script>
+      (function () {
+        const HASH = '46ca78022ce2ea0ca38bf8e4d60c86d672d28dc93629741a2c8f7594f7059107';
+        const gate   = document.getElementById('o-gate');
+        const overlay= document.getElementById('void-overlay');
+        const input  = document.getElementById('void-input');
+        const errMsg = document.getElementById('void-err');
+        const submit = document.getElementById('void-submit');
+
+        gate.style.cssText += 'cursor:default;user-select:none;';
+
+        function showModal() {
+          overlay.style.display = 'flex';
+          input.value = '';
+          errMsg.style.display = 'none';
+          setTimeout(() => input.focus(), 50);
+        }
+
+        function hideModal() {
+          overlay.style.display = 'none';
+        }
+
+        async function attempt() {
+          const val = input.value;
+          if (!val) return;
+          const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(val));
+          const hex  = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+          if (hex === HASH) {
+            sessionStorage.setItem('void_auth', '1');
+            window.location.href = '/void/';
+          } else {
+            errMsg.style.display = 'block';
+            input.style.borderColor = '#c0524a';
+            input.animate([{transform:'translateX(-6px)'},{transform:'translateX(6px)'},{transform:'translateX(-4px)'},{transform:'translateX(0)'}], {duration:260,easing:'ease-out'});
+            setTimeout(() => { input.style.borderColor = 'rgba(143,175,110,0.2)'; }, 800);
+          }
+        }
+
+        gate.addEventListener('click', showModal);
+        submit.addEventListener('click', attempt);
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) hideModal(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') hideModal(); });
+      })();
+      </script>
+
+      <div class="projects-wrapper">
+        <!-- Featured -->
+        <div class="featured-banner fade-up">
+          <div class="featured-label">Featured Project</div>
+          <div class="featured-title">TunesInYourCity</div>
+          <div class="featured-desc">Automates scraping of ~15 venue websites to build and update curated Spotify playlists and weekly Instagram posts. End-to-end pipeline from raw venue data to published content.</div>
+          <div class="featured-tags">
+            <span class="tag">Selenium</span>
+            <span class="tag">Python</span>
+            <span class="tag">Spotify API</span>
+            <span class="tag">Web Scraping</span>
+            <span class="tag">Data Filtering</span>
+            <span class="tag">Instagram Integration</span>
+          </div>
+          <a href="https://open.spotify.com/user/31rclwfbe3ken4qpxspmc6etyfoa?si=c8987c2b34ee4f88" target="_blank" rel="noopener" class="featured-link">View on Spotify →</a>
+        </div>
+
+        <!-- Grid -->
+        <div class="projects-grid">
+
+          <a href="/foraging/" class="project-card fade-up">
+            <div class="project-stripe"></div>
+            <div class="project-name">Fayetteville Foraging Map</div>
+            <div class="project-desc">Interactive map for edible plants in Fayetteville with seasonal filtering and plant-type search.</div>
+            <div class="tags">
+              <span class="tag">JavaScript</span>
+              <span class="tag">Leaflet</span>
+              <span class="tag">GIS</span>
+            </div>
+          </a>
+
+          <a href="/stl-depth/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--slate"></div>
+            <div class="project-name">STL to Depth Map</div>
+            <div class="project-desc">Load any STL, orbit a 3D preview, and generate a precision 16-bit grayscale depth map. Choose projection axis, toggle orthographic or perspective, and export a full-range PNG.</div>
+            <div class="tags">
+              <span class="tag">Three.js</span>
+              <span class="tag">WebGL</span>
+              <span class="tag">16-bit PNG</span>
+              <span class="tag">STL</span>
+            </div>
+          </a>
+
+          <a href="/s1c3r/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--soil"></div>
+            <div class="project-name">s1c3r — STL Sheet Slicer</div>
+            <div class="project-desc">Load any STL, manipulate it in 3D, and slice it into laser-cuttable sheets. Exports a tiled SVG with alignment holes and adjustable thickness settings.</div>
+            <div class="tags">
+              <span class="tag">Three.js</span>
+              <span class="tag">STL Parsing</span>
+              <span class="tag">SVG Export</span>
+            </div>
+          </a>
+
+          <a href="/transcript-tool/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--slate"></div>
+            <div class="project-name">Video Transcript Tool</div>
+            <div class="project-desc">Upload a video or audio file and generate a transcript entirely in the browser — no API key, no server. Powered by local Whisper inference.</div>
+            <div class="tags">
+              <span class="tag">Whisper</span>
+              <span class="tag">Local AI</span>
+              <span class="tag">Web Audio</span>
+            </div>
+          </a>
+
+          <a href="/instagram-analytics/" class="project-card fade-up">
+            <div class="project-stripe project-stripe--bark"></div>
+            <div class="project-name">Instagram Analytics Dashboard</div>
+            <div class="project-desc">Enter any public handle and get a full analytics dashboard — post breakdowns, hashtag performance, hook pattern analysis, and cadence heatmaps.</div>
+            <div class="tags">
+              <span class="tag">Chart.js</span>
+              <span class="tag">Cloudflare Workers</span>
+              <span class="tag">Data Analysis</span>
+            </div>
+          </a>
+
+          <a href="/woah/" class="project-card fade-up">
+            <div class="project-stripe"></div>
+            <div class="project-name">Interactive WebGL Demo</div>
+            <div class="project-desc">Experimental browser tool — a WebGL terrain box with real-time wave physics you can sculpt and ripple directly in the viewport.</div>
+            <div class="tags">
+              <span class="tag">Three.js</span>
+              <span class="tag">WebGL</span>
+              <span class="tag">Physics</span>
+            </div>
+          </a>
+
+          <div class="project-card project-card--showcase fade-up">
+            <div class="project-stripe project-stripe--soil"></div>
+            <div class="project-name">3D Printing &amp; Fabrication</div>
+            <div class="project-desc">Beginner-friendly guides, visual PDFs, and nature-themed accessories with custom support structures designed in Fusion 360 &amp; Inkscape.</div>
+            <div class="tags">
+              <span class="tag">Fusion 360</span>
+              <span class="tag">Inkscape</span>
+              <span class="tag">3D Printing</span>
+            </div>
+            <div class="showcase-label">showcase — no link</div>
+          </div>
+
+          <div class="project-card project-card--showcase fade-up">
+            <div class="project-stripe project-stripe--slate"></div>
+            <div class="project-name">Scouting / STEM Education</div>
+            <div class="project-desc">Interactive merit-badge programs and hands-on STEM lessons for scout camps — designed to work without Wi-Fi or A/V equipment.</div>
+            <div class="tags">
+              <span class="tag">Curriculum Design</span>
+              <span class="tag">STEM</span>
+              <span class="tag">3D Printing</span>
+            </div>
+            <div class="showcase-label">showcase — no link</div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>
