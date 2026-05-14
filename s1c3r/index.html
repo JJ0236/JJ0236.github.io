@@ -397,6 +397,13 @@
       <div id="slice-info">Load an STL to see slice preview.</div>
     </div>
 
+    <!-- Assembly preview -->
+    <div>
+      <div class="section-title">Assembly Preview</div>
+      <button class="full-btn" id="btn-preview" disabled>Show Assembly</button>
+      <div style="font-size:.72rem;color:#666;margin-top:5px">Preview how the cut sheets stack to form the model</div>
+    </div>
+
     <div id="status"></div>
 
   </div>
@@ -448,6 +455,8 @@ scene.add(new THREE.AxesHelper(20));
 let meshGroup      = new THREE.Group(); scene.add(meshGroup);
 let planeGroup     = new THREE.Group(); scene.add(planeGroup);  // kept empty; planes replaced by lines
 let sliceLineGroup = new THREE.Group(); scene.add(sliceLineGroup);
+let assemblyGroup  = new THREE.Group(); scene.add(assemblyGroup); assemblyGroup.visible = false;
+let showingAssembly = false;
 
 function resize() {
   const w = viewport.clientWidth, h = viewport.clientHeight;
@@ -484,6 +493,13 @@ function loadGeometry(buffer) {
   document.getElementById('slice-scrubber').style.display = 'none';
   document.getElementById('hole-status').textContent = 'No holes placed';
   document.getElementById('btn-clear-holes').disabled = true;
+  assemblyGroup.clear();
+  assemblyGroup.visible = false;
+  showingAssembly = false;
+  const prevBtn = document.getElementById('btn-preview');
+  prevBtn.disabled = true;
+  prevBtn.textContent = 'Show Assembly';
+  prevBtn.classList.remove('accent');
 
   // Centre geometry
   const centre = new THREE.Vector3();
@@ -738,6 +754,10 @@ function doSlice() {
   const withGeo = slices.filter(s => s.polygons.length > 0).length;
   setStatus(`✓ ${slices.length} sheets (${withGeo} with geometry). Ready to export.`);
   document.getElementById('btn-export').disabled = false;
+  buildAssembly();
+  const pb = document.getElementById('btn-preview');
+  pb.disabled = false;
+  if (showingAssembly) { assemblyGroup.visible = true; meshGroup.visible = false; }
   updateModelInfo();
 
   // Show and initialise sheet scrubber
@@ -777,6 +797,28 @@ function updateSliceHighlight() {
         line.material.opacity = 0.03;
       }
       line.material.needsUpdate = true;
+    });
+  });
+
+  // Assembly slabs: highlight active slab, dim others
+  assemblyGroup.children.forEach((grp, i) => {
+    const isActive = (i === activeSlice);
+    grp.children.forEach(m => {
+      if (!m.isMesh || !m.material) return;
+      if (activeSlice === -1) {
+        m.material.opacity    = 0.9;
+        m.material.depthWrite = true;
+        m.material.emissive.setHex(0x000000);
+      } else if (isActive) {
+        m.material.opacity    = 1.0;
+        m.material.depthWrite = true;
+        m.material.emissive.setHex(0x221100);
+      } else {
+        m.material.opacity    = 0.1;
+        m.material.depthWrite = false;
+        m.material.emissive.setHex(0x000000);
+      }
+      m.material.needsUpdate = true;
     });
   });
 }
@@ -899,6 +941,81 @@ function connectSegments(segs) {
 
   return loops;
 }
+
+// ─── Assembly preview ─────────────────────────────────────────────────────────
+// Builds extruded 3-D slabs from the computed cross-section polygons.
+// Each slab is an ExtrudeGeometry of thick/sc depth positioned at its rawPlane.
+// Rotation quaternions map local (shapeX, shapeY, extrudeZ) → world (bi, ci, ai):
+//   axis='z': identity (bi=X, ci=Y, extrude=Z)
+//   axis='x': local(x,y,z)→world(z,x,y)  — M = [[0,0,1],[1,0,0],[0,1,0]]
+//   axis='y': local(x,y,z)→world(y,z,x)  — M = [[0,1,0],[0,0,1],[1,0,0]]
+function buildAssembly() {
+  assemblyGroup.clear();
+  if (!slices.length) return;
+
+  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
+  const sc    = getScale();
+  const axis  = document.getElementById('sel-axis').value;
+
+  let quat = new THREE.Quaternion(); // identity for axis='z'
+  if (axis === 'x') {
+    quat.setFromRotationMatrix(
+      new THREE.Matrix4().set(0,0,1,0, 1,0,0,0, 0,1,0,0, 0,0,0,1));
+  } else if (axis === 'y') {
+    quat.setFromRotationMatrix(
+      new THREE.Matrix4().set(0,1,0,0, 0,0,1,0, 1,0,0,0, 0,0,0,1));
+  }
+
+  // Warm plywood tones — alternates per slice
+  const palette = [0xC8A86B, 0xB89455, 0xD4B47A, 0xA8803F, 0xBE9E60, 0xD0B478];
+
+  slices.forEach((sl, idx) => {
+    const sliceGrp = new THREE.Group();
+
+    sl.polygons.forEach(poly => {
+      if (poly.length < 3) return;
+
+      const shape = new THREE.Shape();
+      shape.moveTo(poly[0][0] / sc, poly[0][1] / sc);
+      for (let i = 1; i < poly.length; i++) shape.lineTo(poly[i][0] / sc, poly[i][1] / sc);
+      shape.closePath();
+
+      const geom = new THREE.ExtrudeGeometry(shape, { depth: thick / sc, bevelEnabled: false });
+      const mat  = new THREE.MeshPhongMaterial({
+        color:       palette[idx % palette.length],
+        emissive:    new THREE.Color(0x000000),
+        side:        THREE.DoubleSide,
+        transparent: true,
+        opacity:     0.9,
+      });
+
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.quaternion.copy(quat);
+
+      // Shift slab so it spans rawPlane ± thick/(2*sc) along the slice axis
+      const offset = sl.rawPlane - thick / (2 * sc);
+      if      (axis === 'z') mesh.position.z = offset;
+      else if (axis === 'x') mesh.position.x = offset;
+      else                   mesh.position.y = offset;
+
+      sliceGrp.add(mesh);
+    });
+
+    assemblyGroup.add(sliceGrp);
+  });
+}
+
+function toggleAssembly() {
+  showingAssembly    = !showingAssembly;
+  meshGroup.visible  = !showingAssembly;
+  assemblyGroup.visible =  showingAssembly;
+  const btn = document.getElementById('btn-preview');
+  btn.textContent = showingAssembly ? 'Show Original Mesh' : 'Show Assembly';
+  btn.classList.toggle('accent', showingAssembly);
+  updateSliceHighlight();
+}
+
+document.getElementById('btn-preview').addEventListener('click', toggleAssembly);
 
 // ─── SVG export ───────────────────────────────────────────────────────────────
 document.getElementById('btn-export').addEventListener('click', doExport);
