@@ -836,27 +836,16 @@ function updateSliceHighlight() {
     });
   });
 
-  // Assembly slabs: highlight active slab, dim others
+  // Assembly slabs: always fully solid — highlight active slice with emissive glow
   assemblyGroup.children.forEach((grp, i) => {
     const isActive = (i === activeSlice);
     grp.children.forEach(m => {
       if (!m.isMesh || !m.material) return;
-      if (activeSlice === -1) {
-        m.material.transparent = false;
-        m.material.opacity     = 1.0;
-        m.material.depthWrite  = true;
-        m.material.emissive.setHex(0x000000);
-      } else if (isActive) {
-        m.material.transparent = false;
-        m.material.opacity     = 1.0;
-        m.material.depthWrite  = true;
-        m.material.emissive.setHex(0x332211);
-      } else {
-        m.material.transparent = true;
-        m.material.opacity     = 0.08;
-        m.material.depthWrite  = false;
-        m.material.emissive.setHex(0x000000);
-      }
+      m.material.transparent = false;
+      m.material.opacity     = 1.0;
+      m.material.depthWrite  = true;
+      // Active slice gets a warm highlight so you can still see which sheet the scrubber is on
+      m.material.emissive.setHex(isActive && activeSlice !== -1 ? 0x4a2800 : 0x000000);
       m.material.needsUpdate = true;
     });
   });
