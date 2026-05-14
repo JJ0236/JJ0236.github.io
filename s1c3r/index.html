@@ -153,6 +153,38 @@
     .full-btn:hover { background: #5C7A4E; color: #F8F4EE; }
     .full-btn:disabled { opacity: .4; cursor: not-allowed; }
     .full-btn.accent { background: #5C7A4E; color: #F8F4EE; }
+
+    /* Toggle switch */
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .82rem;
+      cursor: pointer;
+      margin-bottom: 2px;
+    }
+    .toggle-sw { position: relative; display: inline-block; width: 38px; height: 21px; flex-shrink: 0; }
+    .toggle-sw input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: #2A3220;
+      border: 1px solid #3A4A2E;
+      border-radius: 11px;
+      transition: background .2s, border-color .2s;
+    }
+    .toggle-track::before {
+      content: '';
+      position: absolute;
+      width: 15px; height: 15px;
+      left: 2px; top: 2px;
+      background: #6A6055;
+      border-radius: 50%;
+      transition: transform .2s, background .2s;
+    }
+    .toggle-sw input:checked + .toggle-track { background: #5C7A4E; border-color: #5C7A4E; }
+    .toggle-sw input:checked + .toggle-track::before { transform: translateX(17px); background: #F8F4EE; }
+    .toggle-sw input:disabled + .toggle-track { opacity: .4; pointer-events: none; }
     .full-btn.accent:hover { background: #3A4A2C; }
 
     #slice-info {
@@ -400,7 +432,13 @@
     <!-- Assembly preview -->
     <div>
       <div class="section-title">Assembly Preview</div>
-      <button class="full-btn" id="btn-preview" disabled>Show Assembly</button>
+      <label class="toggle-row">
+        <span>Assembly view</span>
+        <span class="toggle-sw">
+          <input type="checkbox" id="chk-preview" disabled>
+          <span class="toggle-track"></span>
+        </span>
+      </label>
       <div style="font-size:.72rem;color:#666;margin-top:5px">Preview how the cut sheets stack to form the model</div>
     </div>
 
@@ -496,10 +534,9 @@ function loadGeometry(buffer) {
   assemblyGroup.clear();
   assemblyGroup.visible = false;
   showingAssembly = false;
-  const prevBtn = document.getElementById('btn-preview');
-  prevBtn.disabled = true;
-  prevBtn.textContent = 'Show Assembly';
-  prevBtn.classList.remove('accent');
+  const prevChk = document.getElementById('chk-preview');
+  prevChk.checked  = false;
+  prevChk.disabled = true;
 
   // Centre geometry
   const centre = new THREE.Vector3();
@@ -755,8 +792,7 @@ function doSlice() {
   setStatus(`✓ ${slices.length} sheets (${withGeo} with geometry). Ready to export.`);
   document.getElementById('btn-export').disabled = false;
   buildAssembly();
-  const pb = document.getElementById('btn-preview');
-  pb.disabled = false;
+  document.getElementById('chk-preview').disabled = false;
   if (showingAssembly) { assemblyGroup.visible = true; meshGroup.visible = false; }
   updateModelInfo();
 
@@ -806,16 +842,19 @@ function updateSliceHighlight() {
     grp.children.forEach(m => {
       if (!m.isMesh || !m.material) return;
       if (activeSlice === -1) {
-        m.material.opacity    = 0.9;
-        m.material.depthWrite = true;
+        m.material.transparent = false;
+        m.material.opacity     = 1.0;
+        m.material.depthWrite  = true;
         m.material.emissive.setHex(0x000000);
       } else if (isActive) {
-        m.material.opacity    = 1.0;
-        m.material.depthWrite = true;
-        m.material.emissive.setHex(0x221100);
+        m.material.transparent = false;
+        m.material.opacity     = 1.0;
+        m.material.depthWrite  = true;
+        m.material.emissive.setHex(0x332211);
       } else {
-        m.material.opacity    = 0.1;
-        m.material.depthWrite = false;
+        m.material.transparent = true;
+        m.material.opacity     = 0.08;
+        m.material.depthWrite  = false;
         m.material.emissive.setHex(0x000000);
       }
       m.material.needsUpdate = true;
@@ -985,8 +1024,8 @@ function buildAssembly() {
         color:       palette[idx % palette.length],
         emissive:    new THREE.Color(0x000000),
         side:        THREE.DoubleSide,
-        transparent: true,
-        opacity:     0.9,
+        transparent: false,
+        opacity:     1.0,
       });
 
       const mesh = new THREE.Mesh(geom, mat);
@@ -1006,16 +1045,13 @@ function buildAssembly() {
 }
 
 function toggleAssembly() {
-  showingAssembly    = !showingAssembly;
-  meshGroup.visible  = !showingAssembly;
+  showingAssembly       = document.getElementById('chk-preview').checked;
+  meshGroup.visible     = !showingAssembly;
   assemblyGroup.visible =  showingAssembly;
-  const btn = document.getElementById('btn-preview');
-  btn.textContent = showingAssembly ? 'Show Original Mesh' : 'Show Assembly';
-  btn.classList.toggle('accent', showingAssembly);
   updateSliceHighlight();
 }
 
-document.getElementById('btn-preview').addEventListener('click', toggleAssembly);
+document.getElementById('chk-preview').addEventListener('change', toggleAssembly);
 
 // ─── SVG export ───────────────────────────────────────────────────────────────
 document.getElementById('btn-export').addEventListener('click', doExport);
