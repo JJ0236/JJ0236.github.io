@@ -180,7 +180,7 @@
     // SVG waypoints \u2014 must match path d= and dot inline style= positions.
     // ViewBox 0 0 100 100: (x,y) maps directly to (x%, y%) of track.
     const svgWP = [
-      {x: 50, y: 10},  // Harrison       \u2192 left:50%, top:10%
+      {x: 72, y: 10},  // Harrison       \u2192 left:72%, top:10%
       {x: 80, y: 30},  // Boxley Valley  \u2192 left:80%, top:30%
       {x: 20, y: 50},  // Hawksbill Crag \u2192 left:20%, top:50%
       {x: 80, y: 70},  // Turner Bend    \u2192 left:80%, top:70%
