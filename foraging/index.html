@@ -394,12 +394,16 @@
       background: var(--green-dark);
       color: #D9D0C1;
       border: none;
-      width: 50px;
-      height: 50px;
-      border-radius: 50%;
-      font-size: 1.4rem;
+      padding: 10px 18px;
+      border-radius: 24px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      letter-spacing: 0.2px;
       box-shadow: var(--shadow);
       cursor: pointer;
+      align-items: center;
+      gap: 8px;
     }
 
     /* Legend */
@@ -461,7 +465,7 @@
         transition: left 0.3s ease;
       }
       .sidebar.open { left: 0; }
-      .sidebar-toggle { display: block; }
+      .sidebar-toggle { display: flex; }
       .sidebar-overlay {
         position: fixed;
         inset: 0;
@@ -551,10 +555,10 @@
           <label for="producingToggle">
             Show only in-season plants
           </label>
-          <div class="toggle-switch">
+          <label class="toggle-switch" for="producingToggle">
             <input type="checkbox" id="producingToggle">
             <span class="toggle-slider"></span>
-          </div>
+          </label>
         </div>
         <div class="current-season" id="seasonInfo"></div>
       </div>
@@ -582,7 +586,14 @@
   </div>
 
   <!-- Mobile toggle -->
-  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">Filters</button>
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <line x1="1" y1="3.5" x2="13" y2="3.5"/>
+      <line x1="3" y1="7" x2="11" y2="7"/>
+      <line x1="5" y1="10.5" x2="9" y2="10.5"/>
+    </svg>
+    Filter Plants
+  </button>
 
   <!-- Legend -->
   <div class="legend" id="legend"></div>

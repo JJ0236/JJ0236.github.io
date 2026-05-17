@@ -380,9 +380,19 @@ function refreshUI() {
 }
 
 // Sidebar toggle (mobile)
+const ICON_FILTER = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="1" y1="3.5" x2="13" y2="3.5"/><line x1="3" y1="7" x2="11" y2="7"/><line x1="5" y1="10.5" x2="9" y2="10.5"/></svg>`;
+const ICON_CLOSE = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>`;
+
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('active');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const btn = document.getElementById('sidebarToggle');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('active');
+  const isOpen = sidebar.classList.contains('open');
+  btn.innerHTML = isOpen
+    ? `${ICON_CLOSE} Close`
+    : `${ICON_FILTER} Filter Plants`;
 }
 
 // --- Init ---
