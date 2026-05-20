@@ -409,6 +409,28 @@
       <div style="font-size:.72rem;color:#666;margin-bottom:4px">If sheet count looks wrong, change units</div>
     </div>
 
+    <!-- Scale & Size -->
+    <div>
+      <div class="section-title">Scale &amp; Size</div>
+      <label class="row">
+        <span>Scale factor</span>
+        <input id="inp-scale" type="number" min="0.001" max="1000" step="0.01" value="1"/>
+      </label>
+      <label class="row">
+        <span>Width X (mm)</span>
+        <input id="inp-size-x" type="number" min="0.001" step="0.1" placeholder="—"/>
+      </label>
+      <label class="row">
+        <span>Depth Y (mm)</span>
+        <input id="inp-size-y" type="number" min="0.001" step="0.1" placeholder="—"/>
+      </label>
+      <label class="row">
+        <span>Height Z (mm)</span>
+        <input id="inp-size-z" type="number" min="0.001" step="0.1" placeholder="—"/>
+      </label>
+      <div style="font-size:.72rem;color:#666;margin-bottom:4px">Edit any dimension to scale proportionally</div>
+    </div>
+
     <!-- SVG export layout -->
     <div>
       <div class="section-title">Export Layout</div>
@@ -561,6 +583,8 @@ function loadGeometry(buffer) {
   controls.update();
 
   document.getElementById('drop-overlay').style.display = 'none';
+  document.getElementById('inp-scale').value = '1';
+  updateSizeFields();
   updateModelInfo();
   enableButtons(true);
   setStatus('');
@@ -573,9 +597,48 @@ function enableButtons(on) {
 }
 
 // ─── Unit scale: raw STL coords × scale = mm ─────────────────────────────────
-function getScale() {
+function getUnitScale() {
   return parseFloat(document.getElementById('sel-units').value) || 1;
 }
+function getScale() {
+  const unitScale = getUnitScale();
+  const userScale = parseFloat(document.getElementById('inp-scale').value) || 1;
+  return unitScale * userScale;
+}
+
+function updateSizeFields() {
+  if (!geometry) return;
+  const bb = geometry.boundingBox;
+  const s  = new THREE.Vector3();
+  bb.getSize(s);
+  const sc = getScale();
+  document.getElementById('inp-size-x').value = (s.x * sc).toFixed(2);
+  document.getElementById('inp-size-y').value = (s.y * sc).toFixed(2);
+  document.getElementById('inp-size-z').value = (s.z * sc).toFixed(2);
+}
+
+function onSizeInput(axis) {
+  if (!geometry) return;
+  const bb = geometry.boundingBox;
+  const s  = new THREE.Vector3();
+  bb.getSize(s);
+  const rawDim = axis === 'x' ? s.x : axis === 'y' ? s.y : s.z;
+  if (rawDim === 0) return;
+  const targetMm = parseFloat(document.getElementById(`inp-size-${axis}`).value);
+  if (!targetMm || targetMm <= 0) return;
+  const newUserScale = targetMm / (rawDim * getUnitScale());
+  document.getElementById('inp-scale').value = newUserScale.toFixed(4);
+  updateSizeFields();
+  updateModelInfo();
+}
+
+document.getElementById('inp-scale').addEventListener('input', () => {
+  updateSizeFields();
+  updateModelInfo();
+});
+['x','y','z'].forEach(axis =>
+  document.getElementById(`inp-size-${axis}`).addEventListener('change', () => onSizeInput(axis))
+);
 
 function updateModelInfo() {
   if (!geometry) return;
@@ -595,9 +658,13 @@ function updateModelInfo() {
     `Sheets: <b>${count}</b>`;
 }
 
-['sel-axis', 'inp-thickness', 'inp-gap', 'sel-units'].forEach(id =>
+['sel-axis', 'inp-thickness', 'inp-gap'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateModelInfo)
 );
+document.getElementById('sel-units').addEventListener('input', () => {
+  updateSizeFields();
+  updateModelInfo();
+});
 
 document.getElementById('stl-input').addEventListener('change', e => {
   const file = e.target.files[0];
