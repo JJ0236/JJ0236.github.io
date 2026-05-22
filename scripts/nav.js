@@ -20,6 +20,7 @@
     { href: '/transcript-tool/',     label: 'Transcript Tool'     },
     { href: '/instagram-analytics/', label: 'IG Analytics'        },
     { href: '/woah/',                label: 'WebGL Demo'          },
+    { href: '/scissor/',             label: 'Scissor Lattice'     },
   ];
 
   function isActive(href) {
