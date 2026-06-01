@@ -709,91 +709,107 @@ function updateVaultHint() {
 document.getElementById('btn-export').addEventListener('click', exportSVG);
 
 function exportSVG() {
-  const { barLen, barW, holeDia, holeInset, nX, nY } = computeLattice();
+  // Exports the assembled lattice as seen from above — full diagonal bars at
+  // their actual positions and angles, with rivet holes.
+  const { barLen, barW, holeDia, nX, nY, cellW, cellH, vertexPts, crossPts } = computeLattice();
 
-  const barsPerRow = Math.max(1, parseInt(document.getElementById('inp-cols').value) || 10);
-  const margin     = parseFloat(document.getElementById('inp-margin').value) || 5;
-  const endShape   = S.endShape;
-  const totalBars  = nX * nY * 2 * S.barCount;
+  const margin   = parseFloat(document.getElementById('inp-margin').value) || 5;
+  const latticeW = nX * cellW;
+  const latticeH = nY * cellH;
+  const pageW    = latticeW + 2 * margin;
+  const pageH    = latticeH + 2 * margin;
 
-  const cellW = barLen + margin;
-  const cellH = barW   + margin;
-  const cols  = Math.min(barsPerRow, totalBars);
-  const rows  = Math.ceil(totalBars / cols);
-  const pageW = cols * cellW + margin;
-  const pageH = rows * cellH + margin;
+  // Convert centered lattice coords → SVG coords (flip Y since SVG y grows downward)
+  const ox = margin + latticeW / 2;
+  const oy = margin + latticeH / 2;
+  const sx = px => ox + px;
+  const sy = py => oy - py;
+
+  // 2D pivot position (flat mode formula matching computeLattice's pivotPos)
+  function pp(i, j) {
+    return [i * cellW - latticeW / 2, j * cellH - latticeH / 2];
+  }
+
+  // Build full-diagonal bars — same merge logic as rebuildLattice in 3D view
+  const fullBars = [];
+
+  // A-diagonals: i − j = constant (NE direction)
+  const aDiag = new Map();
+  for (let j = 0; j < nY; j++)
+    for (let i = 0; i < nX; i++) {
+      const k = i - j;
+      if (!aDiag.has(k)) aDiag.set(k, { minI: i, minJ: j, maxI: i, maxJ: j });
+      else { const e = aDiag.get(k); if (i > e.maxI) { e.maxI = i; e.maxJ = j; } }
+    }
+  aDiag.forEach(({ minI, minJ, maxI, maxJ }) => {
+    const [x0, y0] = pp(minI,     minJ);
+    const [x1, y1] = pp(maxI + 1, maxJ + 1);
+    fullBars.push({ x0, y0, x1, y1, type: 'A' });
+  });
+
+  // B-diagonals: i + j = constant (NW direction)
+  const bDiag = new Map();
+  for (let j = 0; j < nY; j++)
+    for (let i = 0; i < nX; i++) {
+      const k = i + j;
+      if (!bDiag.has(k)) bDiag.set(k, { maxI: i, minJ: j, minI: i, maxJ: j });
+      else {
+        const e = bDiag.get(k);
+        if (i > e.maxI) e.maxI = i;
+        if (j < e.minJ) e.minJ = j;
+        if (i < e.minI) e.minI = i;
+        if (j > e.maxJ) e.maxJ = j;
+      }
+    }
+  bDiag.forEach(({ maxI, minJ, minI, maxJ }) => {
+    const [x0, y0] = pp(maxI + 1, minJ);
+    const [x1, y1] = pp(minI,     maxJ + 1);
+    fullBars.push({ x0, y0, x1, y1, type: 'B' });
+  });
+
+  const sw  = barW.toFixed(4);
+  const cap = S.endShape === 'round' ? 'round' : 'butt';
+  const hR  = (holeDia / 2).toFixed(4);
+  const f   = S.units === 'in' ? 1 / 25.4 : 1;
 
   const lines = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<svg xmlns="http://www.w3.org/2000/svg"`,
     `     width="${pageW.toFixed(2)}mm" height="${pageH.toFixed(2)}mm"`,
     `     viewBox="0 0 ${pageW.toFixed(4)} ${pageH.toFixed(4)}">`,
-    `  <!-- Scissor Lattice | ${totalBars} bars | ${barLen.toFixed(1)}x${barW.toFixed(1)}mm | ${nX}x${nY} cells -->`,
+    `  <!-- Scissor Lattice assembled | ${nX}×${nY} cells | ${(barLen*f).toFixed(1)}×${S.barW}${S.units} bars -->`,
     `  <style>`,
-    `    .cut  { fill: none; stroke: #000; stroke-width: 0.1; }`,
-    `    .hole { fill: none; stroke: #f00; stroke-width: 0.1; }`,
-    `    .lbl  { font-family: monospace; font-size: 2px; fill: #555; }`,
+    `    .barA { fill: none; stroke: #777; stroke-width: ${sw}; stroke-linecap: ${cap}; }`,
+    `    .barB { fill: none; stroke: #444; stroke-width: ${sw}; stroke-linecap: ${cap}; }`,
+    `    .hole { fill: #fff; stroke: #f00; stroke-width: 0.15; }`,
+    `    .lbl  { font-family: monospace; font-size: ${Math.max(2, barW * 0.4).toFixed(1)}px; fill: #555; }`,
     `  </style>`,
   ];
 
-  const hX = [holeInset, barLen / 2, barLen - holeInset];
-  const hY = barW / 2;
-  const hR = holeDia / 2;
+  // A-bars (bottom layer)
+  fullBars.filter(b => b.type === 'A').forEach(({ x0, y0, x1, y1 }) =>
+    lines.push(`  <line class="barA" x1="${sx(x0).toFixed(4)}" y1="${sy(y0).toFixed(4)}" x2="${sx(x1).toFixed(4)}" y2="${sy(y1).toFixed(4)}"/>`)
+  );
+  // B-bars on top
+  fullBars.filter(b => b.type === 'B').forEach(({ x0, y0, x1, y1 }) =>
+    lines.push(`  <line class="barB" x1="${sx(x0).toFixed(4)}" y1="${sy(y0).toFixed(4)}" x2="${sx(x1).toFixed(4)}" y2="${sy(y1).toFixed(4)}"/>`)
+  );
 
-  function barPath(ox, oy) {
-    const r = barW / 2;
-    if (endShape === 'square') {
-      return `M${ox.toFixed(4)},${oy.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
-    }
-    if (endShape === 'round') {
-      const rx = r.toFixed(4);
-      return `M${(ox+r).toFixed(4)},${oy.toFixed(4)}` +
-             ` h${(barLen-2*r).toFixed(4)}` +
-             ` a${rx},${rx} 0 0 1 ${rx},${rx}` +
-             ` v${(barW-2*r).toFixed(4)}` +
-             ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${rx}` +
-             ` h${(-(barLen-2*r)).toFixed(4)}` +
-             ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${(-r).toFixed(4)}` +
-             ` v${(-(barW-2*r)).toFixed(4)}` +
-             ` a${rx},${rx} 0 0 1 ${rx},${(-r).toFixed(4)} Z`;
-    }
-    // tab: rect + bumps handled below
-    return `M${ox.toFixed(4)},${oy.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
-  }
+  // Rivet holes on top of everything
+  vertexPts.forEach(pt =>
+    lines.push(`  <circle class="hole" cx="${sx(pt.x).toFixed(4)}" cy="${sy(pt.y).toFixed(4)}" r="${hR}"/>`)
+  );
+  crossPts.forEach(pt =>
+    lines.push(`  <circle class="hole" cx="${sx(pt.x).toFixed(4)}" cy="${sy(pt.y).toFixed(4)}" r="${hR}"/>`)
+  );
 
-  for (let idx = 0; idx < totalBars; idx++) {
-    const col = idx % cols;
-    const row = Math.floor(idx / cols);
-    const ox  = margin + col * cellW;
-    const oy  = margin + row * cellH;
-
-    lines.push(`  <g id="bar-${idx + 1}">`);
-    lines.push(`    <path class="cut" d="${barPath(ox, oy)}"/>`);
-
-    if (endShape === 'tab') {
-      const tabR = (barW * 0.32).toFixed(4);
-      lines.push(`    <circle class="cut" cx="${ox.toFixed(4)}" cy="${(oy+hY).toFixed(4)}" r="${tabR}"/>`);
-      lines.push(`    <circle class="cut" cx="${(ox+barLen).toFixed(4)}" cy="${(oy+hY).toFixed(4)}" r="${tabR}"/>`);
-    }
-
-    // Pivot holes
-    hX.forEach(hx => {
-      lines.push(`    <circle class="hole" cx="${(ox + hx).toFixed(4)}" cy="${(oy + hY).toFixed(4)}" r="${hR.toFixed(4)}"/>`);
-    });
-
-    lines.push(`  </g>`);
-  }
-
-  const f = S.units === 'in' ? 1 / 25.4 : 1;
-  lines.push(`  <text class="lbl" x="${margin}" y="${(pageH - 1).toFixed(2)}">`);
-  lines.push(`    Scissor Lattice — ${totalBars} bars — ${(barLen*f).toFixed(1)}×${S.barW}${S.units} — ⌀${S.holeDia}${S.units} holes — ${nX}×${nY} cells`);
-  lines.push(`  </text>`);
+  lines.push(`  <text class="lbl" x="${margin}" y="${(pageH - 1).toFixed(2)}">${nX}×${nY} cells · ${nX * nY * 2} bars · ${(barLen*f).toFixed(1)}×${S.barW}${S.units}</text>`);
   lines.push(`</svg>`);
 
   const blob = new Blob([lines.join('\n')], { type: 'image/svg+xml' });
   const a    = document.createElement('a');
   a.href     = URL.createObjectURL(blob);
-  a.download = `scissor-lattice-${totalBars}bars.svg`;
+  a.download = `scissor-lattice-${nX}x${nY}.svg`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
