@@ -508,12 +508,45 @@ function computeLattice() {
   }
 
   // Bars
+  // In flat mode, merge collinear cell-segments into single full-diagonal bars so each
+  // diagonal direction appears as one continuous piece (as it looks in physical reality).
+  // Vault mode keeps per-cell bars because they follow the arc curve.
   const bars = [];
-  for (let j = 0; j < nY; j++) {
-    for (let i = 0; i < nX; i++) {
-      bars.push({ p0: pivotPos(i,   j),   p1: pivotPos(i+1, j+1), type: 'A' });
-      bars.push({ p0: pivotPos(i+1, j),   p1: pivotPos(i,   j+1), type: 'B' });
-    }
+  if (S.mode === 'vault') {
+    for (let j = 0; j < nY; j++)
+      for (let i = 0; i < nX; i++) {
+        bars.push({ p0: pivotPos(i,   j),   p1: pivotPos(i+1, j+1), type: 'A' });
+        bars.push({ p0: pivotPos(i+1, j),   p1: pivotPos(i,   j+1), type: 'B' });
+      }
+  } else {
+    // A-diagonals: i − j = constant (NE direction)
+    const aDiag = new Map();
+    for (let j = 0; j < nY; j++)
+      for (let i = 0; i < nX; i++) {
+        const k = i - j;
+        if (!aDiag.has(k)) aDiag.set(k, { minI: i, minJ: j, maxI: i, maxJ: j });
+        else { const e = aDiag.get(k); if (i > e.maxI) { e.maxI = i; e.maxJ = j; } }
+      }
+    aDiag.forEach(({ minI, minJ, maxI, maxJ }) =>
+      bars.push({ p0: pivotPos(minI, minJ), p1: pivotPos(maxI + 1, maxJ + 1), type: 'A' })
+    );
+    // B-diagonals: i + j = constant (NW direction)
+    const bDiag = new Map();
+    for (let j = 0; j < nY; j++)
+      for (let i = 0; i < nX; i++) {
+        const k = i + j;
+        if (!bDiag.has(k)) bDiag.set(k, { maxI: i, minJ: j, minI: i, maxJ: j });
+        else {
+          const e = bDiag.get(k);
+          if (i > e.maxI) e.maxI = i;
+          if (j < e.minJ) e.minJ = j;
+          if (i < e.minI) e.minI = i;
+          if (j > e.maxJ) e.maxJ = j;
+        }
+      }
+    bDiag.forEach(({ maxI, minJ, minI, maxJ }) =>
+      bars.push({ p0: pivotPos(maxI + 1, minJ), p1: pivotPos(minI, maxJ + 1), type: 'B' })
+    );
   }
 
   // Unique pivot points for hole rendering (avoid per-bar clusters)
@@ -568,6 +601,7 @@ function rebuildLattice() {
 
   // ── Bars ──────────────────────────────────────────────────────────────────
   bars.forEach(({ p0, p1, type }) => {
+    const len  = p0.distanceTo(p1);          // actual length of this diagonal bar
     const mid  = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
     const dir  = new THREE.Vector3().subVectors(p1, p0).normalize();
     const perp = new THREE.Vector3(-dir.y, dir.x, 0).normalize();
@@ -576,7 +610,7 @@ function rebuildLattice() {
     // Stack B-bars on top of A-bars so crossing is visible
     const zOff = type === 'B' ? BAR_THICK : 0;
 
-    const barGeo = new THREE.BoxGeometry(barLen, barW, BAR_THICK);
+    const barGeo = new THREE.BoxGeometry(len, barW, BAR_THICK);
 
     offsets.forEach(offset => {
       const pos = mid.clone().addScaledVector(perp, offset);
@@ -591,7 +625,7 @@ function rebuildLattice() {
         [-1, 1].forEach(side => {
           const cap = new THREE.Mesh(capGeo, mat);
           cap.quaternion.copy(quat).multiply(faceQuat);
-          cap.position.copy(pos).addScaledVector(dir, side * barLen / 2);
+          cap.position.copy(pos).addScaledVector(dir, side * len / 2);
           latticeGroup.add(cap);
         });
       }
@@ -629,7 +663,7 @@ function rebuildLattice() {
     firstBuild = false;
   }
 
-  updateInfo(bars.length * offsets.length, barLen, nX, nY, cellW, cellH);
+  updateInfo(nX * nY * 2 * S.barCount, barLen, nX, nY, cellW, cellH);
   updateExpansionHint();
   updateVaultHint();
 }
