@@ -451,7 +451,7 @@ canvas.addEventListener('mousedown', e => {
 window.addEventListener('mousemove', e => {
   if (!isDragging) return;
   const dx = e.clientX - dragStartX;
-  expansionPct = Math.max(5, Math.min(95, dragStartExp + dx * 0.28));
+  expansionPct = Math.max(5, Math.min(95, dragStartExp + dx * 0.18));
   document.getElementById('inp-expansion').value = expansionPct.toFixed(1);
   rebuildLattice();
 });
@@ -477,14 +477,17 @@ function computeLattice() {
   const holeDia = toMM(S.holeDia);
   const arcH    = toMM(S.arcHeight);
 
-  // Bar length is fixed by the symmetric gap; expansion changes cell proportions
+  // Bar length is fixed by the symmetric gap; expansion changes the angle (not bar count)
   const barLen = gapMM * Math.SQRT2;
   const angle  = expansionAngle();
-  const cellW  = barLen * Math.cos(angle);  // cell width at current expansion
-  const cellH  = barLen * Math.sin(angle);  // cell height at current expansion
+  const cellW  = barLen * Math.cos(angle);  // cell width at current angle
+  const cellH  = barLen * Math.sin(angle);  // cell height at current angle
 
-  const nX = Math.max(1, Math.ceil(W / cellW));
-  const nY = Math.max(1, Math.ceil(H / cellH));
+  // nX and nY are computed from the SYMMETRIC (45°) state and never change with expansion.
+  // This is what makes it behave like a real physical scissor lattice —
+  // the same bars just pivot open or closed, the footprint grows/shrinks.
+  const nX = Math.max(1, Math.round(W / gapMM));
+  const nY = Math.max(1, Math.round(H / gapMM));
 
   const holeInset = barW / 2; // pivot hole inset from bar tip
 
