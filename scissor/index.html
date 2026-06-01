@@ -285,6 +285,14 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title">Expansion</div>
+      <div class="ctrl-hint" style="margin-bottom:8px">← drag viewport to expand/contract</div>
+      <input type="range" id="inp-expansion" min="5" max="95" step="0.5" value="50"
+        style="width:100%;accent-color:var(--moss-light);cursor:pointer;margin-bottom:6px;" />
+      <div class="ctrl-hint" id="expansion-hint">50% — symmetric</div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Bar Settings</div>
       <div class="ctrl-row">
         <label class="ctrl-label" for="inp-barw">Bar Width</label>
@@ -339,7 +347,7 @@
   <!-- ── Three.js viewport ───────────────────────────── -->
   <div class="viewport-wrap">
     <canvas id="three-canvas"></canvas>
-    <div class="viewport-hint">Drag to orbit · Scroll to zoom · Right-drag to pan</div>
+    <div class="viewport-hint">← drag to expand/contract · right-drag to orbit · scroll to zoom</div>
     <div class="viewport-stats" id="vp-stats"></div>
   </div>
 
@@ -360,19 +368,21 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
-  mode:      'flat',   // flat | vault
-  units:     'mm',     // mm | in
+  mode:      'flat',
+  units:     'mm',
   width:     400,
   height:    400,
-  gap:       50,
+  gap:       50,    // symmetric cell size (at 50% expansion)
   barW:      15,
-  endShape:  'square', // square | round | tab
-  barCount:  1,        // 1 | 2
+  endShape:  'square',
+  barCount:  1,
   holeDia:   6,
   arcHeight: 100,
   cols:      10,
   margin:    5,
 };
+
+let expansionPct = 50; // 5..95 — controls cell aspect ratio while keeping bar length fixed
 
 // ─── Three.js setup ──────────────────────────────────────────────────────────
 const canvas   = document.getElementById('three-canvas');
@@ -398,9 +408,12 @@ camera.position.set(0, 0, 600);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.07;
+// Right-drag = orbit; left-drag reserved for expansion; scroll = zoom
+controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+controls.touches     = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 // Lattice group
-let latticeGroup = new THREE.Group();
+const latticeGroup = new THREE.Group();
 scene.add(latticeGroup);
 
 // ─── Resize ──────────────────────────────────────────────────────────────────
@@ -420,197 +433,239 @@ onResize();
   renderer.render(scene, camera);
 })();
 
-// ─── Lattice computation ─────────────────────────────────────────────────────
+// ─── Expansion drag (left mouse on canvas) ───────────────────────────────────
+let isDragging   = false;
+let dragStartX   = 0;
+let dragStartExp = 50;
 
-// Convert gap to mm regardless of current unit
+canvas.style.cursor = 'ew-resize';
+
+canvas.addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  isDragging   = true;
+  dragStartX   = e.clientX;
+  dragStartExp = expansionPct;
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - dragStartX;
+  expansionPct = Math.max(5, Math.min(95, dragStartExp + dx * 0.28));
+  document.getElementById('inp-expansion').value = expansionPct.toFixed(1);
+  rebuildLattice();
+});
+
+window.addEventListener('mouseup', e => {
+  if (e.button === 0) isDragging = false;
+});
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 function toMM(v) { return S.units === 'in' ? v * 25.4 : v; }
 
+function expansionAngle() {
+  // maps 0%→5°, 50%→45°, 100%→85°
+  return (5 + (expansionPct / 100) * 80) * Math.PI / 180;
+}
+
+// ─── Lattice computation ─────────────────────────────────────────────────────
 function computeLattice() {
   const W       = toMM(S.width);
   const H       = toMM(S.height);
-  const gap     = toMM(S.gap);
+  const gapMM   = toMM(S.gap);       // symmetric cell size (at 50%)
   const barW    = toMM(S.barW);
   const holeDia = toMM(S.holeDia);
   const arcH    = toMM(S.arcHeight);
 
-  const nX = Math.max(1, Math.ceil(W / gap));
-  const nY = Math.max(1, Math.ceil(H / gap));
-  const barLen = gap * Math.SQRT2;
-  const holeInset = barW / 2;     // distance from bar end to hole center
+  // Bar length is fixed by the symmetric gap; expansion changes cell proportions
+  const barLen = gapMM * Math.SQRT2;
+  const angle  = expansionAngle();
+  const cellW  = barLen * Math.cos(angle);  // cell width at current expansion
+  const cellH  = barLen * Math.sin(angle);  // cell height at current expansion
+
+  const nX = Math.max(1, Math.ceil(W / cellW));
+  const nY = Math.max(1, Math.ceil(H / cellH));
+
+  const holeInset = barW / 2; // pivot hole inset from bar tip
 
   // Arc radius (barrel vault)
-  const R = S.mode === 'vault' ? (W * W) / (8 * arcH) + arcH / 2 : null;
+  const vaultW = nX * cellW;
+  const R = S.mode === 'vault' ? (vaultW * vaultW) / (8 * arcH) + arcH / 2 : null;
 
-  // Pivot point positions
-  // Flat: (i * gap - W/2, j * gap - H/2, 0)  for i in [0..nX], j in [0..nY]
-  // Vault: x → along arc on cylinder, y → straight, z → height on cylinder
+  // Grid vertices — positioned symmetrically around origin
   function pivotPos(i, j) {
+    const px = i * cellW - (nX * cellW) / 2;
+    const py = j * cellH - (nY * cellH) / 2;
     if (S.mode === 'vault' && R !== null) {
-      const totalAngle = W / R;
-      const angle = -totalAngle / 2 + (i / nX) * totalAngle;
-      const x = R * Math.sin(angle);
-      const z = R - R * Math.cos(angle); // rises from 0
-      const y = j * gap - H / 2;
-      return new THREE.Vector3(x, y, z);
+      const totalAngle = vaultW / R;
+      const a = -totalAngle / 2 + (i / nX) * totalAngle;
+      return new THREE.Vector3(R * Math.sin(a), py, R - R * Math.cos(a));
     }
-    return new THREE.Vector3(i * gap - W / 2, j * gap - H / 2, 0);
+    return new THREE.Vector3(px, py, 0);
   }
 
-  // Build bar list: each bar = { p0, p1, type }
+  // Bars
   const bars = [];
   for (let j = 0; j < nY; j++) {
     for (let i = 0; i < nX; i++) {
-      const p00 = pivotPos(i,   j);
-      const p11 = pivotPos(i+1, j+1);
-      const p10 = pivotPos(i+1, j);
-      const p01 = pivotPos(i,   j+1);
-      bars.push({ p0: p00, p1: p11, type: 'A' });
-      bars.push({ p0: p10, p1: p01, type: 'B' });
+      bars.push({ p0: pivotPos(i,   j),   p1: pivotPos(i+1, j+1), type: 'A' });
+      bars.push({ p0: pivotPos(i+1, j),   p1: pivotPos(i,   j+1), type: 'B' });
     }
   }
 
-  return { bars, barLen, barW, holeDia, holeInset, nX, nY, W, H, R, gap };
+  // Unique pivot points for hole rendering (avoid per-bar clusters)
+  // Vertex pivots: (nX+1)*(nY+1) points at grid corners
+  const vertexPts = [];
+  for (let j = 0; j <= nY; j++)
+    for (let i = 0; i <= nX; i++)
+      vertexPts.push(pivotPos(i, j));
+
+  // Crossing pivots: cell centers where two bars intersect
+  const crossPts = [];
+  for (let j = 0; j < nY; j++)
+    for (let i = 0; i < nX; i++) {
+      const c = pivotPos(i, j).clone().add(pivotPos(i+1, j+1)).multiplyScalar(0.5);
+      crossPts.push(c);
+    }
+
+  return { bars, barLen, barW, holeDia, holeInset, nX, nY, cellW, cellH, R, vertexPts, crossPts };
 }
 
-// ─── Build Three.js geometry ──────────────────────────────────────────────────
-const MAT_A = new THREE.MeshPhongMaterial({ color: 0x8FAF6E, specular: 0x1a2010, shininess: 25, side: THREE.DoubleSide });
-const MAT_B = new THREE.MeshPhongMaterial({ color: 0xA8C882, specular: 0x1a2010, shininess: 25, side: THREE.DoubleSide });
-const MAT_HOLE = new THREE.MeshBasicMaterial({ color: 0x0d1008 });
+// ─── Materials ───────────────────────────────────────────────────────────────
+const MAT_A    = new THREE.MeshPhongMaterial({ color: 0x8FAF6E, specular: 0x1a2010, shininess: 25, side: THREE.DoubleSide });
+const MAT_B    = new THREE.MeshPhongMaterial({ color: 0xA8C882, specular: 0x1a2010, shininess: 25, side: THREE.DoubleSide });
+const MAT_HOLE = new THREE.MeshBasicMaterial({ color: 0x0a0f06 });
 
 let debounceTimer = null;
+let firstBuild    = true;
 
 function scheduleRebuild() {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(rebuildLattice, 220);
+  debounceTimer = setTimeout(rebuildLattice, 200);
 }
 
 function rebuildLattice() {
-  // Dispose previous meshes
-  latticeGroup.traverse(obj => {
-    if (obj.isMesh) {
-      obj.geometry.dispose();
-    }
-  });
+  latticeGroup.traverse(obj => { if (obj.isMesh) obj.geometry.dispose(); });
   latticeGroup.clear();
 
-  const { bars, barLen, barW, holeDia, holeInset, nX, nY, W, H, R } = computeLattice();
+  const { bars, barLen, barW, holeDia, holeInset, nX, nY, cellW, cellH, vertexPts, crossPts } = computeLattice();
 
-  const BAR_THICK = 3; // visual 3mm thickness
-  const barGeo = new THREE.BoxGeometry(barLen, barW, BAR_THICK);
+  const BAR_THICK = Math.max(2, barW * 0.18);
+  const offsets   = S.barCount === 2 ? [-barW * 0.65, barW * 0.65] : [0];
 
-  // Rounded end cap geometry (two half-cylinders at bar ends)
-  let capGeoL = null, capGeoR = null;
+  // Cap geometry for shaped ends
+  let capGeo = null;
   if (S.endShape === 'round') {
-    capGeoL = new THREE.CylinderGeometry(barW / 2, barW / 2, BAR_THICK, 16);
-    capGeoR = capGeoL.clone();
+    capGeo = new THREE.CylinderGeometry(barW / 2, barW / 2, BAR_THICK, 16);
+  } else if (S.endShape === 'tab') {
+    capGeo = new THREE.CylinderGeometry(barW * 0.32, barW * 0.32, BAR_THICK, 12);
   }
+  // Quaternion: makes CylinderGeometry (Y-axis) stand along Z (through bar face)
+  const faceQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
 
-  // Tab bumps
-  let tabGeoL = null, tabGeoR = null;
-  if (S.endShape === 'tab') {
-    tabGeoL = new THREE.CylinderGeometry(barW * 0.32, barW * 0.32, BAR_THICK, 12);
-    tabGeoR = tabGeoL.clone();
-  }
-
-  // Hole cylinder (visual overlay)
-  const holeR = holeDia / 2;
-  const holeGeo = new THREE.CylinderGeometry(holeR, holeR, BAR_THICK + 0.2, 16);
-
-  // Offsets when barCount = 2: offset each pair perpendicularly
-  const offsets = S.barCount === 2
-    ? [-barW * 0.65, barW * 0.65]
-    : [0];
-
+  // ── Bars ──────────────────────────────────────────────────────────────────
   bars.forEach(({ p0, p1, type }) => {
-    const mid   = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
-    const dir   = new THREE.Vector3().subVectors(p1, p0).normalize();
-    const perp  = new THREE.Vector3(-dir.y, dir.x, 0).normalize();
+    const mid  = new THREE.Vector3().addVectors(p0, p1).multiplyScalar(0.5);
+    const dir  = new THREE.Vector3().subVectors(p1, p0).normalize();
+    const perp = new THREE.Vector3(-dir.y, dir.x, 0).normalize();
+    const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir);
+    const mat  = type === 'A' ? MAT_A : MAT_B;
+    // Stack B-bars on top of A-bars so crossing is visible
+    const zOff = type === 'B' ? BAR_THICK : 0;
 
-    // Up vector for the flat bar face
-    const barUp = new THREE.Vector3(0, 0, 1);
-    const quat  = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir);
-
-    const mat = type === 'A' ? MAT_A : MAT_B;
+    const barGeo = new THREE.BoxGeometry(barLen, barW, BAR_THICK);
 
     offsets.forEach(offset => {
-      const centerPos = mid.clone().addScaledVector(perp, offset);
+      const pos = mid.clone().addScaledVector(perp, offset);
+      pos.z += zOff;
 
-      // Main bar body
       const mesh = new THREE.Mesh(barGeo, mat);
-      mesh.position.copy(centerPos);
+      mesh.position.copy(pos);
       mesh.quaternion.copy(quat);
       latticeGroup.add(mesh);
 
-      // Quaternion to make a Y-axis cylinder go through bar face (local Z axis)
-      const faceQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
-
-      // End shape additions
-      if (S.endShape !== 'square') {
-        const geo = S.endShape === 'round' ? capGeoL : tabGeoL;
-        if (geo) {
-          [-1, 1].forEach(side => {
-            const cap = new THREE.Mesh(geo, mat);
-            // Orient cap: cylinder through bar face, then rotated with bar
-            cap.quaternion.copy(quat).multiply(faceQuat);
-            cap.position.copy(centerPos).addScaledVector(dir, side * barLen / 2);
-            latticeGroup.add(cap);
-          });
-        }
+      if (capGeo) {
+        [-1, 1].forEach(side => {
+          const cap = new THREE.Mesh(capGeo, mat);
+          cap.quaternion.copy(quat).multiply(faceQuat);
+          cap.position.copy(pos).addScaledVector(dir, side * barLen / 2);
+          latticeGroup.add(cap);
+        });
       }
-
-      // Holes: inset from each end + center
-      const hPos = [
-        -(barLen / 2 - holeInset),
-        0,
-         (barLen / 2 - holeInset),
-      ];
-
-      hPos.forEach(hp => {
-        const hole = new THREE.Mesh(holeGeo, MAT_HOLE);
-        hole.quaternion.copy(quat).multiply(faceQuat);
-        hole.position.copy(centerPos).addScaledVector(dir, hp);
-        latticeGroup.add(hole);
-      });
     });
   });
 
-  // Auto-fit camera on first load or big changes
-  const diagonal = Math.sqrt(W * W + H * H);
-  const dist = diagonal * 0.9 + 100;
-  camera.position.set(0, 0, dist);
-  controls.target.set(0, 0, 0);
-  controls.update();
+  // ── Holes — one per unique rivet location, not per bar ────────────────────
+  // This eliminates the 4-cluster visual artifact at shared vertices.
+  const holeR     = holeDia / 2;
+  const holeH     = BAR_THICK * 2 + 2;  // tall enough to punch through both layers
+  const holeGeo   = new THREE.CylinderGeometry(holeR, holeR, holeH, 16);
 
-  // Update UI
-  updateInfo(bars.length * offsets.length, bars[0] ? barLen : 0, nX, nY);
+  // Vertex pivots — bar end connection points, sit in the A-bar layer (z=0)
+  vertexPts.forEach(pt => {
+    const hole = new THREE.Mesh(holeGeo, MAT_HOLE);
+    hole.rotation.x = Math.PI / 2;          // orient cylinder along Z
+    hole.position.set(pt.x, pt.y, BAR_THICK); // z = center of A+B stack
+    latticeGroup.add(hole);
+  });
+
+  // Crossing pivots — cell-center crossing points, sit in B-bar layer
+  crossPts.forEach(pt => {
+    const hole = new THREE.Mesh(holeGeo, MAT_HOLE);
+    hole.rotation.x = Math.PI / 2;
+    hole.position.set(pt.x, pt.y, BAR_THICK);
+    latticeGroup.add(hole);
+  });
+
+  // Auto-fit camera only on first load
+  if (firstBuild) {
+    const diagonal = Math.sqrt((nX * cellW) ** 2 + (nY * cellH) ** 2);
+    camera.position.set(0, 0, diagonal * 0.9 + 100);
+    controls.target.set(0, 0, 0);
+    controls.update();
+    firstBuild = false;
+  }
+
+  updateInfo(bars.length * offsets.length, barLen, nX, nY, cellW, cellH);
+  updateExpansionHint();
   updateVaultHint();
 }
 
-function updateInfo(totalBars, barLen, nX, nY) {
-  const unitLabel = S.units;
-  const factor = S.units === 'in' ? 1 / 25.4 : 1;
-  const lenStr = (barLen * factor).toFixed(1);
-  const wStr   = S.width;
-  const hStr   = S.height;
-  document.getElementById('cell-hint').textContent = `${nX} × ${nY} cells = ${nX * nY * 2} bars`;
+function updateInfo(totalBars, barLen, nX, nY, cellW, cellH) {
+  const f   = S.units === 'in' ? 1 / 25.4 : 1;
+  const ul  = S.units;
+  const len = (barLen * f).toFixed(1);
+  const cw  = (cellW  * f).toFixed(1);
+  const ch  = (cellH  * f).toFixed(1);
+  document.getElementById('cell-hint').textContent = `${nX}×${nY} cells = ${nX * nY * 2} bars`;
   document.getElementById('info-strip').innerHTML =
     `${totalBars} bars total<br>` +
-    `Bar length: ${lenStr} ${unitLabel}<br>` +
-    `Bar width: ${S.barW} ${unitLabel}<br>` +
-    `Coverage: ${wStr} × ${hStr} ${unitLabel}`;
+    `Bar L: ${len} ${ul} · W: ${S.barW} ${ul}<br>` +
+    `Cell: ${cw}×${ch} ${ul}`;
   document.getElementById('vp-stats').textContent =
-    `${nX}×${nY} cells · ${totalBars} bars · L=${lenStr}${unitLabel}`;
+    `${nX}×${nY} · ${totalBars} bars · L=${len}${ul}`;
+}
+
+function updateExpansionHint() {
+  const pct    = Math.round(expansionPct);
+  const barLen = toMM(S.gap) * Math.SQRT2;
+  const angle  = expansionAngle();
+  const f      = S.units === 'in' ? 1 / 25.4 : 1;
+  const ul     = S.units;
+  const cw     = (barLen * Math.cos(angle) * f).toFixed(1);
+  const ch     = (barLen * Math.sin(angle) * f).toFixed(1);
+  const label  = pct < 40 ? 'contracted' : pct > 60 ? 'extended' : 'symmetric';
+  document.getElementById('expansion-hint').textContent = `${pct}% — ${label} (${cw}×${ch} ${ul})`;
 }
 
 function updateVaultHint() {
   if (S.mode !== 'vault') return;
-  const W = toMM(S.width);
+  const W    = toMM(S.width);
   const arcH = toMM(S.arcHeight);
   if (arcH <= 0) return;
   const R = (W * W) / (8 * arcH) + arcH / 2;
-  const factor = S.units === 'in' ? 1 / 25.4 : 1;
-  document.getElementById('vault-hint').textContent =
-    `R = ${(R * factor).toFixed(1)} ${S.units}`;
+  const f = S.units === 'in' ? 1 / 25.4 : 1;
+  document.getElementById('vault-hint').textContent = `R = ${(R * f).toFixed(1)} ${S.units}`;
 }
 
 // ─── SVG Export ──────────────────────────────────────────────────────────────
@@ -624,9 +679,8 @@ function exportSVG() {
   const endShape   = S.endShape;
   const totalBars  = nX * nY * 2 * S.barCount;
 
-  // All bars identical — just tile them
   const cellW = barLen + margin;
-  const cellH = barW + margin;
+  const cellH = barW   + margin;
   const cols  = Math.min(barsPerRow, totalBars);
   const rows  = Math.ceil(totalBars / cols);
   const pageW = cols * cellW + margin;
@@ -637,51 +691,37 @@ function exportSVG() {
     `<svg xmlns="http://www.w3.org/2000/svg"`,
     `     width="${pageW.toFixed(2)}mm" height="${pageH.toFixed(2)}mm"`,
     `     viewBox="0 0 ${pageW.toFixed(4)} ${pageH.toFixed(4)}">`,
-    `  <!-- Scissor Lattice | ${totalBars} bars | ${barLen.toFixed(1)} x ${barW.toFixed(1)} mm each | ${nX}x${nY} cells -->`,
-    `  <!-- Qty per piece: ${totalBars} | Hole dia: ${holeDia.toFixed(1)}mm -->`,
+    `  <!-- Scissor Lattice | ${totalBars} bars | ${barLen.toFixed(1)}x${barW.toFixed(1)}mm | ${nX}x${nY} cells -->`,
     `  <style>`,
-    `    .cut  { fill: none; stroke: #000000; stroke-width: 0.1; }`,
-    `    .hole { fill: none; stroke: #ff0000; stroke-width: 0.1; }`,
+    `    .cut  { fill: none; stroke: #000; stroke-width: 0.1; }`,
+    `    .hole { fill: none; stroke: #f00; stroke-width: 0.1; }`,
     `    .lbl  { font-family: monospace; font-size: 2px; fill: #555; }`,
     `  </style>`,
   ];
 
-  // Hole positions along bar (from bar left edge x=0)
-  const hX = [
-    holeInset,
-    barLen / 2,
-    barLen - holeInset,
-  ];
+  const hX = [holeInset, barLen / 2, barLen - holeInset];
   const hY = barW / 2;
   const hR = holeDia / 2;
 
   function barPath(ox, oy) {
-    const x = ox, y = oy;
     const r = barW / 2;
-    let d;
     if (endShape === 'square') {
-      d = `M${x.toFixed(4)},${y.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
-    } else if (endShape === 'round') {
-      // Rounded rect via arc
-      const rx = r.toFixed(4);
-      d = `M${(x + r).toFixed(4)},${y.toFixed(4)}` +
-          ` h${(barLen - 2 * r).toFixed(4)}` +
-          ` a${rx},${rx} 0 0 1 ${rx},${rx}` +
-          ` v${(barW - 2 * r).toFixed(4)}` +
-          ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${rx}` +
-          ` h${(-(barLen - 2 * r)).toFixed(4)}` +
-          ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${(-r).toFixed(4)}` +
-          ` v${(-(barW - 2 * r)).toFixed(4)}` +
-          ` a${rx},${rx} 0 0 1 ${rx},${(-r).toFixed(4)} Z`;
-    } else {
-      // Tab: rect body + small semicircle bump on each end tip
-      const tabR = (barW * 0.32).toFixed(4);
-      const rx   = r.toFixed(4);
-      d = `M${x.toFixed(4)},${y.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
-      // Tab bumps as separate circles (for laser cut holes or decorative)
-      // emitted as separate <circle> elements below
+      return `M${ox.toFixed(4)},${oy.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
     }
-    return d;
+    if (endShape === 'round') {
+      const rx = r.toFixed(4);
+      return `M${(ox+r).toFixed(4)},${oy.toFixed(4)}` +
+             ` h${(barLen-2*r).toFixed(4)}` +
+             ` a${rx},${rx} 0 0 1 ${rx},${rx}` +
+             ` v${(barW-2*r).toFixed(4)}` +
+             ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${rx}` +
+             ` h${(-(barLen-2*r)).toFixed(4)}` +
+             ` a${rx},${rx} 0 0 1 ${(-r).toFixed(4)},${(-r).toFixed(4)}` +
+             ` v${(-(barW-2*r)).toFixed(4)}` +
+             ` a${rx},${rx} 0 0 1 ${rx},${(-r).toFixed(4)} Z`;
+    }
+    // tab: rect + bumps handled below
+    return `M${ox.toFixed(4)},${oy.toFixed(4)} h${barLen.toFixed(4)} v${barW.toFixed(4)} h${(-barLen).toFixed(4)} Z`;
   }
 
   for (let idx = 0; idx < totalBars; idx++) {
@@ -693,11 +733,10 @@ function exportSVG() {
     lines.push(`  <g id="bar-${idx + 1}">`);
     lines.push(`    <path class="cut" d="${barPath(ox, oy)}"/>`);
 
-    // Tab bumps (separate cutouts on each short end)
     if (endShape === 'tab') {
       const tabR = (barW * 0.32).toFixed(4);
-      lines.push(`    <circle class="cut" cx="${(ox).toFixed(4)}" cy="${(oy + barW / 2).toFixed(4)}" r="${tabR}"/>`);
-      lines.push(`    <circle class="cut" cx="${(ox + barLen).toFixed(4)}" cy="${(oy + barW / 2).toFixed(4)}" r="${tabR}"/>`);
+      lines.push(`    <circle class="cut" cx="${ox.toFixed(4)}" cy="${(oy+hY).toFixed(4)}" r="${tabR}"/>`);
+      lines.push(`    <circle class="cut" cx="${(ox+barLen).toFixed(4)}" cy="${(oy+hY).toFixed(4)}" r="${tabR}"/>`);
     }
 
     // Pivot holes
@@ -708,11 +747,9 @@ function exportSVG() {
     lines.push(`  </g>`);
   }
 
-  // Cut list label
-  const factor = S.units === 'in' ? 1 / 25.4 : 1;
-  const lenDisp = (barLen * factor).toFixed(1);
+  const f = S.units === 'in' ? 1 / 25.4 : 1;
   lines.push(`  <text class="lbl" x="${margin}" y="${(pageH - 1).toFixed(2)}">`);
-  lines.push(`    Scissor Lattice — ${totalBars} bars — ${lenDisp}×${S.barW}${S.units} — hole ⌀${S.holeDia}${S.units} — ${nX}×${nY} cells`);
+  lines.push(`    Scissor Lattice — ${totalBars} bars — ${(barLen*f).toFixed(1)}×${S.barW}${S.units} — ⌀${S.holeDia}${S.units} holes — ${nX}×${nY} cells`);
   lines.push(`  </text>`);
   lines.push(`</svg>`);
 
@@ -727,10 +764,9 @@ function exportSVG() {
 // ─── Settings wiring ─────────────────────────────────────────────────────────
 
 function wireSegmented(id, key, onchange) {
-  const el = document.getElementById(id);
-  el.querySelectorAll('button').forEach(btn => {
+  document.getElementById(id).querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => {
-      el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      document.getElementById(id).querySelectorAll('button').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const raw = btn.dataset.val;
       S[key] = key === 'barCount' ? parseInt(raw) : raw;
@@ -739,37 +775,24 @@ function wireSegmented(id, key, onchange) {
   });
 }
 
-function wireInput(id, key, transform) {
+function wireInput(id, key) {
   document.getElementById(id).addEventListener('input', e => {
     const v = parseFloat(e.target.value);
-    if (!isNaN(v) && v > 0) {
-      S[key] = transform ? transform(v) : v;
-      scheduleRebuild();
-    }
+    if (!isNaN(v) && v > 0) { S[key] = v; scheduleRebuild(); }
   });
 }
 
-// Mode toggle also shows/hides vault panel
 wireSegmented('seg-mode', 'mode', () => {
-  const vaultPanel = document.getElementById('vault-panel');
-  if (S.mode === 'vault') {
-    vaultPanel.classList.add('visible');
-  } else {
-    vaultPanel.classList.remove('visible');
-  }
+  document.getElementById('vault-panel').classList.toggle('visible', S.mode === 'vault');
   scheduleRebuild();
 });
 
 wireSegmented('seg-units', 'units', () => {
-  // Convert stored mm values to new unit for display and state
-  const toNew = S.units === 'in' ? (v) => +(v / 25.4).toFixed(4) : (v) => +(v * 25.4).toFixed(2);
-  const fields = ['inp-width', 'inp-height', 'inp-gap', 'inp-barw', 'inp-hole', 'inp-arc'];
-  const keys   = ['width', 'height', 'gap', 'barW', 'holeDia', 'arcHeight'];
-  // Convert: previous values were stored in old unit; toMM gives mm; then convert to new unit
   const prevUnit = S.units === 'in' ? 'mm' : 'in';
+  const fields   = ['inp-width', 'inp-height', 'inp-gap', 'inp-barw', 'inp-hole', 'inp-arc'];
+  const keys     = ['width', 'height', 'gap', 'barW', 'holeDia', 'arcHeight'];
   fields.forEach((fid, i) => {
-    const oldVal = S[keys[i]];
-    const asMM   = prevUnit === 'mm' ? oldVal : oldVal * 25.4;
+    const asMM   = prevUnit === 'mm' ? S[keys[i]] : S[keys[i]] * 25.4;
     const newVal = S.units === 'in' ? +(asMM / 25.4).toFixed(3) : +asMM.toFixed(1);
     S[keys[i]] = newVal;
     document.getElementById(fid).value = newVal;
@@ -777,8 +800,8 @@ wireSegmented('seg-units', 'units', () => {
   scheduleRebuild();
 });
 
-wireSegmented('seg-end',   'endShape',  scheduleRebuild);
-wireSegmented('seg-count', 'barCount',  scheduleRebuild);
+wireSegmented('seg-end',   'endShape', scheduleRebuild);
+wireSegmented('seg-count', 'barCount', scheduleRebuild);
 
 wireInput('inp-width',  'width');
 wireInput('inp-height', 'height');
@@ -787,7 +810,12 @@ wireInput('inp-barw',   'barW');
 wireInput('inp-hole',   'holeDia');
 wireInput('inp-arc',    'arcHeight');
 
-// ─── Initial build ───────────────────────────────────────────────────────────
+document.getElementById('inp-expansion').addEventListener('input', e => {
+  expansionPct = parseFloat(e.target.value);
+  rebuildLattice();
+});
+
+// ─── Initial build ────────────────────────────────────────────────────────────
 rebuildLattice();
 </script>
 </body>
