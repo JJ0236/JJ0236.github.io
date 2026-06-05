@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Ozark Tours — Private helicopter tours over the Arkansas Ozarks. Scenic flights, charters, quartz mine landings, and sunset flights from Harrison, AR." />
-  <title>Ozark Tours — Helicopter Flights Over the Ozarks</title>
+  <meta name="description" content="Ozark Tours — Private helicopter tours over the Arkansas Ozarks. Crystal mining, fly fishing, equestrian trails, supercar rentals, sailing, and more. Harrison, AR." />
+  <title>Ozark Tours — Helicopter Adventures Over the Ozarks</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -12,17 +12,19 @@
 </head>
 <body>
 
-  <!-- Skip link for keyboard users -->
   <a href="#main-content" class="skip-link">Skip to main content</a>
 
-  <!-- ============================================================
-       NAV
-  ============================================================ -->
+  <div class="ambient" aria-hidden="true">
+    <span class="ambient__orb ambient__orb--1"></span>
+    <span class="ambient__orb ambient__orb--2"></span>
+    <span class="ambient__orb ambient__orb--3"></span>
+  </div>
+
   <header class="nav" id="nav" role="banner">
     <div class="nav__inner">
       <a href="#hero" class="nav__logo" aria-label="Ozark Tours home">Ozark Tours</a>
       <nav class="nav__links" id="navLinks" aria-label="Primary navigation">
-        <a href="#flights">Flights</a>
+        <a href="#adventures">Adventures</a>
         <a href="#about">About</a>
         <a href="#gallery">The Ozarks</a>
         <a href="#book">Book</a>
@@ -42,19 +44,37 @@
     </div>
   </header>
 
+  <!-- TRAIL — fixed viewport overlay so coordinates are always valid.
+       The line is drawn each frame from the journey cards down to the
+       Adventures node, so it stays continuous across the section boundary. -->
+  <svg class="trail" id="trail"
+    viewBox="0 0 100 100"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+    xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="journeyFade" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">
+        <stop offset="0"    stop-color="#e8a84e" stop-opacity="0"/>
+        <stop offset="0.05" stop-color="#e8a84e" stop-opacity="1"/>
+        <stop offset="0.52" stop-color="#e8a84e" stop-opacity="1"/>
+        <stop offset="0.66" stop-color="#e8a84e" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path class="journey__path-fill"
+      d=""
+      fill="none"
+      stroke="url(#journeyFade)"
+      stroke-width="3"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      vector-effect="non-scaling-stroke"/>
+  </svg>
+
   <main id="main-content">
 
-    <!-- ============================================================
-         HERO
-    ============================================================ -->
+    <!-- HERO -->
     <section class="hero" id="hero" aria-label="Hero">
-      <div class="hero__bg" aria-hidden="true">
-        <!--
-          STANDIN VIDEO — replace <source src> with your aerial Ozarks footage.
-          Download free aerial drone videos at pexels.com (search "aerial drone forest")
-          or coverr.co (search "aerial"). Drop the .mp4 into assets/hero-aerial.mp4
-          and update the src below. The poster image shows while the video loads.
-        -->
+      <div class="hero__bg" id="heroBg" aria-hidden="true">
         <video
           class="hero__video"
           autoplay
@@ -63,22 +83,21 @@
           playsinline
           disablepictureinpicture
           aria-hidden="true"
-          poster="https://picsum.photos/seed/ozarks-aerial-hero/1920/1080"
+          poster="https://images.pexels.com/photos/4320443/pexels-photo-4320443.jpeg?auto=compress&cs=tinysrgb&w=1920"
         >
           <source
-            src="https://videos.pexels.com/video-files/3772380/3772380-hd_1920_1080_25fps.mp4"
+            src="https://videos.pexels.com/video-files/32391067/13816974_1920_1080_30fps.mp4"
             type="video/mp4"
           />
-          <!-- Fallback: poster image shows if video cannot be loaded -->
         </video>
       </div>
       <div class="hero__overlay" aria-hidden="true"></div>
       <div class="hero__content">
-        <p class="eyebrow">Aerial Tours &middot; Arkansas Ozarks</p>
-        <h1 class="hero__headline">The Ozarks,<br /><em>From Above.</em></h1>
-        <p class="hero__sub">Private helicopter tours over the ridges, rivers, and hidden wonders of the Arkansas Ozarks. No crowds. No trails. Just sky.</p>
+        <p class="eyebrow">Aerial Adventures &middot; Arkansas Ozarks</p>
+        <h1 class="hero__headline">The Ozarks,<br /><em>Unleashed.</em></h1>
+        <p class="hero__sub">Eight extraordinary experiences delivered by private helicopter. Crystal mines, fly fishing, supercar drives, sailing, fine dining, and more — deep in the Arkansas Ozarks.</p>
         <div class="hero__actions">
-          <a href="#book" class="btn btn--primary">Book a Flight</a>
+          <a href="#adventures" class="btn btn--primary">Choose Your Adventure</a>
           <a href="#journey" class="btn btn--ghost">See the Experience</a>
         </div>
       </div>
@@ -87,219 +106,313 @@
       </a>
     </section>
 
-    <!-- ============================================================
-         JOURNEY — SCROLLYTELLING
-         One SVG line flows down the full height of the section.
-         Five stops are spaced 100vh apart. Cards fade in on scroll.
-    ============================================================ -->
+    <!-- TICKER -->
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span>Crystal Mining</span><span class="ticker__sep">✦</span>
+        <span>Fly Fishing &middot; Cotter AR</span><span class="ticker__sep">✦</span>
+        <span>Equestrian Trails</span><span class="ticker__sep">✦</span>
+        <span>100-Mile Biking</span><span class="ticker__sep">✦</span>
+        <span>Supercar Rentals</span><span class="ticker__sep">✦</span>
+        <span>Sailing on Beaver Lake</span><span class="ticker__sep">✦</span>
+        <span>Restaurant Ryn</span><span class="ticker__sep">✦</span>
+        <span>Antebellum Mansion</span><span class="ticker__sep">✦</span>
+        <!-- Duplicate for seamless loop -->
+        <span>Crystal Mining</span><span class="ticker__sep">✦</span>
+        <span>Fly Fishing &middot; Cotter AR</span><span class="ticker__sep">✦</span>
+        <span>Equestrian Trails</span><span class="ticker__sep">✦</span>
+        <span>100-Mile Biking</span><span class="ticker__sep">✦</span>
+        <span>Supercar Rentals</span><span class="ticker__sep">✦</span>
+        <span>Sailing on Beaver Lake</span><span class="ticker__sep">✦</span>
+        <span>Restaurant Ryn</span><span class="ticker__sep">✦</span>
+        <span>Antebellum Mansion</span><span class="ticker__sep">✦</span>
+      </div>
+    </div>
+
+    <!-- JOURNEY — SCROLLYTELLING -->
     <section class="journey" id="journey" aria-labelledby="journey-heading">
 
       <div class="journey__header">
-        <p class="eyebrow">Your Journey</p>
-        <h2 id="journey-heading">Five moments<br />you won&rsquo;t forget.</h2>
+        <p class="eyebrow">Every Adventure</p>
+        <h2 id="journey-heading">Eight ways to experience<br />the <em>Ozarks.</em></h2>
       </div>
 
-      <!-- track: position:relative so the SVG and dots can be positioned absolutely.
-           Height = 5 stops each min-height:100vh ≈ 500vh.
-           The SVG is stretched to 100% of this height so the line literally flows
-           down the page — not compressed into one viewport. -->
       <div class="journey__track">
-        <!-- Background photos: sticky 100vh stage, crossfades between stops -->
         <div class="journey__bg-stage" aria-hidden="true">
-          <!-- Stop 0: aerial forested hills & valleys (lift-off feeling) -->
-          <div class="journey__bg" data-stop="0" style="background-image: url('https://images.pexels.com/photos/12485582/pexels-photo-12485582.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <!-- Stop 1: aerial river winding through lush forest (Boxley Valley / Buffalo River) -->
-          <div class="journey__bg" data-stop="1" style="background-image: url('https://images.pexels.com/photos/576832/pexels-photo-576832.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <!-- Stop 2: rocky cliff overlooking forested mountains (Hawksbill Crag) -->
-          <div class="journey__bg" data-stop="2" style="background-image: url('https://images.pexels.com/photos/2528039/pexels-photo-2528039.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <!-- Stop 3: aerial canyon river bend (Turner Bend / hidden canyon) -->
-          <div class="journey__bg" data-stop="3" style="background-image: url('https://images.pexels.com/photos/17182272/pexels-photo-17182272.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <!-- Stop 4: salt mine / geological cave interior (crystal mines landing) -->
-          <div class="journey__bg" data-stop="4" style="background-image: url('https://images.pexels.com/photos/2790876/pexels-photo-2790876.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="journey__bg" data-bg="0" style="background-image: url('https://images.pexels.com/photos/12654013/pexels-photo-12654013.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="journey__bg" data-bg="1" style="background-image: url('https://images.pexels.com/photos/10057433/pexels-photo-10057433.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="journey__bg" data-bg="2" style="background-image: url('https://images.pexels.com/photos/2739664/pexels-photo-2739664.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="journey__bg" data-bg="3" style="background-image: url('https://images.pexels.com/photos/8564221/pexels-photo-8564221.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
         </div>
 
-        <!-- THE LINE: single SVG absolutely positioned, spanning 100% of track height -->
-        <svg class="journey__svg"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-          xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <clipPath id="journeyClip">
-              <rect id="journeyClipRect" x="0" y="0" width="100" height="0"/>
-            </clipPath>
-          </defs>
-          <path class="journey__path-fill"
-            d="M 72,10 L 80,30 L 20,50 L 80,70 L 20,90"
-            fill="none"
-            stroke="#e8a84e"
-            stroke-width="4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            vector-effect="non-scaling-stroke"
-            clip-path="url(#journeyClip)"/>
-        </svg>
+        <!-- Dots — positioned by JS onto each card's inner edge -->
+        <div class="journey__dot" data-stop="0" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="1" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="2" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="3" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="4" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="5" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="6" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
+        <div class="journey__dot" data-stop="7" aria-hidden="true"><div class="journey__dot-ring"></div><div class="journey__dot-inner"></div></div>
 
-        <!-- Dots: absolutely positioned on the track at the SVG waypoint coords.
-             left = svgX %, top = svgY % of track height. -->
-        <div class="journey__dot" data-stop="0" aria-hidden="true" style="left:72%; top:10%;">
-          <div class="journey__dot-ring"></div>
-          <div class="journey__dot-inner"></div>
-        </div>
-        <div class="journey__dot" data-stop="1" aria-hidden="true" style="left:80%; top:30%;">
-          <div class="journey__dot-ring"></div>
-          <div class="journey__dot-inner"></div>
-        </div>
-        <div class="journey__dot" data-stop="2" aria-hidden="true" style="left:20%; top:50%;">
-          <div class="journey__dot-ring"></div>
-          <div class="journey__dot-inner"></div>
-        </div>
-        <div class="journey__dot" data-stop="3" aria-hidden="true" style="left:80%; top:70%;">
-          <div class="journey__dot-ring"></div>
-          <div class="journey__dot-inner"></div>
-        </div>
-        <div class="journey__dot" data-stop="4" aria-hidden="true" style="left:20%; top:90%;">
-          <div class="journey__dot-ring"></div>
-          <div class="journey__dot-inner"></div>
-        </div>
-
-        <!-- Stops: each 100vh tall. Card fades in when scrolled into view.
-             Cards alternate left/right to mirror the zigzag. -->
-        <div class="journey__stop" data-stop="0">
+        <!-- 8 Experience Stops -->
+        <div class="journey__stop" data-stop="0" data-side="left">
           <div class="journey__card">
             <span class="step-num">01</span>
-            <p class="step-location">Harrison, AR</p>
-            <h3>Lift off from the valley</h3>
-            <p>Your pilot briefs you beside the aircraft on a quiet private pad north of town. The valley floor drops away &mdash; and suddenly the entire Buffalo River watershed opens up beneath you.</p>
+            <p class="step-location">Signature Experience</p>
+            <h3>Crystal Mining Tours</h3>
+            <p>Dig for Ozark quartz in a working private mine &mdash; and keep everything you find.</p>
           </div>
         </div>
 
-        <div class="journey__stop" data-stop="1">
+        <div class="journey__stop" data-stop="1" data-side="right">
           <div class="journey__card">
             <span class="step-num">02</span>
-            <p class="step-location">Boxley Valley</p>
-            <h3>Elk meadows and the upper Buffalo</h3>
-            <p>A patchwork of farmland and open meadow where elk herds roam freely. We follow the upper Buffalo River while it&rsquo;s still cold and clear, winding through the valley below.</p>
+            <p class="step-location">White River &middot; Cotter, AR</p>
+            <h3>Fly Fishing</h3>
+            <p>World-class trout water on the legendary White River tailwater below Bull Shoals Dam.</p>
           </div>
         </div>
 
-        <div class="journey__stop" data-stop="2">
+        <div class="journey__stop" data-stop="2" data-side="left">
           <div class="journey__card">
             <span class="step-num">03</span>
-            <p class="step-location">Hawksbill Crag &mdash; Whitaker Point</p>
-            <h3>Circle Arkansas&rsquo;s most iconic overlook</h3>
-            <p>The most photographed rock formation in Arkansas juts from a 2,000-foot ridge. From the air you see its true scale &mdash; and the river bend 1,000 feet directly below it.</p>
+            <p class="step-location">Trail Riding</p>
+            <h3>Equestrian Adventures</h3>
+            <p>Backcountry trails in the Boston Mountains that only horses can reach.</p>
           </div>
         </div>
 
-        <div class="journey__stop" data-stop="3">
+        <div class="journey__stop" data-stop="3" data-side="right">
           <div class="journey__card">
             <span class="step-num">04</span>
-            <p class="step-location">Turner Bend &mdash; Lost Valley</p>
-            <h3>Drop into a hidden canyon</h3>
-            <p>A slot canyon most people never find on foot. We bank low over Clark Creek&rsquo;s natural bridge, then circle back over the Blue Hole &mdash; a spring-fed swimming hole the color of jade.</p>
+            <p class="step-location">Hundred Miles</p>
+            <h3>Private Mountain Biking</h3>
+            <p>100 miles of single-track. Zero crowds. A private trailhead reserved for you.</p>
           </div>
         </div>
 
-        <div class="journey__stop" data-stop="4">
+        <div class="journey__stop" data-stop="4" data-side="left">
           <div class="journey__card">
             <span class="step-num">05</span>
-            <p class="step-location">Ouachita Foothills &mdash; Crystal Mines</p>
-            <h3>Land at the crystal mines, then ride the sunset home</h3>
-            <p>We set down at a working quartz formation. You&rsquo;re handed a pick &mdash; twenty minutes of digging, then back in the air for the flight home as the ridgelines go gold behind you.</p>
+            <p class="step-location">Drive Something Special</p>
+            <h3>Supercar Rentals</h3>
+            <p>Lamborghini, Ferrari, or classic muscle on empty Ozark mountain roads.</p>
           </div>
         </div>
 
-      </div><!-- /journey__track -->
+        <div class="journey__stop" data-stop="5" data-side="right">
+          <div class="journey__card">
+            <span class="step-num">06</span>
+            <p class="step-location">Beaver Lake</p>
+            <h3>Sailing with a Private Chef</h3>
+            <p>A private yacht, a gourmet chef, and ninety miles of hidden Ozark shoreline.</p>
+          </div>
+        </div>
+
+        <div class="journey__stop" data-stop="6" data-side="left">
+          <div class="journey__card">
+            <span class="step-num">07</span>
+            <p class="step-location">Fine Dining</p>
+            <h3>Fly In to Restaurant Ryn</h3>
+            <p>Arrive by air. Land at one of the South&rsquo;s finest farm-to-table restaurants.</p>
+          </div>
+        </div>
+
+        <div class="journey__stop" data-stop="7" data-side="right">
+          <div class="journey__card">
+            <span class="step-num">08</span>
+            <p class="step-location">Overnight Stay</p>
+            <h3>Antebellum Mansion</h3>
+            <p>Wake up in a 180-year-old estate, with horses grazing outside your window.</p>
+          </div>
+        </div>
+
+      </div>
     </section>
 
-    <!-- ============================================================
-         FLIGHTS — TOUR CARDS
-    ============================================================ -->
-    <section class="flights" id="flights" aria-labelledby="flights-heading">
-      <div class="container">
-        <p class="eyebrow">Our Flights</p>
-        <h2 id="flights-heading">Pick your adventure.</h2>
-        <p class="section-sub">Every tour departs from Harrison, AR. Private charters available year-round.</p>
+    <!-- Soft blend: dark journey melts into cream adventures (no hard wave) -->
+    <div class="wave-divider wave-divider--blend" aria-hidden="true"></div>
+
+    <!-- ADVENTURES — CHOOSE YOUR EXPERIENCE -->
+    <section class="adventures" id="adventures" aria-labelledby="adventures-heading">
+
+      <!-- Trail hand-off: the fixed trail line lands on the node, bar splits -->
+      <div class="adv-intro" aria-hidden="true">
+        <span class="adv-intro__node"></span>
+        <span class="adv-intro__bar"></span>
       </div>
 
-      <div class="flights__cards" role="list">
+      <div class="container">
+        <p class="eyebrow">Your Ozark Adventures</p>
+        <h2 id="adventures-heading">Choose your<br /><em>experience.</em></h2>
+        <p class="section-sub">Eight extraordinary Ozark adventures. One helicopter to get you there. Your itinerary is entirely yours to build.</p>
+      </div>
 
-        <article class="flight-card" role="listitem">
-          <div class="flight-card__img" role="img" aria-label="Scenic Overview flight"
-            style="background-image: url('https://picsum.photos/seed/scenic-overview/700/500');"></div>
-          <div class="flight-card__body">
-            <p class="flight-card__tag">Most Popular</p>
-            <h3>Scenic Overview</h3>
-            <p>A sweeping loop over the Buffalo River watershed, Boxley Valley, and limestone bluff country. The perfect introduction to the Ozarks from the air.</p>
-            <div class="flight-card__meta">
-              <span>30&ndash;45 min</span>
-              <span>From $149<span class="per-person">/person</span></span>
-            </div>
-            <a href="#book" class="btn btn--primary">Book This Flight</a>
+      <div class="adventures__grid">
+
+        <!-- 1: Crystal Mining — FEATURED (2-col span) -->
+        <article class="adv-card adv-card--featured" data-adv-idx="0">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/3737455/pexels-photo-3737455.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">&#9670; Signature Experience</span>
+            <h3 class="adv-card__title">Crystal Mining Tours</h3>
+            <p class="adv-card__tagline">Dig for Ozark quartz in a working private mine</p>
           </div>
+          <button class="adv-card__trigger" aria-label="Explore Crystal Mining Tours — your signature Ozark adventure">
+            <span>Explore Experience <span aria-hidden="true">&#8594;</span></span>
+          </button>
         </article>
 
-        <article class="flight-card" role="listitem">
-          <div class="flight-card__img" role="img" aria-label="Private Charter flight"
-            style="background-image: url('https://picsum.photos/seed/private-charter/700/500');"></div>
-          <div class="flight-card__body">
-            <p class="flight-card__tag">Private</p>
-            <h3>Private Charter</h3>
-            <p>Your aircraft, your route, your time. Propose, celebrate, or just escape — we'll customize every detail including landing spots and duration.</p>
-            <div class="flight-card__meta">
-              <span>Your schedule</span>
-              <span>Custom pricing</span>
-            </div>
-            <a href="#book" class="btn btn--primary">Inquire Now</a>
+        <!-- 2: Fly Fishing -->
+        <article class="adv-card" data-adv-idx="1">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/1409019/pexels-photo-1409019.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">World-Class Waters</span>
+            <h3 class="adv-card__title">Fly Fishing in Cotter</h3>
+            <p class="adv-card__tagline">White River tailwater — legendary trout</p>
           </div>
+          <button class="adv-card__trigger" aria-label="Explore Fly Fishing in Cotter, Arkansas">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
         </article>
 
-        <article class="flight-card" role="listitem">
-          <div class="flight-card__img" role="img" aria-label="Landing Adventure flight — quartz mine"
-            style="background-image: url('https://picsum.photos/seed/landing-adventure/700/500');"></div>
-          <div class="flight-card__body">
-            <p class="flight-card__tag">Adventure</p>
-            <h3>Landing Adventure</h3>
-            <p>Fly out, land somewhere extraordinary — a quartz crystal mine, a remote bluff, a river bend. Explore on foot, then fly back. This one stays with you.</p>
-            <div class="flight-card__meta">
-              <span>60&ndash;90 min</span>
-              <span>From $229<span class="per-person">/person</span></span>
-            </div>
-            <a href="#book" class="btn btn--primary">Book This Flight</a>
+        <!-- 3: Equestrian -->
+        <article class="adv-card" data-adv-idx="2">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/1490577/pexels-photo-1490577.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Trail Riding</span>
+            <h3 class="adv-card__title">Equestrian Adventures</h3>
+            <p class="adv-card__tagline">Ride trails only horses can reach</p>
           </div>
+          <button class="adv-card__trigger" aria-label="Explore Equestrian Adventures in the Ozarks">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
         </article>
 
-        <article class="flight-card" role="listitem">
-          <div class="flight-card__img" role="img" aria-label="Sunset Flight over the Ozark ridgeline"
-            style="background-image: url('https://picsum.photos/seed/golden-sunset/700/500');"></div>
-          <div class="flight-card__body">
-            <p class="flight-card__tag">Romantic</p>
-            <h3>Sunset Flight</h3>
-            <p>Golden hour above the Ozark ridgelines. Timed to the minute, with champagne on landing. The most photographed experience we offer.</p>
-            <div class="flight-card__meta">
-              <span>45&ndash;60 min</span>
-              <span>From $199<span class="per-person">/person</span></span>
-            </div>
-            <a href="#book" class="btn btn--primary">Book This Flight</a>
+        <!-- 4: Mountain Biking -->
+        <article class="adv-card" data-adv-idx="3">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/1143169/pexels-photo-1143169.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Hundred Miles</span>
+            <h3 class="adv-card__title">Private Mountain Biking</h3>
+            <p class="adv-card__tagline">100 miles of single-track. Zero crowds.</p>
           </div>
+          <button class="adv-card__trigger" aria-label="Explore Private Mountain Biking — 100 miles of trail">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
         </article>
 
-      </div><!-- /flights__cards -->
+        <!-- 5: Supercar -->
+        <article class="adv-card" data-adv-idx="4">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/1545743/pexels-photo-1545743.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Drive Something Special</span>
+            <h3 class="adv-card__title">Supercar &amp; Heritage Rentals</h3>
+            <p class="adv-card__tagline">Lamborghini. Ferrari. Classic muscle.</p>
+          </div>
+          <button class="adv-card__trigger" aria-label="Explore Supercar and Heritage Car Rentals">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
+        </article>
+
+        <!-- 6: Sailing -->
+        <article class="adv-card" data-adv-idx="5">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/1007836/pexels-photo-1007836.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Beaver Lake</span>
+            <h3 class="adv-card__title">Sailing with a Private Chef</h3>
+            <p class="adv-card__tagline">A private yacht. A gourmet chef.</p>
+          </div>
+          <button class="adv-card__trigger" aria-label="Explore Sailing on Beaver Lake with a Private Chef">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
+        </article>
+
+        <!-- 7: Restaurant Ryn -->
+        <article class="adv-card" data-adv-idx="6">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/941861/pexels-photo-941861.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Fine Dining</span>
+            <h3 class="adv-card__title">Fly In to Restaurant Ryn</h3>
+            <p class="adv-card__tagline">Arrive by air. Dine at the finest table.</p>
+          </div>
+          <button class="adv-card__trigger" aria-label="Explore flying in to Restaurant Ryn">
+            <span>Explore <span aria-hidden="true">&#8594;</span></span>
+          </button>
+        </article>
+
+        <!-- 8: Antebellum Mansion — WIDE (full-width) -->
+        <article class="adv-card adv-card--wide" data-adv-idx="7">
+          <div class="adv-card__bg" aria-hidden="true"
+            style="background-image: url('https://images.pexels.com/photos/2724748/pexels-photo-2724748.jpeg?auto=compress&cs=tinysrgb&w=1920')"></div>
+          <div class="adv-card__body">
+            <span class="adv-card__tag">Overnight Stay</span>
+            <h3 class="adv-card__title">Antebellum Mansion &amp; Stables</h3>
+            <p class="adv-card__tagline">Wake up in a 180-year-old estate. Horses graze the morning mist.</p>
+          </div>
+          <button class="adv-card__trigger" aria-label="Explore an overnight stay at the Antebellum Mansion and Stables">
+            <span>Explore Experience <span aria-hidden="true">&#8594;</span></span>
+          </button>
+        </article>
+
+      </div>
+
+      <!-- Adventure Detail Modal -->
+      <div class="adv-modal" id="advModal" role="dialog" aria-modal="true" aria-labelledby="advModalTitle" hidden>
+        <div class="adv-modal__backdrop" id="advModalBackdrop" aria-hidden="true"></div>
+        <div class="adv-modal__dialog">
+          <button class="adv-modal__close" id="advModalClose" aria-label="Close adventure details">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+              <line x1="1" y1="1" x2="17" y2="17"/><line x1="17" y1="1" x2="1" y2="17"/>
+            </svg>
+          </button>
+          <div class="adv-modal__img-wrap" aria-hidden="true">
+            <div class="adv-modal__img" id="advModalImg"></div>
+          </div>
+          <div class="adv-modal__body">
+            <span class="adv-modal__tag" id="advModalTag"></span>
+            <h2 class="adv-modal__title" id="advModalTitle"></h2>
+            <p class="adv-modal__tagline" id="advModalTagline"></p>
+            <p class="adv-modal__desc" id="advModalDesc"></p>
+            <ul class="adv-modal__highlights" id="advModalHighlights" aria-label="Experience highlights"></ul>
+            <div class="adv-modal__actions">
+              <a href="#book" class="btn btn--primary adv-modal__book-btn" id="advModalBook">Book This Experience</a>
+              <button class="adv-modal__back" id="advModalBack">&#8592; Back to Adventures</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
-    <!-- ============================================================
-         WHY OZARK TOURS — NUMBERED DIFFERENTIATORS
-         Inspired by Flock Safety's 01–05 sequential reveal
-    ============================================================ -->
+    <!-- Wave: cream → forest why -->
+    <div class="wave-divider wave-divider--to-forest" aria-hidden="true">
+      <svg viewBox="0 0 1440 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,80 C360,0 720,60 1080,20 C1260,0 1380,40 1440,50 L1440,0 L0,0 Z" fill="#2d4a2d"/>
+      </svg>
+    </div>
+
+    <!-- WHY OZARK TOURS -->
     <section class="why" id="about" aria-labelledby="why-heading">
+      <div class="why__deco" aria-hidden="true">
+        <span class="why__orb why__orb--1" data-par="-0.18"></span>
+        <span class="why__orb why__orb--2" data-par="0.22"></span>
+        <span class="why__orb why__orb--3" data-par="-0.1" data-par-x="0.08"></span>
+      </div>
       <div class="container">
         <p class="eyebrow">Why Ozark Tours</p>
         <h2 id="why-heading">Not just a ride.<br /><em>A local experience.</em></h2>
       </div>
 
       <div class="why__list">
-
         <div class="why__item" data-reveal>
           <span class="why__num" aria-hidden="true">01</span>
           <div class="why__text">
@@ -307,45 +420,38 @@
             <p>Our pilots grew up here. They know the hidden hollows, the best light angles, and the spots no guidebook has ever listed.</p>
           </div>
         </div>
-
         <div class="why__item" data-reveal>
           <span class="why__num" aria-hidden="true">02</span>
           <div class="why__text">
-            <h3>Private charters — your route, your way</h3>
-            <p>Anniversary, proposal, bucket list — whatever brought you here, we'll build the flight around it. No group tours unless you want one.</p>
+            <h3>Eight curated adventures, zero compromises</h3>
+            <p>Crystal mines, fly fishing, supercars, sailing, fine dining &mdash; each experience is hand-curated and privately arranged. No groups unless you want one.</p>
           </div>
         </div>
-
         <div class="why__item" data-reveal>
           <span class="why__num" aria-hidden="true">03</span>
           <div class="why__text">
             <h3>Land on the adventure, not just fly over it</h3>
-            <p>We're not a sightseeing loop. We set down in places you'd never reach on foot. That's the whole point.</p>
+            <p>We set down in places you&rsquo;d never reach any other way. The helicopter isn&rsquo;t the spectacle &mdash; it&rsquo;s the key.</p>
           </div>
         </div>
-
         <div class="why__item" data-reveal>
           <span class="why__num" aria-hidden="true">04</span>
           <div class="why__text">
-            <h3>Ozark-only routes: quartz mines, bluffs, river bends</h3>
-            <p>Years of flying these mountains have given us a route library you won't find anywhere else. Each flight is hand-crafted, not templated.</p>
+            <h3>Every detail arranged before you arrive</h3>
+            <p>Guides, chefs, reservations, horses, bikes, keys &mdash; we coordinate everything so you just show up and experience it.</p>
           </div>
         </div>
-
         <div class="why__item" data-reveal>
           <span class="why__num" aria-hidden="true">05</span>
           <div class="why__text">
             <h3>Easy booking, flexible scheduling</h3>
-            <p>Morning, afternoon, golden hour — pick what works for you. We keep groups small and schedules flexible so you're never rushed.</p>
+            <p>Morning, afternoon, overnight &mdash; we keep schedules flexible and groups small so the experience is always yours alone.</p>
           </div>
         </div>
-
       </div>
     </section>
 
-    <!-- ============================================================
-         STATS — BY THE NUMBERS
-    ============================================================ -->
+    <!-- STATS -->
     <section class="stats" aria-label="Ozark Tours by the numbers">
       <div class="stats__inner">
         <div class="stats__item">
@@ -362,9 +468,9 @@
         </div>
         <div class="stats__item">
           <div class="stats__value">
-            <span class="stats__num" data-count="12">0</span>
+            <span class="stats__num" data-count="8">0</span>
           </div>
-          <p>Years in the Air</p>
+          <p>Unique Adventures</p>
         </div>
         <div class="stats__item">
           <div class="stats__value">
@@ -375,80 +481,72 @@
       </div>
     </section>
 
-    <!-- ============================================================
-         TESTIMONIAL
-    ============================================================ -->
+    <!-- TESTIMONIAL -->
     <section class="testimonial" aria-label="Guest testimonial">
       <div class="testimonial__inner">
-        <span class="testimonial__mark" aria-hidden="true">&ldquo;</span>
+        <span class="testimonial__mark" aria-hidden="true" data-par="-0.25">&ldquo;</span>
         <blockquote>
-          <p>We landed on a cliff overlooking the Buffalo River at sunset. My wife cried. I almost did too. I've traveled all over the world and this is one of the top five experiences of my life.</p>
+          <p>We landed at the crystal mine, dug for quartz for an hour, then flew to the mansion for dinner. I&rsquo;ve traveled all over the world and this is one of the top five days of my life.</p>
           <footer>
-            <cite>— Michael T., Private Charter Guest</cite>
+            <cite>— Sarah M., Private Adventure Guest</cite>
           </footer>
         </blockquote>
       </div>
     </section>
 
-    <!-- ============================================================
-         GALLERY — THE OZARKS
-    ============================================================ -->
+    <!-- Wave: dark testimonial → cream gallery -->
+    <div class="wave-divider wave-divider--to-cream" aria-hidden="true">
+      <svg viewBox="0 0 1440 80" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M0,0 C200,70 500,10 720,50 C940,90 1200,20 1440,45 L1440,80 L0,80 Z" fill="#f5f0e8"/>
+      </svg>
+    </div>
+
+    <!-- GALLERY -->
     <section class="gallery" id="gallery" aria-labelledby="gallery-heading">
       <div class="container">
         <p class="eyebrow">The Ozarks</p>
-        <h2 id="gallery-heading">This is what's<br />waiting for you.</h2>
+        <h2 id="gallery-heading">This is what&rsquo;s<br />waiting for you.</h2>
       </div>
 
       <div class="gallery__grid">
-
-        <div class="gallery__item gallery__item--tall" data-parallax>
-          <div class="gallery__img" role="img" aria-label="Buffalo National River from above"
-            style="background-image: url('https://picsum.photos/seed/buffalo-river-tall/800/1100');"></div>
-          <div class="gallery__caption">Buffalo National River</div>
+        <div class="gallery__item gallery__item--tall" data-par="-0.12" data-par-x="-0.04">
+          <div class="gallery__img" role="img" aria-label="Aerial view of Arkansas Ozark forest canopy at dawn"
+            style="background-image: url('https://images.pexels.com/photos/20883496/pexels-photo-20883496.jpeg?auto=compress&cs=tinysrgb&w=800')"></div>
+          <div class="gallery__caption">Ozark Forest Canopy</div>
         </div>
 
-        <div class="gallery__item" data-parallax>
-          <div class="gallery__img" role="img" aria-label="Quartz crystal formations at a mine landing site"
-            style="background-image: url('https://picsum.photos/seed/quartz-mine-shot/800/600');"></div>
-          <div class="gallery__caption">Quartz Crystal Mines</div>
+        <div class="gallery__item" data-par="0.08" data-par-x="0.05">
+          <div class="gallery__img" role="img" aria-label="Natural quartz crystal formations found in the Ozarks"
+            style="background-image: url('https://images.pexels.com/photos/39344/crystals-minerals-geology-rock-39344.jpeg?auto=compress&cs=tinysrgb&w=800')"></div>
+          <div class="gallery__caption">Ozark Quartz Crystal Mines</div>
         </div>
 
-        <div class="gallery__item" data-parallax>
-          <div class="gallery__img" role="img" aria-label="Hawksbill Crag overlook in the Ozarks"
-            style="background-image: url('https://picsum.photos/seed/hawksbill-crag/800/600');"></div>
-          <div class="gallery__caption">Hawksbill Crag</div>
+        <div class="gallery__item" data-par="-0.06" data-par-x="0.03">
+          <div class="gallery__img" role="img" aria-label="Fall foliage on a limestone bluff above a river in the Ozarks"
+            style="background-image: url('https://images.pexels.com/photos/29461444/pexels-photo-29461444.jpeg?auto=compress&cs=tinysrgb&w=800')"></div>
+          <div class="gallery__caption">Limestone Bluff Country</div>
         </div>
 
-        <div class="gallery__item gallery__item--wide" data-parallax>
-          <div class="gallery__img" role="img" aria-label="Ozark ridgeline bathed in golden sunset light"
-            style="background-image: url('https://picsum.photos/seed/ozark-ridge-wide/1400/600');"></div>
-          <div class="gallery__caption">Ozark Ridgeline at Golden Hour</div>
+        <div class="gallery__item gallery__item--wide" data-par="0.1" data-par-x="-0.03">
+          <div class="gallery__img" role="img" aria-label="Sunset over a forested bluff above the Ozark river valley"
+            style="background-image: url('https://images.pexels.com/photos/14854300/pexels-photo-14854300.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <div class="gallery__caption">Ozark River Valley at Sunset</div>
         </div>
-
       </div>
     </section>
 
-    <!-- ============================================================
-         BOOK — FINAL CTA
-    ============================================================ -->
+    <!-- BOOK -->
     <section class="book" id="book" aria-labelledby="book-heading">
       <div class="book__inner">
-
         <div class="book__copy">
-          <p class="eyebrow">Book Your Flight</p>
+          <p class="eyebrow">Book Your Adventure</p>
           <h2 id="book-heading">Ready to see the Ozarks from 1,000 feet up?</h2>
-          <p>Fill out the form and we'll be in touch within 24 hours to confirm your flight. Or call us directly — we love talking about this place.</p>
+          <p>Fill out the form and we&rsquo;ll be in touch within 24 hours to build your adventure. Or call us directly &mdash; we love talking about this place.</p>
           <a href="tel:+18705550000" class="book__phone">
             <span aria-hidden="true">&#9990;</span> (870) 555-0000
           </a>
         </div>
 
-        <!--
-          Replace the action URL with your Formspree endpoint:
-          1. Go to formspree.io, create a free form
-          2. Replace YOUR_FORM_ID with your actual form ID
-          Or drop in a FareHarbor widget in place of this form.
-        -->
         <form
           class="book__form"
           id="bookForm"
@@ -459,47 +557,32 @@
           <div class="form-row">
             <div class="form-group">
               <label for="name">Full Name <span aria-hidden="true">*</span></label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                required
-                autocomplete="name"
-                placeholder="Jane Smith"
-              />
+              <input type="text" id="name" name="name" required autocomplete="name" placeholder="Jane Smith" />
             </div>
             <div class="form-group">
               <label for="email">Email <span aria-hidden="true">*</span></label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                required
-                autocomplete="email"
-                placeholder="jane@email.com"
-              />
+              <input type="email" id="email" name="email" required autocomplete="email" placeholder="jane@email.com" />
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label for="phone">Phone</label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                autocomplete="tel"
-                placeholder="(870) 555-0000"
-              />
+              <input type="tel" id="phone" name="phone" autocomplete="tel" placeholder="(870) 555-0000" />
             </div>
             <div class="form-group">
-              <label for="tour">Tour of Interest</label>
+              <label for="tour">Adventure of Interest</label>
               <select id="tour" name="tour">
-                <option value="">Select a tour...</option>
-                <option value="scenic">Scenic Overview</option>
-                <option value="charter">Private Charter</option>
-                <option value="landing">Landing Adventure</option>
-                <option value="sunset">Sunset Flight</option>
+                <option value="">Choose an adventure...</option>
+                <option value="crystal">Crystal Mining Tour</option>
+                <option value="fishing">Fly Fishing in Cotter</option>
+                <option value="equestrian">Equestrian Adventures</option>
+                <option value="biking">Private Mountain Biking</option>
+                <option value="supercar">Supercar &amp; Heritage Rentals</option>
+                <option value="sailing">Sailing on Beaver Lake</option>
+                <option value="restaurant">Fly In to Restaurant Ryn</option>
+                <option value="mansion">Antebellum Mansion Overnight</option>
+                <option value="custom">Build a Custom Itinerary</option>
                 <option value="unsure">Not sure yet</option>
               </select>
             </div>
@@ -512,12 +595,7 @@
 
           <div class="form-group">
             <label for="message">Anything else we should know?</label>
-            <textarea
-              id="message"
-              name="message"
-              rows="4"
-              placeholder="Group size, special occasion, accessibility needs..."
-            ></textarea>
+            <textarea id="message" name="message" rows="4" placeholder="Group size, special occasion, accessibility needs, dream combination..."></textarea>
           </div>
 
           <button type="submit" class="btn btn--primary btn--full">Send My Request</button>
@@ -527,28 +605,26 @@
             <p>&#10003; We got it! Expect a call or email from us within 24 hours.</p>
           </div>
         </form>
-
       </div>
     </section>
 
   </main>
 
-  <!-- ============================================================
-       FOOTER
-  ============================================================ -->
+  <!-- FOOTER -->
   <footer class="footer" role="contentinfo">
     <div class="footer__inner">
       <div class="footer__brand">
         <span class="footer__logo">Ozark Tours</span>
-        <p>Helicopter tours over the<br />Arkansas Ozarks.<br />Harrison, AR &middot; Est. 2013</p>
+        <p>Helicopter adventures over the<br />Arkansas Ozarks.<br />Harrison, AR &middot; Est. 2013</p>
         <a href="tel:+18705550000" class="footer__phone">(870) 555-0000</a>
       </div>
-      <nav class="footer__nav" aria-label="Tour links">
-        <h4>Flights</h4>
-        <a href="#flights">Scenic Overview</a>
-        <a href="#flights">Private Charter</a>
-        <a href="#flights">Landing Adventure</a>
-        <a href="#flights">Sunset Flight</a>
+      <nav class="footer__nav" aria-label="Adventures links">
+        <h4>Adventures</h4>
+        <a href="#adventures">Crystal Mining</a>
+        <a href="#adventures">Fly Fishing</a>
+        <a href="#adventures">Mountain Biking</a>
+        <a href="#adventures">Sailing &amp; Chef</a>
+        <a href="#adventures">Antebellum Mansion</a>
       </nav>
       <nav class="footer__nav" aria-label="Company links">
         <h4>Company</h4>

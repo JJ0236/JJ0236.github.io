@@ -255,14 +255,39 @@ em {
 }
 
 .nav__links a {
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: rgba(245, 240, 232, 0.85);
+  position: relative;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(245, 240, 232, 0.82);
+  padding-bottom: 4px;
   transition: color var(--transition);
 }
 
-.nav__links a:hover {
+/* Amber underline grows from the left on hover/focus */
+.nav__links a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1.5px;
+  background: var(--amber-light);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.nav__links a:hover,
+.nav__links a:focus-visible {
   color: var(--amber-light);
+}
+
+.nav__links a:hover::after,
+.nav__links a:focus-visible::after {
+  transform: scaleX(1);
 }
 
 .nav__cta {
@@ -337,6 +362,9 @@ em {
   padding: 1.25rem 0;
   font-size: 1.375rem;
   font-family: var(--font-serif);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0.01em;
   color: var(--cream);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   transition: color var(--transition), padding-left var(--transition);
@@ -374,11 +402,9 @@ em {
 
 .hero__bg {
   position: absolute;
-  inset: 0;
+  inset: -20% 0;
   background-color: var(--forest-dark);
   overflow: hidden;
-  transform: scale(1.06);
-  transition: transform 10s ease;
   will-change: transform;
 }
 
@@ -393,9 +419,8 @@ em {
   /* Poster attribute handles the fallback static image */
 }
 
-.hero.is-loaded .hero__bg {
-  transform: scale(1);
-}
+/* hero zoom-in handled by JS parallax now */
+.hero.is-loaded .hero__bg { }
 
 .hero__overlay {
   position: absolute;
@@ -491,18 +516,23 @@ em {
 }
 
 .journey__header {
+  position: relative;
+  z-index: 2;
   text-align: center;
-  padding: 5rem var(--page-padding) 0;
+  padding: 5rem var(--page-padding) 2.5rem;
 }
 
 .journey__header h2 {
   color: var(--cream);
 }
 
-/* ── Track: the tall scrollable section. Height = 5 × 100vh stops. ── */
+/* ── Track: the tall scrollable section. ── */
 .journey__track {
   position: relative;
-  /* height set naturally by 5 journey__stop divs each min-height:100vh */
+  /* Tuck the photo's dark top edge up behind the header (seamless join) */
+  margin-top: -2.5rem;
+  /* padding-bottom keeps the sticky bg-stage visible through the last stop */
+  padding-bottom: 100vh;
 }
 
 /* ── Background photo stage: sticky 100vh, crossfades between stops ── */
@@ -520,8 +550,33 @@ em {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(10, 22, 10, 0.52);
+  /* Even darkening, fading to solid forest-dark at the very bottom so the
+     photo melts seamlessly into the blend divider below (no hard seam) */
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 22, 10, 0.52) 0%,
+    rgba(10, 22, 10, 0.52) 82%,
+    var(--forest-dark) 100%
+  );
   z-index: 1;
+}
+
+/* Top fade: photo emerges from the dark header — no hard seam */
+.journey__bg-stage::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32vh;
+  background: linear-gradient(
+    to bottom,
+    var(--forest-dark) 0%,
+    rgba(13, 26, 13, 0.65) 38%,
+    transparent 100%
+  );
+  z-index: 2;
+  pointer-events: none;
 }
 
 .journey__bg {
@@ -533,18 +588,20 @@ em {
   transition: opacity 0.9s ease;
 }
 
-.journey__bg[data-stop="0"] {
+.journey__bg[data-bg="0"] {
   opacity: 1;
 }
 
-/* ── SVG: absolutely fills the full track height, above backgrounds ── */
-.journey__svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+/* ── Trail: fixed viewport overlay. viewBox 0–100 always maps to the
+      viewport, so the path coordinates never break (no sticky un-stick). ── */
+.trail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   pointer-events: none;
-  z-index: 1;
+  z-index: 4;
 }
 
 .journey__path-fill {
@@ -595,38 +652,50 @@ em {
   background: var(--amber);
 }
 
-/* ── Content stops: each 100vh tall, card centered inside ── */
+/* ── Content stops ── */
 .journey__stop {
   position: relative;
-  min-height: 100vh;
+  min-height: 80vh;
   display: flex;
   align-items: center;
   padding: 0 var(--page-padding);
   z-index: 1;
 }
 
-/* Stops 0, 1, 3: dot is at right or center — card sits on the LEFT */
-[data-stop="0"],
-[data-stop="1"],
-[data-stop="3"] {
+/* Cards sit on the side opposite to their dot */
+.journey__stop[data-side="left"] {
   justify-content: flex-start;
 }
-
-/* Stops 2, 4: dot is at left 20% — card sits on the RIGHT */
-[data-stop="2"],
-[data-stop="4"] {
+.journey__stop[data-side="right"] {
   justify-content: flex-end;
+}
+
+/* Mobile: reduced zigzag amplitude — percentage padding clears the dots */
+@media (max-width: 767px) {
+  .journey__stop {
+    min-height: 80vh;
+  }
+  .journey__stop[data-side="left"] {
+    padding-right: calc(37% + 0.5rem);
+  }
+  .journey__stop[data-side="right"] {
+    padding-left: calc(37% + 0.5rem);
+  }
+  .journey__stop .journey__card {
+    max-width: none;
+    width: 100%;
+  }
 }
 
 /* ── Content card ── */
 .journey__card {
-  max-width: 300px;
-  background: rgba(13, 26, 13, 0.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(201, 137, 58, 0.18);
-  border-radius: 1rem;
-  padding: 1.5rem;
+  max-width: 340px;
+  background: rgba(13, 26, 13, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(201, 137, 58, 0.28);
+  border-radius: 1.25rem;
+  padding: 1.875rem 2rem;
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.65s ease, transform 0.65s ease;
@@ -639,169 +708,632 @@ em {
 
 .journey__card .step-num {
   font-family: var(--font-serif);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: var(--amber);
   letter-spacing: 0.06em;
   display: block;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.25rem;
 }
 
 .journey__card .step-location {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
-  color: rgba(201, 137, 58, 0.65);
-  margin: 0 0 0.6rem;
+  color: rgba(201, 137, 58, 0.7);
+  margin: 0 0 0.75rem;
 }
 
 .journey__card h3 {
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  line-height: 1.25;
+  line-height: 1.2;
   color: var(--cream);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.65rem;
 }
 
 .journey__card p {
-  font-size: 0.875rem;
-  line-height: 1.65;
-  color: rgba(245, 240, 232, 0.7);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: rgba(245, 240, 232, 0.78);
 }
 
 @media (min-width: 768px) {
   .journey__card {
-    max-width: 380px;
-    padding: 2rem 2.25rem;
+    max-width: 440px;
+    padding: 2.5rem 2.75rem;
   }
 
   .journey__card h3 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
   }
 
   .journey__card p {
-    font-size: 0.9375rem;
+    font-size: 1.0625rem;
+    line-height: 1.75;
   }
 }
 
 /* ============================================================
-   FLIGHTS — TOUR CARDS
+   ADVENTURES — CHOOSE YOUR EXPERIENCE
    ============================================================ */
-.flights {
+.adventures {
   background: var(--cream);
-  padding: 5rem 0 4rem;
+  padding: 1.5rem 0 4rem;
   position: relative;
-  z-index: 1; /* sits above journey section's sticky background */
+  z-index: 1;
 }
 
-.flights .container {
+.adventures .container {
   margin-bottom: 2.5rem;
 }
 
-/* Mobile: single-card horizontal scroll with snap */
-.flights__cards {
-  display: flex;
-  gap: 1.25rem;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding: 0.5rem var(--page-padding) 2rem;
-  scrollbar-width: none;
+/* ── Trail hand-off connector: the fixed trail line lands on the node,
+      then a bar splits out to both sides ── */
+.adv-intro {
+  position: relative;
+  height: 16px;            /* node + bar sit at the top */
+  margin-bottom: 2.5rem;
+  pointer-events: none;
+  z-index: 3;
 }
 
-.flights__cards::-webkit-scrollbar {
-  display: none;
+/* Node where the trail lands and splits */
+.adv-intro__node {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: 13px;
+  height: 13px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 10px rgba(232, 168, 78, 0.8);
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition-delay: 0.05s;
 }
 
-.flight-card {
-  flex: 0 0 82vw;
-  max-width: 360px;
-  scroll-snap-align: start;
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: 0 2px 16px rgba(13, 26, 13, 0.08);
-  transition: transform var(--transition), box-shadow var(--transition);
+/* Horizontal bar splits outward from center to both sides */
+.adv-intro__bar {
+  position: absolute;
+  left: 50%;
+  top: 8px;
+  width: min(760px, 86vw);
+  height: 2px;
+  margin-top: -1px;
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+  background: linear-gradient(
+    to right,
+    rgba(201, 137, 58, 0) 0%,
+    var(--amber) 22%,
+    var(--amber) 78%,
+    rgba(201, 137, 58, 0) 100%
+  );
+  transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: 0.18s;
 }
 
-.flight-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 40px rgba(13, 26, 13, 0.14);
+.adventures.is-unrolled .adv-intro__node {
+  opacity: 1;
+  transform: scale(1);
+}
+.adventures.is-unrolled .adv-intro__bar { transform: translateX(-50%) scaleX(1); }
+
+/* ── Section unfurls downward beneath the split bar ── */
+.js .adventures .container {
+  clip-path: inset(0 0 100% 0);
+  opacity: 0;
+  transition: clip-path 0.8s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.8s ease;
+  transition-delay: 0.42s;
 }
 
-.flight-card__img {
-  aspect-ratio: 4 / 3;
-  background-size: cover;
-  background-position: center;
-  transition: transform 0.5s ease;
+.js .adventures.is-unrolled .container {
+  clip-path: inset(0 0 0 0);
+  opacity: 1;
 }
 
-.flight-card:hover .flight-card__img {
-  transform: scale(1.04);
+.js .adventures__grid > .adv-card {
+  opacity: 0;
+  transform: translateY(34px);
+  transition: opacity 0.55s ease, transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.flight-card__body {
-  padding: 1.5rem;
+.js .adventures.is-unrolled .adventures__grid > .adv-card {
+  opacity: 1;
+  transform: none;
+}
+
+.adventures.is-unrolled .adv-card:nth-child(1) { transition-delay: 0.58s; }
+.adventures.is-unrolled .adv-card:nth-child(2) { transition-delay: 0.65s; }
+.adventures.is-unrolled .adv-card:nth-child(3) { transition-delay: 0.72s; }
+.adventures.is-unrolled .adv-card:nth-child(4) { transition-delay: 0.79s; }
+.adventures.is-unrolled .adv-card:nth-child(5) { transition-delay: 0.86s; }
+.adventures.is-unrolled .adv-card:nth-child(6) { transition-delay: 0.93s; }
+.adventures.is-unrolled .adv-card:nth-child(7) { transition-delay: 1.00s; }
+.adventures.is-unrolled .adv-card:nth-child(8) { transition-delay: 1.07s; }
+
+/* Mobile: single-column stack */
+.adventures__grid {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  padding: 0 var(--page-padding);
+  max-width: var(--max-width);
+  margin: 0 auto;
 }
 
-.flight-card__tag {
-  font-size: 0.72rem;
+/* ── Adventure card base ── */
+.adv-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  height: 280px;
+  cursor: pointer;
+  background: var(--forest-dark);
+}
+
+.adv-card__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.6s ease;
+}
+
+.adv-card:hover .adv-card__bg {
+  transform: scale(1.06);
+}
+
+/* Gradient overlay */
+.adv-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(10, 20, 10, 0.82) 0%,
+    rgba(10, 20, 10, 0.30) 55%,
+    rgba(10, 20, 10, 0.12) 100%
+  );
+  transition: background 0.35s ease;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.adv-card:hover::after {
+  background: linear-gradient(
+    to top,
+    rgba(10, 20, 10, 0.72) 0%,
+    rgba(10, 20, 10, 0.20) 55%,
+    rgba(10, 20, 10, 0.05) 100%
+  );
+}
+
+/* Card body — sits above overlay */
+.adv-card__body {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1.5rem 1.75rem 1.75rem;
+  z-index: 2;
+  transition: transform 0.35s ease;
+}
+
+.adv-card:hover .adv-card__body {
+  transform: translateY(-5px);
+}
+
+.adv-card__tag {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber-light);
+  margin-bottom: 0.45rem;
+}
+
+.adv-card__title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.2;
+  margin-bottom: 0.3rem;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  display: inline-block;
+  position: relative;
+}
+
+/* Amber underline slide-in on hover */
+.adv-card__title::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--amber);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.38s ease;
+}
+
+.adv-card:hover .adv-card__title::after {
+  transform: scaleX(1);
+}
+
+.adv-card__tagline {
+  display: block;
+  font-size: 0.825rem;
+  color: rgba(245, 240, 232, 0.72);
+  line-height: 1.45;
+}
+
+/* Full-card invisible trigger button */
+.adv-card__trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 1.25rem 1.5rem;
+}
+
+.adv-card__trigger span {
+  opacity: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--cream);
+  letter-spacing: 0.05em;
+  background: rgba(13, 26, 13, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 0.45rem 0.9rem;
+  border-radius: 2rem;
+  border: 1px solid rgba(201, 137, 58, 0.35);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  transform: translateY(6px);
+}
+
+.adv-card:hover .adv-card__trigger span,
+.adv-card__trigger:focus span {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.adv-card__trigger:focus-visible {
+  outline: 3px solid var(--amber);
+  outline-offset: -4px;
+  border-radius: var(--radius-lg);
+}
+
+/* ── Featured card (Crystal Mining — 2-col) ── */
+.adv-card--featured {
+  height: 340px;
+}
+
+/* Amber color warmth via CSS tint — richer than a border */
+.adv-card--featured .adv-card__bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(201, 137, 58, 0.18);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+/* ── Wide card (Antebellum Mansion — full-width) ── */
+.adv-card--wide {
+  height: 260px;
+}
+
+/* Tablet: 2-column grid */
+@media (min-width: 640px) {
+  .adventures__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.875rem;
+  }
+
+  .adv-card--featured {
+    grid-column: span 2;
+    height: 380px;
+  }
+
+  .adv-card--wide {
+    grid-column: span 2;
+    height: 280px;
+  }
+}
+
+/* Desktop: 4-column grid */
+@media (min-width: 1024px) {
+  .adventures__grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .adv-card {
+    height: 340px;
+  }
+
+  .adv-card--featured {
+    grid-column: span 2;
+    height: 380px;
+  }
+
+  .adv-card--wide {
+    grid-column: span 4;
+    height: 260px;
+  }
+}
+
+/* ============================================================
+   ADVENTURE MODAL
+   ============================================================ */
+.adv-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+
+.adv-modal[hidden] {
+  display: none;
+}
+
+.adv-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 20, 10, 0.72);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.adv-modal.is-open .adv-modal__backdrop {
+  opacity: 1;
+}
+
+/* Mobile: bottom sheet */
+.adv-modal__dialog {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-height: 88vh;
+  background: var(--white);
+  border-radius: 1.375rem 1.375rem 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile drag-handle indicator */
+.adv-modal__dialog::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  background: rgba(13, 26, 13, 0.14);
+  border-radius: 2px;
+  margin: 0.875rem auto 0;
+  flex-shrink: 0;
+}
+
+.adv-modal.is-open .adv-modal__dialog {
+  transform: translateY(0);
+}
+
+.adv-modal__close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(13, 26, 13, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: var(--white);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.adv-modal__close:hover {
+  background: rgba(13, 26, 13, 0.85);
+}
+
+.adv-modal__img-wrap {
+  flex-shrink: 0;
+  height: 260px;
+  position: relative;
+  overflow: hidden;
+}
+
+.adv-modal__img {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  transition-delay: 0ms;
+}
+
+.adv-modal.is-open .adv-modal__img {
+  opacity: 1;
+  transition-delay: 80ms;
+}
+
+.adv-modal__body {
+  padding: 1.75rem 1.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  flex: 1;
+}
+
+.adv-modal__tag {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--amber);
 }
 
-.flight-card__body h3 {
+.adv-modal__title {
+  font-size: clamp(1.5rem, 4vw, 2.125rem);
   color: var(--forest-dark);
-  font-size: 1.3125rem;
+  line-height: 1.15;
+  margin: 0;
 }
 
-.flight-card__body p {
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--gray);
-  flex: 1;
-}
-
-.flight-card__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.875rem;
+.adv-modal__tagline {
+  font-size: 1rem;
+  color: var(--amber);
   font-weight: 500;
-  color: var(--forest);
-  padding: 0.75rem 0;
-  border-top: 1px solid rgba(13, 26, 13, 0.08);
-  border-bottom: 1px solid rgba(13, 26, 13, 0.08);
+  font-style: italic;
+  margin: 0;
 }
 
-.per-person {
-  font-size: 0.78rem;
-  font-weight: 400;
+.adv-modal__desc {
+  font-size: 0.9375rem;
+  line-height: 1.75;
   color: var(--gray);
+  margin: 0;
 }
 
-/* Tablet+: 2-column grid */
-@media (min-width: 640px) {
-  .flights__cards {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    overflow-x: unset;
-    scroll-snap-type: unset;
-    max-width: var(--max-width);
-    margin: 0 auto;
-    padding: 0 var(--page-padding) 0;
-    gap: 1.5rem;
+.adv-modal__highlights {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.adv-modal__highlights li {
+  font-size: 0.9rem;
+  color: var(--forest);
+  padding-left: 1.375rem;
+  position: relative;
+  line-height: 1.5;
+}
+
+.adv-modal__highlights li::before {
+  content: '✦';
+  position: absolute;
+  left: 0;
+  color: var(--amber);
+  font-size: 0.6rem;
+  top: 0.22em;
+}
+
+.adv-modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.adv-modal__book-btn {
+  text-align: center;
+}
+
+.adv-modal__back {
+  background: none;
+  border: none;
+  color: var(--gray);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  font-family: var(--font-sans);
+  transition: color 0.2s ease;
+}
+
+.adv-modal__back:hover {
+  color: var(--forest);
+}
+
+/* Desktop: centered modal with side-by-side layout */
+@media (min-width: 768px) {
+  .adv-modal {
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
   }
 
-  .flight-card {
-    flex: unset;
-    max-width: unset;
+  .adv-modal__dialog {
+    width: min(80vw, 960px);
+    max-height: 90vh;
+    border-radius: 1.375rem;
+    flex-direction: row;
+    transform: scale(0.94);
+    opacity: 0;
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.38s ease;
+    overflow-y: unset;
+  }
+
+  .adv-modal__dialog::before {
+    display: none;
+  }
+
+  .adv-modal.is-open .adv-modal__dialog {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  .adv-modal__img-wrap {
+    width: 42%;
+    flex-shrink: 0;
+    height: auto;
+    min-height: 420px;
+  }
+
+  .adv-modal__body {
+    flex: 1;
+    padding: 2.5rem 2.25rem;
+    overflow-y: auto;
+  }
+
+  .adv-modal__close {
+    top: 1.125rem;
+    right: 1.125rem;
+    background: rgba(255, 255, 255, 0.88);
+    color: var(--forest-dark);
+  }
+
+  .adv-modal__close:hover {
+    background: var(--white);
+  }
+
+  .adv-modal__actions {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
   }
 }
 
@@ -1364,4 +1896,252 @@ em {
 .js .fade-in.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ============================================================
+   PARALLAX UTILITIES
+   ============================================================ */
+[data-par], [data-par-x] {
+  will-change: transform;
+}
+
+/* Gallery items: contain overflow so parallax shift doesn't bleed */
+.gallery__item {
+  overflow: hidden;
+}
+
+/* ============================================================
+   TICKER STRIP
+   ============================================================ */
+.ticker {
+  background: var(--amber);
+  height: 48px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.ticker__track {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  animation: ticker-scroll 36s linear infinite;
+  white-space: nowrap;
+  padding-left: 2.5rem;
+}
+
+.ticker__track span {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--forest-dark);
+  flex-shrink: 0;
+}
+
+.ticker__sep {
+  color: rgba(13, 26, 13, 0.45) !important;
+  letter-spacing: 0 !important;
+  font-size: 0.5rem !important;
+}
+
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Pause on hover */
+.ticker:hover .ticker__track {
+  animation-play-state: paused;
+}
+
+/* ============================================================
+   WAVE DIVIDERS
+   ============================================================ */
+.wave-divider {
+  position: relative;
+  height: 80px;
+  overflow: hidden;
+  z-index: 1;
+  /* Remove gap by pulling into the section above */
+  margin-top: -2px;
+}
+
+.wave-divider svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.wave-divider--to-cream { background: var(--forest-dark); }
+.wave-divider--to-forest { background: var(--cream); }
+
+/* Blend divider: soft dark→cream gradient (journey melts into adventures).
+   Starts at forest-dark to match the photo's faded bottom edge above it. */
+.wave-divider--blend {
+  height: 240px;
+  overflow: visible;
+  margin-top: -1px;
+  background: linear-gradient(
+    to bottom,
+    var(--forest-dark) 0%,
+    #16261a 22%,
+    #36492c 46%,
+    #6a7a52 68%,
+    #b3b896 86%,
+    var(--cream) 100%
+  );
+}
+
+/* Adjust section tops so waves sit flush */
+.flights { margin-top: 0; }
+.why { margin-top: 0; }
+
+/* ============================================================
+   WHY SECTION — DECORATIVE ORBS
+   ============================================================ */
+.why {
+  position: relative;
+  overflow: hidden;
+}
+
+.why__deco {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.why__orb {
+  position: absolute;
+  border-radius: 50%;
+  display: block;
+}
+
+.why__orb--1 {
+  width: min(600px, 60vw);
+  height: min(600px, 60vw);
+  background: radial-gradient(circle, rgba(201,137,58,0.10) 0%, transparent 68%);
+  top: -15%;
+  right: -10%;
+}
+
+.why__orb--2 {
+  width: min(400px, 50vw);
+  height: min(400px, 50vw);
+  background: radial-gradient(circle, rgba(201,137,58,0.07) 0%, transparent 65%);
+  bottom: 5%;
+  left: -8%;
+}
+
+.why__orb--3 {
+  width: min(250px, 35vw);
+  height: min(250px, 35vw);
+  background: radial-gradient(circle, rgba(201,137,58,0.12) 0%, transparent 60%);
+  top: 45%;
+  left: 50%;
+}
+
+/* Ensure why content sits above orbs */
+.why .container,
+.why__list {
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   AMBIENT FLOATING PARTICLES
+   ============================================================ */
+.ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient__orb {
+  position: absolute;
+  border-radius: 50%;
+  display: block;
+  animation: ambientFloat 18s ease-in-out infinite;
+}
+
+.ambient__orb--1 {
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(201,137,58,0.04) 0%, transparent 65%);
+  top: 20%;
+  left: -80px;
+  animation-duration: 22s;
+}
+
+.ambient__orb--2 {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(201,137,58,0.06) 0%, transparent 60%);
+  top: 55%;
+  right: -40px;
+  animation-duration: 16s;
+  animation-delay: -8s;
+}
+
+.ambient__orb--3 {
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(201,137,58,0.05) 0%, transparent 60%);
+  bottom: 30%;
+  left: 40%;
+  animation-duration: 26s;
+  animation-delay: -13s;
+}
+
+@keyframes ambientFloat {
+  0%, 100% { transform: translateY(0) translateX(0); }
+  25%       { transform: translateY(-30px) translateX(20px); }
+  50%       { transform: translateY(-10px) translateX(-15px); }
+  75%       { transform: translateY(20px) translateX(10px); }
+}
+
+/* ============================================================
+   TESTIMONIAL MARK parallax — needs relative context
+   ============================================================ */
+.testimonial__inner {
+  position: relative;
+}
+
+.testimonial__mark {
+  display: block;
+  position: relative;
+  z-index: 0;
+}
+
+/* ============================================================
+   REDUCED MOTION — respect accessibility preference
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .ticker__track { animation: none; }
+  .ambient__orb  { animation: none; }
+  [data-par], [data-par-x] { transform: none !important; }
+
+  /* Adventures unroll: show immediately, no wipe/cascade/split */
+  .js .adventures .container,
+  .js .adventures__grid > .adv-card {
+    clip-path: none;
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .adv-intro__node {
+    transition: none;
+    opacity: 1;
+    transform: scale(1);
+  }
+  .adv-intro__bar {
+    transition: none;
+    transform: translateX(-50%) scaleX(1);
+  }
 }
