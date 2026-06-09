@@ -111,6 +111,15 @@
     return [0, 0];   // dead-centered on the place/pin (no vertical nudge)
   }
 
+  // Narrow screens see a tight, claustrophobic satellite frame — pull the zoom
+  // out so more of the landscape is in view. Zoom is log2, so −1 ≈ 2× the area.
+  function zoomAdjust() {
+    const w = window.innerWidth;
+    if (w <= 480) return 1.5;   // phones
+    if (w <= 767) return 1.0;   // large phones / small tablets
+    return 0;                   // desktop unchanged
+  }
+
   const lerp = (a, b, f) => a + (b - a) * f;
   const smooth = (f) => f * f * (3 - 2 * f);
   const HOLD = 0.18;          // half-width of the "clean stop" hold zone (frame units)
@@ -143,7 +152,7 @@
     // Apex = a regional pull-back that fits the leg (further out on long legs).
     let apex = 14.0 - Math.log2(Math.max(geoDist(A, B), 6)) * 1.3;
     apex = Math.max(6.5, Math.min(10.5, apex));
-    const baseZoom = lerp(A.zoom, B.zoom, e);
+    const baseZoom = lerp(A.zoom, B.zoom, e) - zoomAdjust();
     const zoom = baseZoom - (baseZoom - apex) * arc;
     // Near top-down AT the stops (so the venue sits dead-center under the pin —
     // a steep pitch shoves the target up-screen), a gentle tilt only mid-leg.
@@ -198,10 +207,10 @@
   }
   function loop() {
     if (reduceMotion) { currentT = targetT; applyProgress(currentT); loopRunning = false; return; }
-    // Ease toward the scroll target with extra inertia so the camera has
+    // Ease toward the scroll target with heavy inertia so the camera has
     // "traction" — it glides and settles instead of snapping 1:1 with fast or
     // jerky scrolling (which made the zoom arc wig out). Lower = more damped.
-    currentT += (targetT - currentT) * 0.12;
+    currentT += (targetT - currentT) * 0.08;
     if (Math.abs(targetT - currentT) < 0.0005) {
       currentT = targetT; lastApplied = currentT;
       applyProgress(currentT); loopRunning = false; return;
