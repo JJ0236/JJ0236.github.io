@@ -5,10 +5,9 @@
    page. The camera flies around the helicopter as you scroll the
    #aircraft section, and captions swap per step.
 
-   The model here is a PROCEDURAL PLACEHOLDER that reads as a sleek
-   single-engine helicopter (AS350 silhouette). When we have the
-   real licensed AS350 glTF, swap buildHelicopter() for a GLTFLoader
-   load — the camera rig, scroll logic, and captions stay the same.
+   The real AS350 glTF (models/as350.glb) is lazy-loaded into the
+   scene the first time the section nears the viewport. The camera
+   rig, scroll logic, and captions are independent of the model.
 
    Degrades gracefully: if WebGL is unavailable the section still
    shows its heading + first caption over the CSS gradient.
@@ -133,119 +132,11 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
   cabinLight.position.set(0, 0.8, 1.2);
   scene.add(cabinLight);
 
-  /* ---- Materials ---- */
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0xf3f1ec, metalness: 0.15, roughness: 0.32, envMapIntensity: 1.1,
-  });
-  const accentMat = new THREE.MeshStandardMaterial({
-    color: 0xe8a84e, metalness: 0.35, roughness: 0.38, envMapIntensity: 1.1,
-  });
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x16242e, metalness: 0.25, roughness: 0.06, envMapIntensity: 1.4,
-    transparent: true, opacity: 0.9,
-  });
-  const darkMat = new THREE.MeshStandardMaterial({
-    color: 0x2a302c, metalness: 0.6, roughness: 0.45,
-  });
-
-  /* ---- Build the helicopter (nose toward +Z, tail toward -Z) ----
-     The procedural model is built into `body` as a FALLBACK; the real
-     glTF (loaded below) replaces it when ready. ---- */
+  /* ---- Helicopter group ----
+     The real AS350 glTF is loaded into this group (loadHeliModel, below).
+     There is no procedural placeholder anymore, so nothing flickers in
+     before the model is ready. ---- */
   const heli = new THREE.Group();
-  const body = new THREE.Group();
-
-  // Main cabin pod — rounded teardrop
-  const cabin = new THREE.Mesh(new THREE.SphereGeometry(1.4, 40, 30), bodyMat);
-  cabin.scale.set(1.02, 0.96, 1.28);
-  cabin.position.set(0, 0, 0.5);
-  body.add(cabin);
-
-  // Cockpit canopy / windshield — dark glass over the nose
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1.18, 36, 26), glassMat);
-  canopy.scale.set(0.96, 0.9, 1.05);
-  canopy.position.set(0, 0.06, 1.42);
-  body.add(canopy);
-
-  // Tail boom — tapering cylinder
-  const boomGeo = new THREE.CylinderGeometry(0.16, 0.46, 3.7, 24, 1, true);
-  const boom = new THREE.Mesh(boomGeo, bodyMat);
-  boom.rotation.x = Math.PI / 2;
-  boom.position.set(0, 0.28, -2.35);
-  body.add(boom);
-
-  // Vertical tail fin (gold accent panel)
-  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.05, 0.7), accentMat);
-  fin.position.set(0, 0.7, -4.0);
-  fin.rotation.x = -0.18;
-  body.add(fin);
-
-  // Horizontal stabilizer
-  const stab = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.07, 0.45), bodyMat);
-  stab.position.set(0, 0.32, -3.7);
-  body.add(stab);
-
-  // Tail rotor (spins about Z), set on the side of the fin
-  const tailRotor = new THREE.Group();
-  for (let i = 0; i < 2; i++) {
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.05, 0.12), darkMat);
-    blade.rotation.z = i * Math.PI;
-    tailRotor.add(blade);
-  }
-  tailRotor.position.set(0.16, 0.7, -4.25);
-  body.add(tailRotor);
-
-  // Landing skids
-  const skidMat = darkMat;
-  for (const sx of [-0.78, 0.78]) {
-    const skid = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.4, 16), skidMat);
-    skid.rotation.x = Math.PI / 2;
-    skid.position.set(sx, -1.15, 0.1);
-    body.add(skid);
-    // struts up to the belly
-    for (const sz of [-0.7, 0.95]) {
-      const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 12), skidMat);
-      strut.position.set(sx * 0.78, -0.7, sz);
-      strut.rotation.z = sx > 0 ? 0.28 : -0.28;
-      body.add(strut);
-    }
-  }
-
-  // Rotor mast + hub
-  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.6, 16), darkMat);
-  mast.position.set(0, 1.35, 0.2);
-  body.add(mast);
-
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.16, 20), darkMat);
-  hub.position.set(0, 1.62, 0.2);
-  body.add(hub);
-
-  // Main rotor — 3 blades, each on a pivot so it extends from the hub
-  // outward (spins about Y).
-  const mainRotor = new THREE.Group();
-  const bladeGeo = new THREE.BoxGeometry(3.7, 0.05, 0.34);
-  for (let i = 0; i < 3; i++) {
-    const pivot = new THREE.Group();
-    pivot.rotation.y = (i * Math.PI * 2) / 3;
-    const b = new THREE.Mesh(bladeGeo, darkMat);
-    b.position.x = 1.85;
-    pivot.add(b);
-    mainRotor.add(pivot);
-  }
-  mainRotor.position.set(0, 1.7, 0.2);
-  body.add(mainRotor);
-
-  // A subtle translucent disc to hint the spinning rotor plane
-  const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(3.7, 48),
-    new THREE.MeshBasicMaterial({
-      color: 0xdfe6ea, transparent: true, opacity: 0.05, side: THREE.DoubleSide,
-    })
-  );
-  disc.rotation.x = -Math.PI / 2;
-  disc.position.set(0, 1.72, 0.2);
-  body.add(disc);
-
-  heli.add(body);
   heli.position.y = 0.3;
   scene.add(heli);
 
@@ -322,7 +213,6 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
             }
           });
         });
-        body.visible = false;                           // hide the placeholder
         heli.add(model);
 
         // Swap the model's thin flat blades for a motion-blur rotor disc.
@@ -365,7 +255,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
         }
       },
       undefined,
-      (err) => { console.warn('[heli] model load failed — using procedural fallback', err); }
+      (err) => { console.warn('[heli] model load failed', err); }
     );
   }
 
@@ -458,9 +348,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
     const dt = clock.getDelta();
     const t  = clock.getElapsedTime();
 
-    // Spin rotors — the converted model's main rotor (and procedural fallback)
-    if (mainRotor) mainRotor.rotation.y += dt * 16;
-    if (tailRotor) tailRotor.rotation.z += dt * 26;
+    // Spin the model's rotor-FX disc (built in loadHeliModel)
     for (let i = 0; i < spinners.length; i++) spinners[i].rotation.y += dt * 24;
 
     // Idle sway — but settle to STILL during the cockpit phase so you can
