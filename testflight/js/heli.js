@@ -96,9 +96,9 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
   const sctx = skyCanvas.getContext('2d');
   const sgrad = sctx.createLinearGradient(0, 0, 0, 256);
   sgrad.addColorStop(0.0, '#16263a');   // deep blue zenith
-  sgrad.addColorStop(0.55, '#27384a');
-  sgrad.addColorStop(0.82, '#5c6f63');  // hazy ridge horizon
-  sgrad.addColorStop(1.0, '#34432f');   // forest below
+  sgrad.addColorStop(0.62, '#243749');  // blue body
+  sgrad.addColorStop(0.9,  '#3a4a4a');  // hazy ridge horizon — pushed lower + desaturated
+  sgrad.addColorStop(1.0,  '#1a241c');  // thin, dark forest base (was a big green block)
   sctx.fillStyle = sgrad; sctx.fillRect(0, 0, 2, 256);
   const skyTex = new THREE.CanvasTexture(skyCanvas);
   skyTex.colorSpace = THREE.SRGBColorSpace;

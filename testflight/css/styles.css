@@ -564,8 +564,10 @@ em {
 .journey__bg-stage {
   position: sticky;
   top: 0;
-  height: 100vh;
-  margin-bottom: -100vh;
+  /* svh = the *visible* viewport on mobile (matches the address-bar-up height),
+     so the focal point stays centred on screen instead of being pushed up. */
+  height: 100svh;
+  margin-bottom: -100svh;
   overflow: hidden;
   pointer-events: none;
   z-index: 0;
@@ -821,6 +823,15 @@ em {
 @media (max-width: 767px) {
   .journey__stop {
     min-height: 110vh;
+  }
+  /* Keep the dark forest-dark blend to a thin strip at the very bottom so it
+     doesn't read as a green shade over the lower half of the phone screen. */
+  .journey__bg-stage::after {
+    background: linear-gradient(
+      to bottom,
+      rgba(10, 22, 10, 0.28) 0%,
+      rgba(10, 22, 10, 0.28) 90%,
+      var(--forest-dark) 100%);
   }
   .journey__stop[data-side="left"] {
     padding-right: calc(37% + 0.5rem);
