@@ -2954,3 +2954,94 @@ em {
 }
 .exp-cta h2 { color: var(--cream); margin-bottom: 0.75rem; }
 .exp-cta p { color: rgba(245, 240, 232, 0.8); max-width: 46ch; margin: 0 auto 2rem; line-height: 1.7; }
+
+/* ============================================================
+   PILOT — two-button action row
+   ============================================================ */
+.pilot__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* ============================================================
+   MORE WAYS TO FLY — private charter + corporate culture
+   ============================================================ */
+.more {
+  background: var(--cream);
+  padding: 1rem 0 4.5rem;
+  position: relative;
+  z-index: 1;
+}
+.more .container { margin-bottom: 2.5rem; }
+
+.more__grid {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--page-padding);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+@media (min-width: 768px) {
+  .more__grid { grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+}
+
+.more__card {
+  position: relative;
+  min-height: 340px;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  isolation: isolate;
+  box-shadow: 0 18px 40px -24px rgba(13, 26, 13, 0.55);
+}
+.more__card-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-size: cover;
+  background-position: center;
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Forest scrim so the copy stays legible over any photo */
+.more__card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to top,
+    rgba(13, 26, 13, 0.92) 0%,
+    rgba(13, 26, 13, 0.55) 42%,
+    rgba(13, 26, 13, 0.10) 100%);
+}
+.more__card:hover .more__card-bg { transform: scale(1.06); }
+
+.more__card-body { padding: 1.875rem 2rem 2rem; color: var(--cream); }
+.more__card-tag {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber-light);
+  margin-bottom: 0.75rem;
+}
+.more__card-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.35rem, 3vw, 1.75rem);
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.2;
+  margin-bottom: 0.6rem;
+}
+.more__card-copy {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: rgba(245, 240, 232, 0.82);
+  max-width: 42ch;
+}
