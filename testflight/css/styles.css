@@ -388,8 +388,17 @@ em {
 /* ============================================================
    HERO
    ============================================================ */
+/* Hero is a tall scroll track; the sticky stage pins to the viewport
+   while JS pushes the footage in (the "zoom through the sky" effect). */
 .hero {
   position: relative;
+  height: 170vh;
+  background: var(--forest-dark);
+}
+
+.hero__sticky {
+  position: sticky;
+  top: 0;
   height: 100vh;
   height: 100svh;
   min-height: 600px;
@@ -397,7 +406,6 @@ em {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: var(--forest-dark);
 }
 
 .hero__bg {
@@ -405,7 +413,23 @@ em {
   inset: -20% 0;
   background-color: var(--forest-dark);
   overflow: hidden;
-  will-change: transform;
+  will-change: transform, filter;
+  transform-origin: 50% 45%;
+}
+
+/* Atmospheric bloom that intensifies as you push into the sky */
+.hero__atmos {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(120% 90% at 50% 42%,
+      rgba(255, 248, 235, 0.0) 18%,
+      rgba(232, 168, 78, 0.16) 52%,
+      rgba(13, 26, 13, 0.72) 100%);
+  will-change: opacity;
 }
 
 /* Video fills the bg container exactly like a background-image */
@@ -531,8 +555,9 @@ em {
   position: relative;
   /* Tuck the photo's dark top edge up behind the header (seamless join) */
   margin-top: -2.5rem;
-  /* padding-bottom keeps the sticky bg-stage visible through the last stop */
-  padding-bottom: 100vh;
+  /* padding-bottom keeps the sticky bg-stage pinned through the last stop and
+     the Arkansas zoom-out finale — kept short so the state view doesn't linger */
+  padding-bottom: 95vh;
 }
 
 /* ── Background photo stage: sticky 100vh, crossfades between stops ── */
@@ -554,8 +579,8 @@ em {
      photo melts seamlessly into the blend divider below (no hard seam) */
   background: linear-gradient(
     to bottom,
-    rgba(10, 22, 10, 0.52) 0%,
-    rgba(10, 22, 10, 0.52) 82%,
+    rgba(10, 22, 10, 0.32) 0%,
+    rgba(10, 22, 10, 0.32) 78%,
     var(--forest-dark) 100%
   );
   z-index: 1;
@@ -590,6 +615,126 @@ em {
 
 .journey__bg[data-bg="0"] {
   opacity: 1;
+}
+
+/* Live aerial map fills the sticky bg stage, behind the darkening overlays
+   (::after z-1 / ::before z-2) so the trail line + cards stay legible. */
+.journey__map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: var(--forest-dark);
+}
+.journey__map .maplibregl-ctrl-attrib { font-size: 10px; opacity: 0.7; }
+.journey__map .maplibregl-canvas { outline: none; }
+
+/* Full-screen location photo — takes over the map at each stop (JS opacity) */
+.journey__photo {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: #05070f;
+  transition: opacity 0.25s ease;
+}
+.journey__photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.journey__photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(5, 7, 15, 0.35) 0%, rgba(5, 7, 15, 0) 28%,
+    rgba(5, 7, 15, 0) 52%, rgba(5, 7, 15, 0.85) 100%);
+}
+.journey__photo-cap {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: clamp(3rem, 12vh, 8rem);
+  z-index: 1;
+  padding: 0 var(--page-padding);
+  text-align: center;
+  color: var(--white);
+  font-family: var(--font-serif);
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  text-shadow: 0 2px 22px rgba(0, 0, 0, 0.65);
+}
+
+/* Takeoff caption over the map at the start of the route */
+.journey__depart {
+  position: absolute;
+  top: 15vh;
+  left: 50%;
+  transform: translate(-50%, -8px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+}
+.journey__depart.is-on { opacity: 1; transform: translate(-50%, 0); }
+.journey__depart-eyebrow {
+  font-size: 0.72rem; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--amber-light);
+}
+.journey__depart-name {
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  color: var(--white);
+  line-height: 1.05;
+}
+.journey__depart-sub {
+  font-size: 0.8rem; letter-spacing: 0.04em;
+  color: rgba(245, 240, 232, 0.72);
+}
+
+/* Map pin that rises / forms out of the terrain when the camera arrives.
+   The inner .map-pin is animated; MapLibre positions the outer wrapper. */
+.map-pin {
+  transform: translateY(9px) scale(0);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  filter: drop-shadow(0 5px 7px rgba(0, 0, 0, 0.55));
+}
+.map-pin.is-in {
+  transition:
+    transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.35s ease;
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+.map-pin__svg { display: block; }
+
+/* Ground ripple that expands as the pin forms */
+.map-pin::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 16px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(232, 168, 78, 0.55);
+  transform: translateX(-50%) scale(0);
+}
+.map-pin.is-in::after {
+  animation: pinRipple 1.5s ease-out 0.15s both;
+}
+@keyframes pinRipple {
+  0%   { transform: translateX(-50%) scale(0.3); opacity: 0.85; }
+  100% { transform: translateX(-50%) scale(2.6); opacity: 0; }
 }
 
 /* ── Trail: fixed viewport overlay. viewBox 0–100 always maps to the
@@ -655,7 +800,9 @@ em {
 /* ── Content stops ── */
 .journey__stop {
   position: relative;
-  min-height: 80vh;
+  /* Taller stops = much more scroll per leg, so the map transitions slowly
+     and naturally as you scroll instead of flying past. */
+  min-height: 135vh;
   display: flex;
   align-items: center;
   padding: 0 var(--page-padding);
@@ -673,7 +820,7 @@ em {
 /* Mobile: reduced zigzag amplitude — percentage padding clears the dots */
 @media (max-width: 767px) {
   .journey__stop {
-    min-height: 80vh;
+    min-height: 110vh;
   }
   .journey__stop[data-side="left"] {
     padding-right: calc(37% + 0.5rem);
@@ -2120,12 +2267,371 @@ em {
 }
 
 /* ============================================================
+   FLIGHT MAP — MapLibre globe, scroll-driven flyTo
+   Tall track + sticky stage; glass panel updates per leg.
+   ============================================================ */
+.flightmap {
+  position: relative;
+  background: #05070f;
+  /* height is set by JS (≈ one viewport of scroll per leg);
+     this is just a fallback before JS runs. */
+  height: 700vh;
+}
+
+.flightmap__sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  min-height: 600px;
+  overflow: hidden;
+  background: #05070f;
+}
+
+.flightmap__map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Keep MapLibre's own canvas from grabbing scroll/pointer — this is a
+   passive, scroll-driven cinematic, not an interactive map. */
+.flightmap__map .maplibregl-canvas { outline: none; }
+.flightmap__map .maplibregl-ctrl-attrib { font-size: 10px; }
+
+/* Readability scrim behind the panel (bottom-left weighted) */
+.flightmap__scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(5,7,15,0.55) 0%, rgba(5,7,15,0) 22%),
+    linear-gradient(0deg, rgba(5,7,15,0.85) 0%, rgba(5,7,15,0) 42%);
+}
+
+.flightmap__head {
+  position: absolute;
+  top: clamp(4.5rem, 11vh, 7rem);
+  left: 0; right: 0;
+  text-align: center;
+  padding: 0 var(--page-padding);
+  pointer-events: none;
+  color: var(--cream);
+}
+.flightmap__head .eyebrow { color: var(--amber-light); }
+.flightmap__head h2 { color: var(--white); }
+
+.flightmap__panel {
+  position: absolute;
+  left: clamp(1.25rem, 5vw, 3rem);
+  bottom: clamp(3rem, 9vh, 5rem);
+  width: min(420px, calc(100% - 2.5rem));
+  padding: 1.5rem 1.75rem;
+  border-radius: var(--radius-lg);
+  background: rgba(10, 14, 24, 0.62);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(232, 168, 78, 0.22);
+  color: var(--cream);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+}
+.flightmap__panel.is-swapping { opacity: 0; transform: translateY(10px); }
+
+.flightmap__panel-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.flightmap__leg {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber-light);
+}
+.flightmap__dist {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: rgba(245, 240, 232, 0.6);
+}
+
+.flightmap__name {
+  font-family: var(--font-serif);
+  font-size: clamp(1.35rem, 3.4vw, 1.9rem);
+  color: var(--white);
+  line-height: 1.15;
+  margin-bottom: 0.25rem;
+}
+.flightmap__vendor {
+  font-size: 0.82rem;
+  color: var(--amber-light);
+  margin-bottom: 0.7rem;
+}
+.flightmap__desc {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: rgba(245, 240, 232, 0.82);
+}
+
+.flightmap__hint {
+  position: absolute;
+  right: clamp(1.25rem, 5vw, 3rem);
+  bottom: clamp(3rem, 9vh, 5rem);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(245, 240, 232, 0.55);
+  pointer-events: none;
+  animation: flightHintPulse 2.4s ease-in-out infinite;
+}
+@keyframes flightHintPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.85; }
+}
+
+@media (max-width: 767px) {
+  .flightmap__panel {
+    left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 2rem);
+  }
+  .flightmap__panel.is-swapping { transform: translateX(-50%) translateY(10px); }
+  .flightmap__hint { display: none; }
+}
+
+/* ============================================================
+   MEET THE PILOT
+   ============================================================ */
+.pilot {
+  background: var(--forest);
+  color: var(--cream);
+  padding: clamp(4rem, 10vw, 7rem) var(--page-padding);
+}
+
+.pilot__inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: center;
+}
+
+.pilot__media {
+  position: relative;
+}
+
+.pilot__photo {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(120% 90% at 30% 20%, rgba(232,168,78,0.18), transparent 55%),
+    linear-gradient(160deg, #1f3320 0%, #0d1a0d 100%);
+  border: 1px solid rgba(245, 240, 232, 0.10);
+}
+
+.pilot__photo-note {
+  font-size: 0.8rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(245, 240, 232, 0.45);
+}
+
+.pilot__badge {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  background: rgba(13, 26, 13, 0.78);
+  color: var(--amber-light);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.85rem;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(232, 168, 78, 0.3);
+}
+
+.pilot__copy .eyebrow { color: var(--amber-light); }
+.pilot__copy h2 { color: var(--white); margin-bottom: 1.25rem; }
+
+.pilot__lead {
+  font-size: clamp(1rem, 2.2vw, 1.125rem);
+  line-height: 1.75;
+  color: rgba(245, 240, 232, 0.86);
+  margin-bottom: 1.75rem;
+}
+
+.pilot__creds {
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.pilot__creds li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.975rem;
+  color: rgba(245, 240, 232, 0.82);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(245, 240, 232, 0.08);
+}
+
+.pilot__cred-k {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: var(--amber-light);
+  min-width: 5.5rem;
+}
+
+@media (min-width: 768px) {
+  .pilot__inner {
+    grid-template-columns: 0.85fr 1.15fr;
+  }
+  .pilot__photo { max-width: 420px; }
+}
+
+/* ============================================================
+   THE AIRCRAFT — AS350 3D scroll fly-through
+   Tall track + sticky stage holding the WebGL canvas. Captions
+   are absolutely positioned over the canvas and swapped by JS.
+   ============================================================ */
+.aircraft {
+  position: relative;
+  height: 360vh;
+  background:
+    radial-gradient(140% 120% at 50% 8%, #16241a 0%, #0b150b 55%, #060d06 100%);
+}
+
+.aircraft__viz {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100svh;
+  min-height: 600px;
+  overflow: hidden;
+}
+
+.aircraft__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.aircraft__intro {
+  position: absolute;
+  top: clamp(4.5rem, 12vh, 8rem);
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 0 var(--page-padding);
+  z-index: 2;
+  pointer-events: none;
+  color: var(--cream);
+}
+
+.aircraft__intro .eyebrow { color: var(--amber-light); }
+.aircraft__intro h2 { color: var(--white); }
+
+.aircraft__caption {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(4rem, 12vh, 7.5rem);
+  transform: translateX(-50%) translateY(12px);
+  width: min(560px, calc(100% - 2 * var(--page-padding)));
+  text-align: center;
+  z-index: 2;
+  pointer-events: none;
+  color: var(--cream);
+  opacity: 0;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.aircraft__caption.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.aircraft__caption-tag {
+  display: inline-block;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amber-light);
+  margin-bottom: 0.75rem;
+}
+
+.aircraft__caption-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  color: var(--white);
+  margin-bottom: 0.625rem;
+}
+
+.aircraft__caption-body {
+  font-size: clamp(0.95rem, 2.2vw, 1.0625rem);
+  line-height: 1.65;
+  color: rgba(245, 240, 232, 0.82);
+}
+
+.aircraft__progress {
+  position: absolute;
+  left: 50%;
+  bottom: 2.25rem;
+  transform: translateX(-50%);
+  width: min(220px, 60%);
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(245, 240, 232, 0.18);
+  z-index: 2;
+  overflow: hidden;
+}
+
+.aircraft__progress-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--amber), var(--amber-light));
+  transition: width 0.1s linear;
+}
+
+@media (max-width: 767px) {
+  /* Shorter runway on phones so the pinned stage isn't endless */
+  .aircraft { height: 300vh; }
+}
+
+/* ============================================================
    REDUCED MOTION — respect accessibility preference
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
   .ticker__track { animation: none; }
   .ambient__orb  { animation: none; }
   [data-par], [data-par-x] { transform: none !important; }
+
+  /* Hero: no sky-zoom track — collapse to a single static viewport */
+  .hero { height: 100vh; height: 100svh; }
+  .hero__bg { transform: none !important; filter: none !important; }
+  .hero__content { transform: none !important; opacity: 1 !important; }
+  .hero__atmos { opacity: 0 !important; }
+
+  /* Aircraft: collapse the scroll runway; show a single static frame */
+  .aircraft { height: 100vh; height: 100svh; }
+  .aircraft__caption { position: static; opacity: 1; transform: none; margin-top: 2rem; }
+
+  /* Flight map: collapse the runway; JS shows the whole route at once */
+  .flightmap { height: 100vh !important; height: 100svh !important; }
+  .flightmap__hint { display: none; }
 
   /* Adventures unroll: show immediately, no wipe/cascade/split */
   .js .adventures .container,
@@ -2145,3 +2651,295 @@ em {
     transform: translateX(-50%) scaleX(1);
   }
 }
+
+/* ============================================================
+   EXPERIENCE SUB-PAGES  +  card→page View Transition
+   The "big" adventures open as full immersive pages. The card's
+   hero image morphs into the page hero via the cross-document
+   View Transitions API (degrades to a normal nav where unsupported).
+   ============================================================ */
+
+/* Opt this document (and the experience pages) into MPA transitions. */
+@view-transition { navigation: auto; }
+
+/* Shared-element morph: every experience-page hero carries ONE name. The
+   source element — the full-screen journey photo that's parked on screen
+   when you tap "Learn More" — is tagged with the same name in JS only while
+   a stop is active, so the photo expands seamlessly into the page hero.
+   (Only one element ever holds the name per page, so there's no clash;
+   cards elsewhere just cross-fade.) */
+.exp-hero__bg { view-transition-name: exp-hero; }
+
+::view-transition-group(exp-hero) { animation-duration: 0.55s; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Title card that sits above the full-screen journey photo, with the
+   "Learn More" that flows to the experience page. */
+.journey__photo-card {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: clamp(3rem, 12vh, 8rem);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 var(--page-padding);
+  text-align: center;
+  color: var(--white);
+}
+.journey__photo-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amber-light);
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.7);
+}
+.journey__photo-more {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--forest-dark);
+  background: var(--cream);
+  padding: 0.8rem 1.6rem;
+  border-radius: 3rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transition: background var(--transition), transform var(--transition);
+}
+.journey__photo-more span[aria-hidden] { transition: transform var(--transition); }
+.journey__photo-more:hover { background: var(--white); transform: translateY(-2px); }
+.journey__photo-more:hover span[aria-hidden] { transform: translateX(3px); }
+
+/* Accessible per-card "Learn More" in the scrolling journey track. */
+.journey__card-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--amber);
+  transition: gap var(--transition);
+}
+.journey__card-more span[aria-hidden] { transition: transform var(--transition); }
+.journey__card-more:hover span[aria-hidden] { transform: translateX(4px); }
+
+/* ---- Experience page ---- */
+.exp { background: var(--cream); }
+
+/* Hero */
+.exp-hero {
+  position: relative;
+  min-height: 92vh;
+  min-height: 92svh;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  isolation: isolate;
+}
+.exp-hero__bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: -2;
+}
+.exp-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(13,26,13,0.55) 0%, rgba(13,26,13,0) 32%),
+    linear-gradient(0deg, rgba(13,26,13,0.92) 4%, rgba(13,26,13,0.35) 42%, rgba(13,26,13,0) 70%);
+}
+.exp-hero__inner {
+  width: 100%;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 var(--page-padding) clamp(2.5rem, 6vw, 4.5rem);
+  color: var(--cream);
+}
+.exp-hero .eyebrow { color: var(--amber-light); }
+.exp-hero__title {
+  font-size: clamp(2.75rem, 8vw, 5.5rem);
+  color: var(--cream);
+  margin: 0.25rem 0 0.5rem;
+}
+.exp-hero__tagline {
+  font-size: clamp(1.0625rem, 2.4vw, 1.4rem);
+  font-weight: 300;
+  max-width: 36ch;
+  color: rgba(245, 240, 232, 0.92);
+}
+
+/* Back link (top-left, over the hero) */
+.exp-back {
+  position: absolute;
+  top: calc(var(--nav-height) + 1rem);
+  left: var(--page-padding);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--cream);
+  padding: 0.5rem 1rem 0.5rem 0.85rem;
+  border-radius: 3rem;
+  background: rgba(13, 26, 13, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background var(--transition);
+}
+.exp-back:hover { background: rgba(13, 26, 13, 0.7); }
+.exp-back span[aria-hidden] { transition: transform var(--transition); }
+.exp-back:hover span[aria-hidden] { transform: translateX(-3px); }
+
+/* Body sections */
+.exp-section { padding: clamp(3.5rem, 8vw, 6rem) 0; }
+.exp-section--tight { padding: clamp(2rem, 5vw, 3rem) 0; }
+.exp-lede {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 3.4vw, 2.25rem);
+  line-height: 1.4;
+  color: var(--forest);
+  max-width: 22ch;
+}
+.exp-lede em { color: var(--amber); }
+
+.exp-grid {
+  display: grid;
+  gap: clamp(2rem, 5vw, 4rem);
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+@media (min-width: 860px) {
+  .exp-grid { grid-template-columns: 1.4fr 1fr; }
+}
+.exp-prose p {
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  color: #34432f;
+  margin-bottom: 1.25rem;
+  max-width: 60ch;
+}
+.exp-prose p:last-child { margin-bottom: 0; }
+
+/* "Included" card */
+.exp-included {
+  background: var(--forest);
+  color: var(--cream);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.75rem, 4vw, 2.5rem);
+}
+.exp-included h3 {
+  color: var(--cream);
+  font-size: 1.35rem;
+  margin-bottom: 1.25rem;
+}
+.exp-included ul { display: grid; gap: 0.85rem; }
+.exp-included li {
+  position: relative;
+  padding-left: 1.75rem;
+  font-size: 0.975rem;
+  line-height: 1.5;
+  color: rgba(245, 240, 232, 0.9);
+}
+.exp-included li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--amber-light);
+  transform: rotate(45deg);
+}
+
+/* How-it-works steps */
+.exp-steps {
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+  grid-template-columns: 1fr;
+  counter-reset: step;
+}
+@media (min-width: 720px) {
+  .exp-steps { grid-template-columns: repeat(4, 1fr); }
+}
+.exp-step { counter-increment: step; }
+.exp-step__num {
+  font-family: var(--font-serif);
+  font-size: 2.5rem;
+  color: var(--amber);
+  line-height: 1;
+}
+.exp-step__num::before { content: counter(step, decimal-leading-zero); }
+.exp-step h4 {
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  margin: 0.6rem 0 0.4rem;
+  color: var(--forest-dark);
+}
+.exp-step p { font-size: 0.95rem; line-height: 1.6; color: var(--gray); }
+
+/* Specs strip */
+.exp-specs {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(2, 1fr);
+  background: var(--cream-dark);
+  border: 1px solid var(--cream-dark);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+@media (min-width: 720px) { .exp-specs { grid-template-columns: repeat(4, 1fr); } }
+.exp-spec { background: var(--cream); padding: 1.5rem; text-align: center; }
+.exp-spec__k {
+  display: block;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.exp-spec__v { font-family: var(--font-serif); font-size: 1.2rem; color: var(--forest-dark); }
+
+/* Gallery */
+.exp-gallery {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 720px) { .exp-gallery { grid-template-columns: repeat(3, 1fr); } }
+.exp-gallery__item {
+  aspect-ratio: 4 / 3;
+  background-size: cover;
+  background-position: center;
+  border-radius: var(--radius);
+}
+.exp-gallery__item--tall { grid-row: span 2; aspect-ratio: 3 / 5; }
+
+/* CTA band */
+.exp-cta {
+  background: var(--forest-dark);
+  color: var(--cream);
+  text-align: center;
+  padding: clamp(3.5rem, 8vw, 6rem) var(--page-padding);
+}
+.exp-cta h2 { color: var(--cream); margin-bottom: 0.75rem; }
+.exp-cta p { color: rgba(245, 240, 232, 0.8); max-width: 46ch; margin: 0 auto 2rem; line-height: 1.7; }

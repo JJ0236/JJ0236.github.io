@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
@@ -26,6 +27,7 @@
       <nav class="nav__links" id="navLinks" aria-label="Primary navigation">
         <a href="#adventures">Adventures</a>
         <a href="#about">About</a>
+        <a href="#pilot">Pilot</a>
         <a href="#gallery">The Ozarks</a>
         <a href="#book">Book</a>
       </nav>
@@ -70,40 +72,63 @@
       vector-effect="non-scaling-stroke"/>
   </svg>
 
+  <!-- Full-screen location photo: fades in over the map at each journey stop,
+       then fades back to continue the route. Images are PLACEHOLDERS — swap
+       for real licensed photos of each actual location. -->
+  <div class="journey__photo" id="journeyPhoto" aria-hidden="true">
+    <img id="journeyPhotoImg" alt="" decoding="async" />
+    <div class="journey__photo-card">
+      <span class="journey__photo-eyebrow">The Experience</span>
+      <div class="journey__photo-cap" id="journeyPhotoName"></div>
+      <!-- Visual "Learn More" over the photo; href set per-stop in flightmap.js.
+           Decorative duplicate of the in-card links below (which carry a11y). -->
+      <a class="journey__photo-more" id="journeyPhotoMore" href="#" tabindex="-1" aria-hidden="true">
+        Learn More <span aria-hidden="true">&#8594;</span>
+      </a>
+    </div>
+  </div>
+
   <main id="main-content">
 
-    <!-- HERO -->
+    <!-- HERO — sticky "zoom through the sky" scroll runway.
+         The .hero is a tall scroll track; .hero__sticky pins to the
+         viewport while the aerial footage pushes in and the content
+         recedes, so it reads as flying down through the sky. JS drives
+         the transforms (see initHeroZoom in main.js). -->
     <section class="hero" id="hero" aria-label="Hero">
-      <div class="hero__bg" id="heroBg" aria-hidden="true">
-        <video
-          class="hero__video"
-          autoplay
-          muted
-          loop
-          playsinline
-          disablepictureinpicture
-          aria-hidden="true"
-          poster="https://images.pexels.com/photos/4320443/pexels-photo-4320443.jpeg?auto=compress&cs=tinysrgb&w=1920"
-        >
-          <source
-            src="https://videos.pexels.com/video-files/32391067/13816974_1920_1080_30fps.mp4"
-            type="video/mp4"
-          />
-        </video>
-      </div>
-      <div class="hero__overlay" aria-hidden="true"></div>
-      <div class="hero__content">
-        <p class="eyebrow">Aerial Adventures &middot; Arkansas Ozarks</p>
-        <h1 class="hero__headline">The Ozarks,<br /><em>Unleashed.</em></h1>
-        <p class="hero__sub">Eight extraordinary experiences delivered by private helicopter. Crystal mines, fly fishing, supercar drives, sailing, fine dining, and more — deep in the Arkansas Ozarks.</p>
-        <div class="hero__actions">
-          <a href="#adventures" class="btn btn--primary">Choose Your Adventure</a>
-          <a href="#journey" class="btn btn--ghost">See the Experience</a>
+      <div class="hero__sticky">
+        <div class="hero__bg" id="heroBg" aria-hidden="true">
+          <video
+            class="hero__video"
+            autoplay
+            muted
+            loop
+            playsinline
+            disablepictureinpicture
+            aria-hidden="true"
+            poster="https://images.pexels.com/photos/4320443/pexels-photo-4320443.jpeg?auto=compress&cs=tinysrgb&w=1920"
+          >
+            <source
+              src="https://videos.pexels.com/video-files/32391067/13816974_1920_1080_30fps.mp4"
+              type="video/mp4"
+            />
+          </video>
         </div>
+        <div class="hero__overlay" aria-hidden="true"></div>
+        <div class="hero__atmos" id="heroAtmos" aria-hidden="true"></div>
+        <div class="hero__content">
+          <p class="eyebrow">Aerial Adventures &middot; Arkansas Ozarks</p>
+          <h1 class="hero__headline">The Ozarks,<br /><em>Unleashed.</em></h1>
+          <p class="hero__sub">Extraordinary experiences delivered by private helicopter — crystal mines, fly fishing, supercar drives, sailing, fine dining, and more, all radiating out from Thaden Field.</p>
+          <div class="hero__actions">
+            <a href="#adventures" class="btn btn--primary">Choose Your Adventure</a>
+            <a href="#journey" class="btn btn--ghost">See the Experience</a>
+          </div>
+        </div>
+        <a href="#journey" class="hero__scroll-hint" id="heroHint" aria-label="Scroll to explore">
+          <span class="scroll-dot" aria-hidden="true"></span>
+        </a>
       </div>
-      <a href="#journey" class="hero__scroll-hint" aria-label="Scroll to explore">
-        <span class="scroll-dot" aria-hidden="true"></span>
-      </a>
     </section>
 
     <!-- TICKER -->
@@ -139,10 +164,15 @@
 
       <div class="journey__track">
         <div class="journey__bg-stage" aria-hidden="true">
-          <div class="journey__bg" data-bg="0" style="background-image: url('https://images.pexels.com/photos/12654013/pexels-photo-12654013.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <div class="journey__bg" data-bg="1" style="background-image: url('https://images.pexels.com/photos/10057433/pexels-photo-10057433.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <div class="journey__bg" data-bg="2" style="background-image: url('https://images.pexels.com/photos/2739664/pexels-photo-2739664.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
-          <div class="journey__bg" data-bg="3" style="background-image: url('https://images.pexels.com/photos/8564221/pexels-photo-8564221.jpeg?auto=compress&cs=tinysrgb&w=1400')"></div>
+          <!-- Live aerial map: flies (Google-Earth style) to each experience
+               as the trail line trails past. Driven from main.js → OzarkMap. -->
+          <div class="journey__map" id="journeyMap"></div>
+          <!-- Takeoff caption: shown while the map is on the ground at Thaden -->
+          <div class="journey__depart" id="journeyDepart">
+            <span class="journey__depart-eyebrow">Now departing</span>
+            <span class="journey__depart-name">Thaden Field</span>
+            <span class="journey__depart-sub">Fly&nbsp;OZ clubhouse &middot; Caf&eacute; Louise</span>
+          </div>
         </div>
 
         <!-- Dots — positioned by JS onto each card's inner edge -->
@@ -159,72 +189,80 @@
         <div class="journey__stop" data-stop="0" data-side="left">
           <div class="journey__card">
             <span class="step-num">01</span>
-            <p class="step-location">Signature Experience</p>
-            <h3>Crystal Mining Tours</h3>
-            <p>Dig for Ozark quartz in a working private mine &mdash; and keep everything you find.</p>
+            <p class="step-location">Bentonville &middot; 3 mi</p>
+            <h3>Fly In to Restaurant Ryn</h3>
+            <p>Land minutes from the runway at Chef Matthew Cooper&rsquo;s farm-to-table tasting table.</p>
+            <a class="journey__card-more" href="experiences/restaurant-ryn.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="1" data-side="right">
           <div class="journey__card">
             <span class="step-num">02</span>
-            <p class="step-location">White River &middot; Cotter, AR</p>
-            <h3>Fly Fishing</h3>
-            <p>World-class trout water on the legendary White River tailwater below Bull Shoals Dam.</p>
+            <p class="step-location">Springdale &middot; 16 mi</p>
+            <h3>Sassafras Springs Vineyard</h3>
+            <p>Private tastings among the vines at a Northwest Arkansas estate winery, a short hop south.</p>
+            <a class="journey__card-more" href="experiences/sassafras-vineyard.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="2" data-side="left">
           <div class="journey__card">
             <span class="step-num">03</span>
-            <p class="step-location">Trail Riding</p>
-            <h3>Equestrian Adventures</h3>
-            <p>Backcountry trails in the Boston Mountains that only horses can reach.</p>
+            <p class="step-location">Beaver Lake &middot; 19 mi</p>
+            <h3>Sailing &amp; a Private Chef</h3>
+            <p>Set sail from Lost Bridge with an on-board meal from the chef behind Ryn.</p>
+            <a class="journey__card-more" href="experiences/sailing-chef.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="3" data-side="right">
           <div class="journey__card">
             <span class="step-num">04</span>
-            <p class="step-location">Hundred Miles</p>
-            <h3>Private Mountain Biking</h3>
-            <p>100 miles of single-track. Zero crowds. A private trailhead reserved for you.</p>
+            <p class="step-location">Fayetteville &middot; 19 mi</p>
+            <h3>Equestrian &amp; Ride Therapy</h3>
+            <p>Show-caliber stables and a therapeutic-horsemanship program on a private farm.</p>
+            <a class="journey__card-more" href="experiences/equestrian.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="4" data-side="left">
           <div class="journey__card">
             <span class="step-num">05</span>
-            <p class="step-location">Drive Something Special</p>
-            <h3>Supercar Rentals</h3>
-            <p>Lamborghini, Ferrari, or classic muscle on empty Ozark mountain roads.</p>
+            <p class="step-location">Ozark NF &middot; 47 mi</p>
+            <h3>White Rock Mountain</h3>
+            <p>100+ miles of private trail &mdash; mountain bikes, e-bikes, motocross, and bluff-top cabins.</p>
+            <a class="journey__card-more" href="experiences/white-rock-mountain.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="5" data-side="right">
           <div class="journey__card">
             <span class="step-num">06</span>
-            <p class="step-location">Beaver Lake</p>
-            <h3>Sailing with a Private Chef</h3>
-            <p>A private yacht, a gourmet chef, and ninety miles of hidden Ozark shoreline.</p>
+            <p class="step-location">Buffalo River &middot; 53 mi</p>
+            <h3>Hawksbill Crag</h3>
+            <p>A quiet, meditative walk to Arkansas&rsquo;s most iconic bluff over the wilderness.</p>
+            <a class="journey__card-more" href="experiences/hawksbill-crag.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="6" data-side="left">
           <div class="journey__card">
             <span class="step-num">07</span>
-            <p class="step-location">Fine Dining</p>
-            <h3>Fly In to Restaurant Ryn</h3>
-            <p>Arrive by air. Land at one of the South&rsquo;s finest farm-to-table restaurants.</p>
+            <p class="step-location">Cotter &middot; 94 mi</p>
+            <h3>Cotter Elite Anglers</h3>
+            <p>Guided fly fishing for trophy trout on the legendary White River.</p>
+            <a class="journey__card-more" href="experiences/cotter-anglers.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
         <div class="journey__stop" data-stop="7" data-side="right">
           <div class="journey__card">
             <span class="step-num">08</span>
-            <p class="step-location">Overnight Stay</p>
-            <h3>Antebellum Mansion</h3>
-            <p>Wake up in a 180-year-old estate, with horses grazing outside your window.</p>
+            <p class="step-location">Ouachitas &middot; 132 mi &middot; Signature</p>
+            <h3>Crystal Mining</h3>
+            <p>Dig your own quartz in a working Ouachita mine &mdash; and keep everything you find.</p>
+            <a class="journey__card-more" href="experiences/crystal-mining.html">Learn More <span aria-hidden="true">&#8594;</span></a>
           </div>
         </div>
 
@@ -260,9 +298,9 @@
             <h3 class="adv-card__title">Crystal Mining Tours</h3>
             <p class="adv-card__tagline">Dig for Ozark quartz in a working private mine</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Crystal Mining Tours — your signature Ozark adventure">
+          <a class="adv-card__trigger" href="experiences/crystal-mining.html" aria-label="Explore Crystal Mining Tours — your signature Ozark adventure">
             <span>Explore Experience <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 2: Fly Fishing -->
@@ -274,9 +312,9 @@
             <h3 class="adv-card__title">Fly Fishing in Cotter</h3>
             <p class="adv-card__tagline">White River tailwater — legendary trout</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Fly Fishing in Cotter, Arkansas">
+          <a class="adv-card__trigger" href="experiences/cotter-anglers.html" aria-label="Explore Fly Fishing in Cotter, Arkansas">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 3: Equestrian -->
@@ -288,9 +326,9 @@
             <h3 class="adv-card__title">Equestrian Adventures</h3>
             <p class="adv-card__tagline">Ride trails only horses can reach</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Equestrian Adventures in the Ozarks">
+          <a class="adv-card__trigger" href="experiences/equestrian.html" aria-label="Explore Equestrian Adventures in the Ozarks">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 4: Mountain Biking -->
@@ -302,9 +340,9 @@
             <h3 class="adv-card__title">Private Mountain Biking</h3>
             <p class="adv-card__tagline">100 miles of single-track. Zero crowds.</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Private Mountain Biking — 100 miles of trail">
+          <a class="adv-card__trigger" href="experiences/white-rock-mountain.html" aria-label="Explore Private Mountain Biking — 100 miles of trail">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 5: Supercar -->
@@ -316,9 +354,9 @@
             <h3 class="adv-card__title">Supercar &amp; Heritage Rentals</h3>
             <p class="adv-card__tagline">Lamborghini. Ferrari. Classic muscle.</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Supercar and Heritage Car Rentals">
+          <a class="adv-card__trigger" href="experiences/supercar.html" aria-label="Explore Supercar and Heritage Car Rentals">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 6: Sailing -->
@@ -330,9 +368,9 @@
             <h3 class="adv-card__title">Sailing with a Private Chef</h3>
             <p class="adv-card__tagline">A private yacht. A gourmet chef.</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore Sailing on Beaver Lake with a Private Chef">
+          <a class="adv-card__trigger" href="experiences/sailing-chef.html" aria-label="Explore Sailing on Beaver Lake with a Private Chef">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 7: Restaurant Ryn -->
@@ -344,23 +382,23 @@
             <h3 class="adv-card__title">Fly In to Restaurant Ryn</h3>
             <p class="adv-card__tagline">Arrive by air. Dine at the finest table.</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore flying in to Restaurant Ryn">
+          <a class="adv-card__trigger" href="experiences/restaurant-ryn.html" aria-label="Explore flying in to Restaurant Ryn">
             <span>Explore <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
         <!-- 8: Antebellum Mansion — WIDE (full-width) -->
         <article class="adv-card adv-card--wide" data-adv-idx="7">
           <div class="adv-card__bg" aria-hidden="true"
-            style="background-image: url('https://images.pexels.com/photos/2724748/pexels-photo-2724748.jpeg?auto=compress&cs=tinysrgb&w=1920')"></div>
+            style="background-image: url('images/equestrian.jpg')"></div>
           <div class="adv-card__body">
             <span class="adv-card__tag">Overnight Stay</span>
             <h3 class="adv-card__title">Antebellum Mansion &amp; Stables</h3>
             <p class="adv-card__tagline">Wake up in a 180-year-old estate. Horses graze the morning mist.</p>
           </div>
-          <button class="adv-card__trigger" aria-label="Explore an overnight stay at the Antebellum Mansion and Stables">
+          <a class="adv-card__trigger" href="experiences/antebellum-mansion.html" aria-label="Explore an overnight stay at the Antebellum Mansion and Stables">
             <span>Explore Experience <span aria-hidden="true">&#8594;</span></span>
-          </button>
+          </a>
         </article>
 
       </div>
@@ -535,6 +573,55 @@
       </div>
     </section>
 
+    <!-- MEET THE PILOT — Andrew McKenna.
+         Bio copy + credentials are PLACEHOLDER ([bracketed] specifics
+         need the client's real numbers); headshot to be supplied. -->
+    <section class="pilot" id="pilot" aria-labelledby="pilot-heading">
+      <div class="pilot__inner">
+        <div class="pilot__media">
+          <div class="pilot__photo" role="img" aria-label="Portrait of pilot Andrew McKenna — photo to be provided">
+            <span class="pilot__photo-note">Headshot to be provided</span>
+          </div>
+          <span class="pilot__badge"><span aria-hidden="true">&#9670;</span> Warbird &middot; Historic Charter</span>
+        </div>
+        <div class="pilot__copy">
+          <p class="eyebrow">Meet Your Pilot</p>
+          <h2 id="pilot-heading">Flown by <em>Andrew McKenna.</em></h2>
+          <p class="pilot__lead">A lifetime in the air, much of it behind the controls of vintage warbirds and historic aircraft. Andrew brings the precision of heritage-charter and military-style flying to every Ozark adventure &mdash; reading the ridges, the light, and the weather the way only someone who&rsquo;s logged real mountain time can.</p>
+          <ul class="pilot__creds">
+            <li><span class="pilot__cred-k">[0,000]+</span> hours logged</li>
+            <li><span class="pilot__cred-k">Warbird</span> &amp; historic-aircraft charter</li>
+            <li><span class="pilot__cred-k">Military</span> &amp; heritage flight experiences</li>
+            <li><span class="pilot__cred-k">FAA</span> Part 135 certified</li>
+          </ul>
+          <a href="#book" class="btn btn--primary">Fly with Andrew</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- THE AIRCRAFT — AS350 / A-Star 3D scroll fly-through.
+         .aircraft is a tall scroll track; .aircraft__viz pins while the
+         Three.js camera flies around the helicopter. Captions swap per
+         scroll step (driven by js/heli.js). Procedural placeholder model
+         for now — swap in the real AS350 glTF when we have it. -->
+    <section class="aircraft" id="aircraft" aria-labelledby="aircraft-heading">
+      <div class="aircraft__viz">
+        <canvas class="aircraft__canvas" id="heliCanvas" aria-hidden="true"></canvas>
+        <div class="aircraft__intro">
+          <p class="eyebrow">The Aircraft</p>
+          <h2 id="aircraft-heading">Meet the <em>A&#8209;Star.</em></h2>
+        </div>
+        <div class="aircraft__caption" id="heliCaption" aria-live="polite">
+          <span class="aircraft__caption-tag" id="heliCapTag"></span>
+          <h3 class="aircraft__caption-title" id="heliCapTitle"></h3>
+          <p class="aircraft__caption-body" id="heliCapBody"></p>
+        </div>
+        <div class="aircraft__progress" aria-hidden="true">
+          <span class="aircraft__progress-fill" id="heliProgress"></span>
+        </div>
+      </div>
+    </section>
+
     <!-- BOOK -->
     <section class="book" id="book" aria-labelledby="book-heading">
       <div class="book__inner">
@@ -641,5 +728,21 @@
   </footer>
 
   <script src="js/main.js"></script>
+
+  <!-- MapLibre GL JS (open-source, no token/card) for the globe flight map -->
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="js/flightmap.js"></script>
+
+  <!-- Three.js for the AS350 fly-through. Module + import map so heli.js
+       can `import * as THREE from 'three'`. Pinned version for stability. -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="js/heli.js"></script>
 </body>
 </html>

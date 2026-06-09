@@ -190,6 +190,29 @@
     let nodeDoc = null;    // adventures node center in document coords
     let trackDocTop = 0, trackDocLeft = 0;
 
+    // Continuous route progress for the SCROLL-LINKED map. Frame space:
+    // 0 = Thaden Field, 1 = stop 0, … 8 = stop 7. Derived from where the
+    // trail-tip line (ACT) sits relative to each dot, so it scrubs as you
+    // scroll and reverses cleanly.
+    function journeyProgress() {
+      if (!J.length) return 0;
+      const actY = window.scrollY + window.innerHeight * (ACT / 100);
+      if (actY <= J[0].y) {
+        const f = (actY - trackDocTop) / Math.max(J[0].y - trackDocTop, 1);
+        return Math.max(0, Math.min(1, f));         // Thaden → stop 0
+      }
+      const last = J.length - 1;
+      if (actY >= J[last].y) {                        // past the final stop:
+        // zoom out to the whole-of-Arkansas frame within ~half a viewport,
+        // then hold it (the rest of the track padding keeps it pinned)
+        return J.length + Math.min((actY - J[last].y) / (window.innerHeight * 0.5), 1.0);
+      }
+      let i = 0;
+      while (i < last && actY > J[i + 1].y) i++;
+      const f = (actY - J[i].y) / Math.max(J[i + 1].y - J[i].y, 1);
+      return (i + 1) + f;
+    }
+
     // Cache positions on load / resize (layout is stable; cheap per-frame after).
     function measure() {
       trackDocTop  = docTop(track);
@@ -248,9 +271,9 @@
 
       dots.forEach(function(dot, i) { dot.classList.toggle('is-active', i === activeIdx); });
 
-      // Background photos: 2 stops per photo
-      const bgIdx = Math.min(Math.floor(Math.max(activeIdx, 0) / 2), bgs.length - 1);
-      bgs.forEach(function(bg, i) { bg.style.opacity = i === bgIdx ? '1' : '0'; });
+      // Drive the aerial map background — scroll-linked, so the camera
+      // scrubs continuously between places as you scroll (and reverses).
+      if (window.OzarkMap) window.OzarkMap.setProgress(journeyProgress());
     }
 
     // Cards fade in when scrolled into view
@@ -315,6 +338,40 @@
   ---------------------------------------------------------- */
   const heroBg = document.getElementById('heroBg');
 
+  /* ----------------------------------------------------------
+     HERO "ZOOM THROUGH THE SKY"
+     .hero is a tall track; as the user scrolls through it the
+     aerial footage pushes in + blurs, the content recedes, and
+     an atmospheric bloom intensifies — reads as flying down
+     through the sky into the experience. Skipped for reduced
+     motion (CSS collapses the track to one viewport).
+  ---------------------------------------------------------- */
+  const prefersReducedMotion =
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const heroEl      = document.getElementById('hero');
+  const heroContent = heroEl ? heroEl.querySelector('.hero__content') : null;
+  const heroAtmos   = document.getElementById('heroAtmos');
+  const heroHint    = document.getElementById('heroHint');
+
+  function updateHeroZoom(scrollY, vh) {
+    if (!heroEl || !heroBg || prefersReducedMotion) return;
+
+    const range = heroEl.offsetHeight - vh;
+    const p = range > 0 ? Math.min(Math.max(scrollY / range, 0), 1) : 0;
+    const eased = p * p; // accelerate into the sky
+
+    heroBg.style.transform = `scale(${(1 + eased * 0.6).toFixed(4)}) translateY(${(-eased * 4).toFixed(2)}%)`;
+    heroBg.style.filter    = `blur(${(eased * 4).toFixed(2)}px)`;
+
+    if (heroContent) {
+      heroContent.style.opacity   = String(Math.max(1 - p / 0.55, 0).toFixed(3));
+      heroContent.style.transform = `translateY(${(-p * 60).toFixed(1)}px) scale(${(1 - p * 0.06).toFixed(4)})`;
+    }
+    if (heroAtmos) heroAtmos.style.opacity = eased.toFixed(3);
+    if (heroHint)  heroHint.style.opacity  = String(Math.max(0.65 * (1 - p / 0.25), 0).toFixed(3));
+  }
+
   // Collect all parallax elements once
   const parMap = new Map();
 
@@ -336,11 +393,8 @@
     const vh      = window.innerHeight;
     const isMobile = window.innerWidth < 768;
 
-    // Hero background — absolute parallax from top of page
-    if (heroBg) {
-      // Move bg down as user scrolls: bg lags behind → classic depth effect
-      heroBg.style.transform = `translateY(${scrollY * 0.45}px)`;
-    }
+    // Hero "zoom through the sky"
+    updateHeroZoom(scrollY, vh);
 
     // Skip multi-directional parallax on mobile to avoid jank
     if (isMobile) return;
@@ -612,8 +666,19 @@
 
   if (modal) {
     document.querySelectorAll('.adv-card__trigger').forEach(btn => {
+      const card = btn.closest('[data-adv-idx]');
+      // Link-based triggers navigate to their own sub-page. Tag the card's
+      // image with the shared morph name so it expands into the destination
+      // page hero via the cross-document View Transition; then let the browser
+      // handle the navigation natively.
+      if (btn.tagName === 'A') {
+        btn.addEventListener('click', () => {
+          const bg = card && card.querySelector('.adv-card__bg');
+          if (bg) bg.style.viewTransitionName = 'exp-hero';
+        });
+        return;
+      }
       btn.addEventListener('click', () => {
-        const card = btn.closest('[data-adv-idx]');
         if (card) openModal(parseInt(card.dataset.advIdx, 10));
       });
     });
