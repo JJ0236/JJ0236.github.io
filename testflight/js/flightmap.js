@@ -198,10 +198,10 @@
   }
   function loop() {
     if (reduceMotion) { currentT = targetT; applyProgress(currentT); loopRunning = false; return; }
-    // Track the scroll target CLOSELY (light anti-jitter smoothing only) — the
-    // camera matches YOUR scroll speed and stops when you stop. No fixed-rate
-    // auto-travel. The zoom-out→travel→zoom-in arc plays as you scroll the leg.
-    currentT += (targetT - currentT) * 0.25;
+    // Ease toward the scroll target with extra inertia so the camera has
+    // "traction" — it glides and settles instead of snapping 1:1 with fast or
+    // jerky scrolling (which made the zoom arc wig out). Lower = more damped.
+    currentT += (targetT - currentT) * 0.12;
     if (Math.abs(targetT - currentT) < 0.0005) {
       currentT = targetT; lastApplied = currentT;
       applyProgress(currentT); loopRunning = false; return;
