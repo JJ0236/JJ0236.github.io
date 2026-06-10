@@ -507,7 +507,7 @@
       img:        'https://images.pexels.com/photos/3737455/pexels-photo-3737455.jpeg?auto=compress&cs=tinysrgb&w=1400',
       desc:       'Fly by helicopter to a private working crystal mine deep in the Ouachita Mountains. A seasoned local miner walks you through the geology and hands you a pick. Every crystal you find is yours to keep — raw, unpolished, and pulled from 300-million-year-old rock by your own hands.',
       highlights: [
-        'Private helicopter transfer from Harrison, AR',
+        'Private helicopter transfer from Thaden Field, Bentonville',
         'Guided dig session with a working miner',
         'Keep everything you find',
         'Lunch at a nearby local smokehouse',
