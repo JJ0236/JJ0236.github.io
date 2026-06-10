@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Stratus Charters">
+  <rect width="64" height="64" rx="14" fill="#16263a"/>
+  <!-- stratus cloud bands -->
+  <g stroke="#e8a84e" stroke-width="6" stroke-linecap="round">
+    <line x1="17" y1="24" x2="47" y2="24"/>
+    <line x1="12" y1="36" x2="52" y2="36"/>
+    <line x1="21" y1="48" x2="43" y2="48"/>
+  </g>
+</svg>
