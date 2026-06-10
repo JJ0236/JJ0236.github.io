@@ -309,9 +309,27 @@
     });
   }
 
-  // Build the map immediately on page load so it's ready before the user
-  // scrolls (not streaming in mid-scroll).
-  initMap();
+  // Boot the map OFF the hero's critical path. Instead of initializing at page
+  // load (which fired the ~800 KB library + satellite/terrain tile fetches in
+  // parallel with the hero video), we start init as the journey section nears
+  // the viewport — with a big rootMargin (~1.5 viewports of lead time) so tiles
+  // are loaded by the time it scrolls into view. The ready/pending guard in
+  // setProgress means even a fast scroll just snaps to the correct frame; the
+  // section opens parked on the "Now departing — Thaden Field" caption anyway.
+  let booted = false;
+  function bootMap() { if (booted) return; booted = true; initMap(); }
+
+  if ('IntersectionObserver' in window) {
+    const bootObs = new IntersectionObserver(function (entries) {
+      if (entries.some(function (e) { return e.isIntersecting; })) {
+        bootObs.disconnect();
+        bootMap();
+      }
+    }, { rootMargin: '1500px 0px' });
+    bootObs.observe(journeyEl);
+  } else {
+    bootMap();   // no IO support → fall back to immediate init
+  }
 
   window.addEventListener('resize', () => { if (map) map.resize(); }, { passive: true });
 })();

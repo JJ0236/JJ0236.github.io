@@ -743,9 +743,13 @@
 
   <script src="js/main.js"></script>
 
-  <!-- MapLibre GL JS (open-source, no token/card) for the globe flight map -->
-  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-  <script src="js/flightmap.js"></script>
+  <!-- MapLibre GL JS (open-source, no token/card) for the globe flight map.
+       Both deferred so the ~800 KB library never parse-blocks the hero; the
+       map itself only *initializes* as the journey section approaches (see
+       the boot observer in flightmap.js). defer preserves order, so flightmap
+       still runs after maplibregl is defined. -->
+  <script defer src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script defer src="js/flightmap.js"></script>
 
   <!-- Three.js for the AS350 fly-through. Module + import map so heli.js
        can `import * as THREE from 'three'`. Pinned version for stability. -->
