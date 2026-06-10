@@ -43,7 +43,7 @@
     { name: 'Sailing · Beaver Lake',      lng: -93.90903, lat: 36.38923, zoom: 15.1, pitch: 62, photo: WK + '/5/58/Beaver_Lake_with_changing_leaves.jpg/1280px-Beaver_Lake_with_changing_leaves.jpg', page: 'experiences/sailing-chef.html' },
     { name: 'Equestrian & Ride Therapy',  lng: -94.10039, lat: 36.10706, zoom: 15.4, pitch: 61, photo: 'images/equestrian.jpg',   page: 'experiences/equestrian.html' },
     { name: 'White Rock Mountain',        lng: -93.95714, lat: 35.69314, zoom: 15.1, pitch: 66, photo: 'images/whiterock-1.jpg',  page: 'experiences/white-rock-mountain.html' },
-    { name: 'Hawksbill Crag',             lng: -93.45787, lat: 35.89842, zoom: 15.4, pitch: 66, photo: WK + '/a/a5/Hawksbill_Crag_Trail_011.jpg/1280px-Hawksbill_Crag_Trail_011.jpg', page: 'experiences/hawksbill-crag.html' },
+    { name: 'Cave Meditation · Lost Bridge', lng: -93.92770, lat: 36.41970, zoom: 15.2, pitch: 63, photo: 'https://picsum.photos/seed/lostbridge-cave-hero/1280/853', page: 'experiences/lost-bridge-cave.html' },
     { name: 'Cotter Elite Anglers',       lng: -92.53544, lat: 36.27118, zoom: 15.1, pitch: 62, photo: WK + '/1/14/White_River%2C_Arkansas.jpg/1280px-White_River%2C_Arkansas.jpg', page: 'experiences/cotter-anglers.html' },
     { name: 'Crystal Mining',             lng: -93.09953, lat: 34.66161, zoom: 15.4, pitch: 62, photo: WK + '/2/27/Digging_For_Diamonds_%282245556315%29.jpg/1280px-Digging_For_Diamonds_%282245556315%29.jpg', page: 'experiences/crystal-mining.html' },
   ];
