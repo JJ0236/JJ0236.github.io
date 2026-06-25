@@ -332,8 +332,9 @@
       <div class="panel-title">SVG Export Layout</div>
       <div class="ctrl-row">
         <label class="ctrl-label" for="inp-cols">Bars per Row</label>
-        <input class="ctrl-input" id="inp-cols" type="number" min="1" step="1" value="10" />
+        <input class="ctrl-input" id="inp-cols" type="number" min="0" step="1" value="0" placeholder="auto" />
       </div>
+      <div class="ctrl-hint">0 = auto (squarest sheet)</div>
       <div class="ctrl-row">
         <label class="ctrl-label" for="inp-margin">Margin (mm)</label>
         <input class="ctrl-input" id="inp-margin" type="number" min="0" step="1" value="5" />
@@ -723,11 +724,27 @@ function exportSVG() {
 
   // Slot width based on the longest bar in the set
   const maxLen    = allBars.reduce((m, b) => Math.max(m, b.p0.distanceTo(b.p1)), 0);
-  const barsPerRow = Math.max(1, parseInt(document.getElementById('inp-cols').value) || 10);
-  const cols  = Math.min(barsPerRow, totalBars);
-  const rows  = Math.ceil(totalBars / cols);
   const slotW = maxLen + margin;
   const slotH = barW   + margin;
+
+  // Column count: 0/blank = auto-pick the grid that gives the squarest sheet,
+  // otherwise honor the requested bars-per-row.
+  const colsInput = parseInt(document.getElementById('inp-cols').value);
+  let cols;
+  if (!colsInput || colsInput < 1) {
+    cols = 1;
+    let bestErr = Infinity;
+    for (let c = 1; c <= totalBars; c++) {
+      const r = Math.ceil(totalBars / c);
+      const w = c * slotW + margin;
+      const h = r * slotH + margin;
+      const err = Math.abs(Math.log(w / h)); // log-ratio: symmetric around square
+      if (err < bestErr) { bestErr = err; cols = c; }
+    }
+  } else {
+    cols = Math.min(colsInput, totalBars);
+  }
+  const rows  = Math.ceil(totalBars / cols);
   const pageW = cols * slotW + margin;
   const pageH = rows * slotH + margin;
 
