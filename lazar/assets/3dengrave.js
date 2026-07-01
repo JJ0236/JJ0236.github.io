@@ -270,12 +270,11 @@
         for (let i = 0; i < w * h; i++) Yp[i] = clahed[i] / 255;
       }
 
-      // 3) Invert + gamma (gamma=1.0)
+      // 3) Invert
       const base = new Float32Array(w * h);
       for (let i = 0; i < w * h; i++) {
-        let b = invertOutput ? 1.0 - Yp[i] : Yp[i];
-        b = Math.max(1e-6, Math.min(1.0, b));
-        base[i] = Math.max(0, Math.min(1, invertOutput ? 1.0 - Math.pow(b, 1.0) : Math.pow(b, 1.0)));
+        const b = invertOutput ? 1.0 - Yp[i] : Yp[i];
+        base[i] = Math.max(0, Math.min(1, b));
       }
 
       // 4) Sharpen
