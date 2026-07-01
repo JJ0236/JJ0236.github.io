@@ -21,6 +21,7 @@
     targetHeightIn: 2.0,
     targetWidthIn: null,
     lutMode: 'linear',   // 'linear' | 'lut'
+    lutSnap: 'nearest',  // 'nearest' | 'bands'  (Custom LUT mode only)
     linearMin: 0,
     linearMax: 255,
   };
@@ -47,14 +48,46 @@
       return Math.round(inches * dpi);
     }
 
-    /** Build a LUT from custom gray values (evenly-spaced input → custom output) */
-    function buildMappingLut(grayValues) {
+    /**
+     * Build a 256-entry LUT from custom gray values.
+     *   snap=null      (Linear mode): evenly-spaced input → interpolated ramp
+     *     between the values (produces smooth in-between grays).
+     *   snap='nearest' (Custom LUT): each input snaps to the NEAREST listed value.
+     *   snap='bands'   (Custom LUT): input split into equal-width bands, each band
+     *     maps to one listed value in order (every value gets an equal slice).
+     *   Both snap modes output ONLY the values that were given.
+     */
+    function buildMappingLut(grayValues, snap) {
       const sorted = [...new Set(grayValues)].sort((a, b) => a - b);
+      const lut = new Uint8Array(256);
+
+      if (snap === 'nearest') {
+        for (let x = 0; x < 256; x++) {
+          let best = sorted[0];
+          let bestDist = Math.abs(x - sorted[0]);
+          for (let i = 1; i < sorted.length; i++) {
+            const d = Math.abs(x - sorted[i]);
+            if (d < bestDist) { bestDist = d; best = sorted[i]; }
+          }
+          lut[x] = best;
+        }
+        return lut;
+      }
+
+      if (snap === 'bands') {
+        const n = sorted.length;
+        for (let x = 0; x < 256; x++) {
+          let idx = Math.floor((x / 256) * n);
+          if (idx >= n) idx = n - 1;
+          lut[x] = sorted[idx];
+        }
+        return lut;
+      }
+
       const inputLevels = [];
       for (let i = 0; i < sorted.length; i++) {
         inputLevels.push((i / (sorted.length - 1)) * 255);
       }
-      const lut = new Uint8Array(256);
       for (let x = 0; x < 256; x++) {
         if (x <= inputLevels[0]) {
           lut[x] = sorted[0];
@@ -214,7 +247,8 @@
 
     function processImage(pixels, w, h, settings) {
       const { customGrayValues, driverDpi, invertOutput, applyClahe: doClahe,
-              claheClip, claheTile, sharpenAmount, targetHeightIn, targetWidthIn } = settings;
+              claheClip, claheTile, sharpenAmount, targetHeightIn, targetWidthIn,
+              lutMode, lutSnap } = settings;
 
       // 1) sRGB → linear → luminance Y
       const Y = new Float32Array(w * h);
@@ -266,8 +300,8 @@
         finalData = resizeBilinear(sharpened, w, h, finalW, finalH);
       }
 
-      // 6) Quantize + LUT
-      const lut = buildMappingLut(customGrayValues);
+      // 6) Quantize + LUT — Custom LUT mode snaps to exact listed values
+      const lut = buildMappingLut(customGrayValues, lutMode === 'lut' ? lutSnap : null);
       const out = new Uint8Array(finalW * finalH);
       for (let i = 0; i < finalW * finalH; i++) {
         out[i] = lut[Math.round(Math.max(0, Math.min(255, finalData[i] * 255)))];
@@ -319,14 +353,44 @@
     return Math.round(inches * dpi);
   }
 
-  /** Build a LUT from custom gray values (evenly-spaced input → custom output) */
-  function buildMappingLut(grayValues) {
+  /**
+   * Build a LUT from custom gray values.
+   *   snap=null      (Linear mode): interpolated ramp between the values.
+   *   snap='nearest' (Custom LUT): snap each input to the NEAREST listed value.
+   *   snap='bands'   (Custom LUT): equal-width input bands, one value each.
+   *   Both snap modes output ONLY the values that were given.
+   */
+  function buildMappingLut(grayValues, snap) {
     const sorted = [...new Set(grayValues)].sort((a, b) => a - b);
+    const lut = new Uint8Array(256);
+
+    if (snap === 'nearest') {
+      for (let x = 0; x < 256; x++) {
+        let best = sorted[0];
+        let bestDist = Math.abs(x - sorted[0]);
+        for (let i = 1; i < sorted.length; i++) {
+          const d = Math.abs(x - sorted[i]);
+          if (d < bestDist) { bestDist = d; best = sorted[i]; }
+        }
+        lut[x] = best;
+      }
+      return lut;
+    }
+
+    if (snap === 'bands') {
+      const n = sorted.length;
+      for (let x = 0; x < 256; x++) {
+        let idx = Math.floor((x / 256) * n);
+        if (idx >= n) idx = n - 1;
+        lut[x] = sorted[idx];
+      }
+      return lut;
+    }
+
     const inputLevels = [];
     for (let i = 0; i < sorted.length; i++) {
       inputLevels.push((i / (sorted.length - 1)) * 255);
     }
-    const lut = new Uint8Array(256);
     for (let x = 0; x < 256; x++) {
       // Linear interpolation through the custom values
       if (x <= inputLevels[0]) {
@@ -651,6 +715,40 @@
       border-bottom-color: var(--accent, #2196f3);
     }
 
+    /* Segmented toggle (snap method) */
+    .e3d-seg {
+      display: flex;
+      border: 1px solid var(--border, #2a2a4a);
+      border-radius: var(--radius, 6px);
+      overflow: hidden;
+    }
+
+    .e3d-seg-btn {
+      flex: 1;
+      padding: 7px 0;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      background: var(--bg-input, #0f0f23);
+      color: var(--text-secondary, #a0a0c0);
+      border: none;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+    }
+
+    .e3d-seg-btn + .e3d-seg-btn {
+      border-left: 1px solid var(--border, #2a2a4a);
+    }
+
+    .e3d-seg-btn:hover:not(.active) {
+      color: var(--text-primary, #e0e0e0);
+    }
+
+    .e3d-seg-btn.active {
+      background: var(--accent, #2196f3);
+      color: #fff;
+    }
+
     .engrave3d-live-badge {
       display: inline-flex;
       align-items: center;
@@ -779,7 +877,15 @@
         <div class="engrave3d-field">
           <label>Gray Values (comma-separated)</label>
           <input type="text" id="e3d-gray-values" value="${state.settings.customGrayValues.join(', ')}" />
-          <div class="field-hint">Custom output gray levels for piecewise LUT mapping</div>
+          <div class="field-hint">Output contains ONLY these gray levels</div>
+        </div>
+        <div class="engrave3d-field">
+          <label>Snap Method</label>
+          <div class="e3d-seg" id="e3d-snap-seg">
+            <button type="button" class="e3d-seg-btn ${state.settings.lutSnap === 'nearest' ? 'active' : ''}" data-snap="nearest">Nearest value</button>
+            <button type="button" class="e3d-seg-btn ${state.settings.lutSnap === 'bands' ? 'active' : ''}" data-snap="bands">Equal bands</button>
+          </div>
+          <div class="field-hint">Nearest = each tone snaps to closest value · Equal bands = each value gets an equal slice of the range</div>
         </div>
       </div>
 
@@ -1121,6 +1227,15 @@
       document.getElementById('e3d-clahe-tile-val').textContent = claheTileSlider.value + 'px';
       scheduleLiveUpdate();
     });
+    // Snap-method segmented toggle (Custom LUT mode)
+    document.querySelectorAll('#e3d-snap-seg .e3d-seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#e3d-snap-seg .e3d-seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        scheduleLiveUpdate();
+      });
+    });
+
     document.getElementById('e3d-invert').addEventListener('change', scheduleLiveUpdate);
     document.getElementById('e3d-gray-values').addEventListener('change', scheduleLiveUpdate);
     document.getElementById('e3d-dpi').addEventListener('change', scheduleLiveUpdate);
@@ -1194,6 +1309,7 @@
         .map(s => parseInt(s.trim(), 10))
         .filter(n => !isNaN(n) && n >= 0 && n <= 255);
       if (grayVals.length >= 2) state.settings.customGrayValues = grayVals;
+      state.settings.lutSnap = document.querySelector('#e3d-snap-seg .e3d-seg-btn.active')?.dataset.snap || 'nearest';
     }
 
     const dpi = parseInt(document.getElementById('e3d-dpi').value, 10);
@@ -1346,7 +1462,7 @@
     // Mode tag
     const modeTag = s.lutMode === 'linear'
       ? `linear_${s.linearMin}-${s.linearMax}`
-      : `lut_${s.customGrayValues.join('-')}`;
+      : `lut_${s.lutSnap}_${s.customGrayValues.join('-')}`;
 
     // Size tag (only if user specified dimensions)
     const hasH = s.targetHeightIn > 0;
