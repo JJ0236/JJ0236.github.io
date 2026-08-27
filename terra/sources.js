@@ -298,7 +298,10 @@ function polygonsFromRelation(el) {
   // Attach every inner ring to the first outer. Correct containment testing
   // would need point-in-polygon per inner; for building courtyards and lake
   // islands the single-outer case dominates and this stays cheap.
-  return outers.map((o, i) => (i === 0 ? [o, ...inners] : [o]));
+  // concat, not [o, ...inners] — a coastline or landuse relation can carry a
+  // very large number of inner rings, and spreading them into an array literal
+  // is the same stack-overflow hazard as spreading into a call.
+  return outers.map((o, i) => (i === 0 ? [o].concat(inners) : [o]));
 }
 
 function stitch(open, out) {

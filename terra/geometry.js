@@ -92,7 +92,7 @@ export function solidify(src, count, bottom, out) {
   const partStart = out.n;
   const index = new Map();
   const vx = [], vy = [], vz = [];
-  const tris = [];
+  let tris = [];
 
   const weld = (x, y, z) => {
     const k = vkey(x, y);
@@ -132,7 +132,9 @@ export function solidify(src, count, bottom, out) {
       used.add(e0); used.add(e1); used.add(e2);
       kept.push(a, b, c);
     }
-    if (dropped) tris.length = 0, tris.push(...kept);
+    // Assign, never `tris.push(...kept)` — spreading a multi-million-element
+    // array into a call blows the stack ("Maximum call stack size exceeded").
+    if (dropped) tris = kept;
   }
   if (!tris.length) return;
   const bz = new Float64Array(V);
@@ -386,7 +388,7 @@ function subdivide(buf, maxEdge, maxPasses = 7) {
     if (!any) break;
 
     const next = [];
-    const push = (...v) => next.push(...v);
+    const push = (...v) => { for (let i = 0; i < v.length; i++) next.push(v[i]); };
     for (let t = 0, k = 0; t < tris.length; t += 3, k++) {
       const a = tris[t], b = tris[t + 1], c = tris[t + 2];
       const [e0, e1, e2] = marked[k];
