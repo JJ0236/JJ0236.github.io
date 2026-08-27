@@ -216,7 +216,7 @@
     .attribution a { color: var(--muted); }
 
     /* ── Viewport ───────────────────────────────────────── */
-    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #222A1C; }
     #map { position: absolute; inset: 0; }
     #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     .view.hidden { display: none; visibility: hidden; }
@@ -533,36 +533,69 @@ const STYLE = {
   sources: {
     omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }
   },
+  // Dark to match the workbench, but land, water, parks and roads have to be
+  // told apart at a glance — you are choosing an area to print from this.
   layers: [
-    { id: 'bg', type: 'background', paint: { 'background-color': '#141810' } },
+    { id: 'bg', type: 'background', paint: { 'background-color': '#222A1C' } },
+
+    { id: 'landuse-residential', type: 'fill', source: 'omt', 'source-layer': 'landuse',
+      filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood'],
+      paint: { 'fill-color': '#2A331F' } },
     { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': 'landcover',
-      paint: { 'fill-color': '#1B2415', 'fill-opacity': 0.85 } },
+      paint: { 'fill-color': '#314024', 'fill-opacity': 0.75 } },
     { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park',
-      paint: { 'fill-color': '#1D2717', 'fill-opacity': 0.8 } },
+      paint: { 'fill-color': '#354626', 'fill-opacity': 0.8 } },
+
     { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water',
-      paint: { 'fill-color': '#16211F' } },
+      paint: { 'fill-color': '#24444C' } },
     { id: 'waterway', type: 'line', source: 'omt', 'source-layer': 'waterway',
-      paint: { 'line-color': '#16211F', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 16, 3] } },
+      paint: { 'line-color': '#24444C',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.6, 16, 4] } },
+
     { id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building',
-      minzoom: 13, paint: { 'fill-color': '#232A1C', 'fill-outline-color': '#2B331F' } },
+      minzoom: 13,
+      paint: { 'fill-color': '#3B4530', 'fill-outline-color': '#4A5540',
+               'fill-opacity': ['interpolate', ['linear'], ['zoom'], 13, 0, 15, 1] } },
+
+    // Casings first so roads read as roads rather than bare strokes.
+    { id: 'road-casing', type: 'line', source: 'omt', 'source-layer': 'transportation',
+      minzoom: 11, filter: ['!in', 'class', 'path', 'track', 'ferry'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#1D2417',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 11, 2, 18, 12] } },
     { id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation',
-      filter: ['!in', 'class', 'motorway', 'trunk', 'primary'],
-      paint: { 'line-color': '#242C1B', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 18, 5] } },
+      filter: ['!in', 'class', 'motorway', 'trunk', 'primary', 'ferry'],
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#59653F',
+               'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 18, 7] } },
     { id: 'road-major', type: 'line', source: 'omt', 'source-layer': 'transportation',
       filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
-      paint: { 'line-color': '#31391F', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.6, 18, 8] } },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': '#8FAF6E',
+               'line-opacity': 0.85,
+               'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 18, 10] } },
+    { id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation',
+      minzoom: 12, filter: ['==', 'class', 'rail'],
+      paint: { 'line-color': '#6B6656', 'line-dasharray': [3, 2], 'line-width': 1 } },
+
     { id: 'boundary', type: 'line', source: 'omt', 'source-layer': 'boundary',
       filter: ['<=', 'admin_level', 4],
-      paint: { 'line-color': '#3A4A2C', 'line-dasharray': [3, 2], 'line-width': 0.8 } },
+      paint: { 'line-color': '#8A9470', 'line-dasharray': [3, 2],
+               'line-width': 1, 'line-opacity': 0.6 } },
+
     { id: 'place', type: 'symbol', source: 'omt', 'source-layer': 'place',
       filter: ['in', 'class', 'city', 'town', 'village', 'country', 'state'],
       layout: {
         'text-field': ['get', 'name'],
         'text-font': ['Noto Sans Regular'],
-        'text-size': ['interpolate', ['linear'], ['zoom'], 4, 10, 12, 14],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 4, 11, 12, 15],
         'text-max-width': 8
       },
-      paint: { 'text-color': '#7A7560', 'text-halo-color': '#141810', 'text-halo-width': 1.4 } }
+      paint: { 'text-color': '#E4DECB', 'text-halo-color': '#1A2014', 'text-halo-width': 1.6 } },
+    { id: 'poi-water', type: 'symbol', source: 'omt', 'source-layer': 'water_name',
+      layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Italic'],
+                'text-size': 11, 'text-max-width': 8 },
+      paint: { 'text-color': '#8FB6BE', 'text-halo-color': '#1A2014', 'text-halo-width': 1.4 } }
   ]
 };
 
@@ -580,11 +613,11 @@ map.on('load', () => {
   map.addSource('sel', { type: 'geojson', data: emptyFc() });
   map.addLayer({
     id: 'sel-fill', type: 'fill', source: 'sel',
-    paint: { 'fill-color': '#8FAF6E', 'fill-opacity': 0.12 }
+    paint: { 'fill-color': '#8FAF6E', 'fill-opacity': 0.18 }
   });
   map.addLayer({
     id: 'sel-line', type: 'line', source: 'sel',
-    paint: { 'line-color': '#8FAF6E', 'line-width': 1.6 }
+    paint: { 'line-color': '#C6E0A4', 'line-width': 2.2 }
   });
 });
 
@@ -1196,7 +1229,7 @@ setArmed(false);
 refreshArea();
 setView('map');
 resize();
-if (DEBUG) window.terra = state;
+if (DEBUG) { window.terra = state; window.terraMap = map; }
 </script>
 </body>
 </html>
