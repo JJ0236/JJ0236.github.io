@@ -76,6 +76,18 @@ class MeshBuf {
 const Q = 256;
 const KEY_STRIDE = 8388608; // 2^23; safe while |y * Q| < 2^22
 
+// A roof must sit at least this far above the highest ground it covers, and a
+// building's base this far below the lowest, so terrain and structure always
+// overlap into one solid rather than intersecting through each other.
+const ROOF_CLEARANCE_MM = 0.6;
+const BUILDING_EMBED_MM = 0.3;
+// How much height variation a water polygon may cover and still be flattened.
+const FLAT_WATER_TOLERANCE_MM = 1.5;
+// Thinnest triangle worth keeping, squared. 0.02 mm is five times the vertex
+// quantum and a twentieth of a nozzle width: comfortably resolvable, and far
+// too small to describe anything a printer could lay down.
+const MIN_TRI_HEIGHT_SQ = 0.02 * 0.02;
+
 function vkey(x, y) {
   return Math.round(x * Q) * KEY_STRIDE + Math.round(y * Q);
 }
@@ -110,7 +122,29 @@ export function solidify(src, count, bottom, out) {
     const b = weld(src[i + 3], src[i + 4], src[i + 5]);
     const c = weld(src[i + 6], src[i + 7], src[i + 8]);
     if (a === b || b === c || c === a) continue; // collapsed by quantisation
-    tris.push(a, b, c);
+    // A top surface is a heightfield seen from above, so every triangle must
+    // wind counter-clockwise. Enforce that here rather than trusting each
+    // producer: a mitred road ribbon folds over where a way doubles back,
+    // earcut can flip a facet on a self-touching outline, and any one of those
+    // leaves an upward-facing normal on the underside of the finished solid —
+    // which reads exactly like ground erupting through the surface.
+    const area = (src[i + 3] - src[i]) * (src[i + 7] - src[i + 1]) -
+                 (src[i + 4] - src[i + 1]) * (src[i + 6] - src[i]);
+    // Only trust the orientation of a triangle thick enough to have one.
+    // |cross| / longest edge is the triangle's height; welding can shift a
+    // corner by half a quantum, which alone flips a needle thinner than that.
+    //
+    // Needles are left exactly as they are — neither flipped nor dropped.
+    // Flipping one on a coin-toss, or removing it, tears a hole in the surface
+    // whose corners become pinch vertices, and the wall pass then puts two
+    // faces on one edge. A zero-area facet is harmless; a torn surface is not.
+    const e0 = (src[i + 3] - src[i]) ** 2 + (src[i + 4] - src[i + 1]) ** 2;
+    const e1 = (src[i + 6] - src[i + 3]) ** 2 + (src[i + 7] - src[i + 4]) ** 2;
+    const e2 = (src[i] - src[i + 6]) ** 2 + (src[i + 1] - src[i + 7]) ** 2;
+    const longest = e0 > e1 ? (e0 > e2 ? e0 : e2) : (e1 > e2 ? e1 : e2);
+    const trustworthy = area * area >= MIN_TRI_HEIGHT_SQ * longest;
+    if (trustworthy && area < 0) tris.push(a, c, b);
+    else tris.push(a, b, c);
   }
   if (!tris.length) return;
 
@@ -552,6 +586,69 @@ export function buildModel({ selection, dem, osm, params, onProgress }) {
 
   const maxEdge = Math.max(cellX, cellY) * 1.5;
 
+  // Bounds on the terrain mesh over an axis-aligned box. The mesh is linear
+  // within each grid cell, so its extremes over any region are attained at a
+  // grid point of the cells that region touches.
+  //
+  // Bounding the box rather than the exact shape deliberately errs outward.
+  // Testing containment instead skips grid points that lie outside the shape
+  // but inside a cell it crosses — and those are exactly the peaks that push
+  // through a thin road ribbon, whose triangles are narrower than a cell.
+  const terrainBoundsInBox = (lox, loy, hix, hiy) => {
+    const i0 = Math.max(0, Math.floor((lox - x0) / cellX));
+    const i1 = Math.min(gw, Math.ceil((hix - x0) / cellX));
+    const j0 = Math.max(0, Math.floor((loy - y0) / cellY));
+    const j1 = Math.min(gh, Math.ceil((hiy - y0) / cellY));
+    let lo = Infinity, hi = -Infinity;
+    for (let j = j0; j <= j1; j++) {
+      const row = j * (gw + 1);
+      for (let i = i0; i <= i1; i++) {
+        const z = zOfElev(gz[row + i]);
+        if (z < lo) lo = z;
+        if (z > hi) hi = z;
+      }
+    }
+    return [lo, hi];
+  };
+
+  const triTerrainMax = (ax, ay, bx, by, cx, cy) => {
+    const [, hi] = terrainBoundsInBox(Math.min(ax, bx, cx), Math.min(ay, by, cy),
+                                      Math.max(ax, bx, cx), Math.max(ay, by, cy));
+    return Math.max(hi, terrainZ(ax, ay), terrainZ(bx, by), terrainZ(cx, cy));
+  };
+
+  // Drape a flat surface so it clears the ground everywhere, not just at its
+  // vertices. Each vertex is lifted to `raise` above the highest terrain any
+  // triangle touching it covers; a plane through three such vertices cannot
+  // dip below the ground inside that triangle. Sampling only at vertices lets
+  // terrain erupt through the middle of a road or a park.
+  const drapeClear = (buf, raise) => {
+    const index = new Map();
+    const ids = new Int32Array(buf.n / 3);
+    const vmax = [];
+    let nv = 0;
+    for (let i = 0, k = 0; i < buf.n; i += 3, k++) {
+      const key = vkey(buf.a[i], buf.a[i + 1]);
+      let id = index.get(key);
+      if (id === undefined) { id = nv++; index.set(key, id); vmax.push(-Infinity); }
+      ids[k] = id;
+    }
+    for (let i = 0, k = 0; i < buf.n; i += 9, k += 3) {
+      const m = triTerrainMax(buf.a[i], buf.a[i + 1], buf.a[i + 3],
+                              buf.a[i + 4], buf.a[i + 6], buf.a[i + 7]);
+      if (m > vmax[ids[k]])     vmax[ids[k]]     = m;
+      if (m > vmax[ids[k + 1]]) vmax[ids[k + 1]] = m;
+      if (m > vmax[ids[k + 2]]) vmax[ids[k + 2]] = m;
+    }
+    const out = new MeshBuf(buf.triangles);
+    for (let i = 0, k = 0; i < buf.n; i += 9, k += 3) {
+      out.tri(buf.a[i],     buf.a[i + 1], vmax[ids[k]] + raise,
+              buf.a[i + 3], buf.a[i + 4], vmax[ids[k + 1]] + raise,
+              buf.a[i + 6], buf.a[i + 7], vmax[ids[k + 2]] + raise);
+    }
+    return out;
+  };
+
   // Every draped slab must keep a positive thickness. A flattened lake sitting
   // on a slope will otherwise have its underside (terrain - depth) rise through
   // its flat top along one contour, pinching the solid to nothing there — which
@@ -566,40 +663,50 @@ export function buildModel({ selection, dem, osm, params, onProgress }) {
     for (const f of features) {
       if (f.line) {
         for (const piece of clipLineToSelection(proj.ring(f.line), clipRing)) {
-          const strip = stripTop(piece, f.width * proj.mmPerM, maxEdge,
-                                 (x, y) => terrainZ(x, y) + raise);
-          if (!strip.n) continue;
-          solidify(strip.a, strip.n, underside, out);
+          for (const run of splitHairpins(piece)) {
+            for (const strip of stripTops(run, f.width * proj.mmPerM, maxEdge, () => 0)) {
+              const top = drapeClear(strip, raise);
+              solidify(top.a, top.n, underside, out);
+            }
+          }
         }
         continue;
       }
+
       const clipped = surfaceFromRings(f.rings, proj, clipRing, true);
       if (!clipped) continue;
-      // A flattened surface is a plane — refining it buys nothing, and its
-      // underside is buried in the terrain where nobody will see the coarseness.
-      const dense = subdivide(clipped, flatten ? maxEdge * 4 : maxEdge);
 
-      let zOf;
       if (flatten) {
-        // A lake draped over terrain looks like a hill. Use one level surface
-        // at the median height under the polygon instead.
-        const samples = [];
+        // A level surface is only right where the ground under it is level.
+        // Taking the median height of sloping ground puts half the terrain
+        // above the water; taking the maximum turns a river on a hillside
+        // into a dam. Flatten genuinely flat water, drape the rest.
+        const dense = subdivide(clipped, maxEdge * 4);
+        let lo = Infinity, hi = -Infinity;
         for (let i = 0; i < dense.n; i += 9) {
-          samples.push(terrainZ(dense.a[i], dense.a[i + 1]));
+          const m = triTerrainMax(dense.a[i], dense.a[i + 1], dense.a[i + 3],
+                                  dense.a[i + 4], dense.a[i + 6], dense.a[i + 7]);
+          if (m > hi) hi = m;
+          for (let v = 0; v < 9; v += 3) {
+            const z = terrainZ(dense.a[i + v], dense.a[i + v + 1]);
+            if (z < lo) lo = z;
+          }
         }
-        samples.sort((a, b) => a - b);
-        const level = samples[Math.floor(samples.length / 2)] + raise;
-        zOf = () => level;
-      } else {
-        zOf = (x, y) => terrainZ(x, y) + raise;
+        if (Number.isFinite(hi) && hi - lo <= FLAT_WATER_TOLERANCE_MM) {
+          const level = hi + raise;
+          const top = new MeshBuf(dense.triangles);
+          for (let i = 0; i < dense.n; i += 9) {
+            top.tri(dense.a[i],     dense.a[i + 1], level,
+                    dense.a[i + 3], dense.a[i + 4], level,
+                    dense.a[i + 6], dense.a[i + 7], level);
+          }
+          solidify(top.a, top.n, underside, out);
+          continue;
+        }
       }
 
-      const top = new MeshBuf(dense.triangles);
-      for (let i = 0; i < dense.n; i += 9) {
-        top.tri(dense.a[i],     dense.a[i + 1], zOf(dense.a[i],     dense.a[i + 1]),
-                dense.a[i + 3], dense.a[i + 4], zOf(dense.a[i + 3], dense.a[i + 4]),
-                dense.a[i + 6], dense.a[i + 7], zOf(dense.a[i + 6], dense.a[i + 7]));
-      }
+      const dense = subdivide(clipped, maxEdge);
+      const top = drapeClear(dense, raise);
       solidify(top.a, top.n, underside, out);
     }
     return out;
@@ -622,11 +729,12 @@ export function buildModel({ selection, dem, osm, params, onProgress }) {
     list.forEach((r, n) => {
       const line = clipLineToSelection(proj.ring(r.line), clipRing);
       for (const piece of line) {
-        if (piece.length < 2) continue;
-        const strip = stripTop(piece, r.width * proj.mmPerM, maxEdge,
-                               (x, y) => terrainZ(x, y) + p.roadRaiseMm);
-        if (!strip.n) continue;
-        solidify(strip.a, strip.n, underside, out);
+        for (const run of splitHairpins(piece)) {
+          for (const strip of stripTops(run, r.width * proj.mmPerM, maxEdge, () => 0)) {
+            const top = drapeClear(strip, p.roadRaiseMm);
+            solidify(top.a, top.n, underside, out);
+          }
+        }
       }
       if ((n & 255) === 0) report('Building roads', n / list.length);
     });
@@ -641,22 +749,40 @@ export function buildModel({ selection, dem, osm, params, onProgress }) {
       const roof = surfaceFromRings(b.rings, proj, clipRing, true);
       if (!roof) return;
 
-      // Sit the base at the lowest terrain under the footprint and sink it
-      // slightly, so the slicer unions it with the ground instead of leaving
-      // a hairline gap on a slope.
-      let groundZ = Infinity;
+      // The ground under a footprint has to be measured across the whole
+      // footprint, not just around its outline. Terrain is piecewise linear
+      // over the DEM grid, so its extremes sit either on the outline or on a
+      // grid point the footprint covers — sample both.
+      let lo = Infinity, hi = -Infinity;
+      let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
       for (let i = 0; i < roof.n; i += 3) {
-        const z = terrainZ(roof.a[i], roof.a[i + 1]);
-        if (z < groundZ) groundZ = z;
+        const x = roof.a[i], y = roof.a[i + 1];
+        const z = terrainZ(x, y);
+        if (z < lo) lo = z;
+        if (z > hi) hi = z;
+        if (x < bx0) bx0 = x;
+        if (x > bx1) bx1 = x;
+        if (y < by0) by0 = y;
+        if (y > by1) by1 = y;
       }
-      if (!Number.isFinite(groundZ)) return;
+      if (!Number.isFinite(lo)) return;
+
+      const [boxLo, boxHi] = terrainBoundsInBox(bx0, by0, bx1, by1);
+      if (boxLo < lo) lo = boxLo;
+      if (boxHi > hi) hi = boxHi;
 
       const hM = b.height ?? p.defaultBuildingHeightM;
       const hMm = Math.max(p.minBuildingMm, hM * proj.mmPerM * p.buildingScale);
-      const topZ = groundZ + hMm;
+      // Two constraints: stand the requested height above the lowest ground,
+      // and always clear the highest ground the footprint covers. Without the
+      // second, a hillside steeper than the building is tall pushes terrain
+      // straight up through the roof.
+      const topZ = Math.max(lo + hMm, hi + ROOF_CLEARANCE_MM);
       for (let i = 2; i < roof.n; i += 3) roof.a[i] = topZ;
 
-      solidify(roof.a, roof.n, groundZ - 0.3, out);
+      // Base sunk below the lowest ground so the slicer unions the building
+      // with the terrain instead of leaving a hairline seam on a slope.
+      solidify(roof.a, roof.n, lo - BUILDING_EMBED_MM, out);
 
       if ((n & 511) === 0) report('Building structures', n / osm.buildings.length);
     });
@@ -854,18 +980,52 @@ function clipSegment(a, b, ring, ccw) {
   return [[a[0] + dx * t0, a[1] + dy * t0], [a[0] + dx * t1, a[1] + dy * t1]];
 }
 
-// Widen a polyline into a draped ribbon (top surface only).
-function stripTop(pts, width, maxEdge, zOf) {
-  const buf = new MeshBuf(64);
+/**
+ * Break a polyline where it turns back on itself.
+ *
+ * A ribbon widened around a hairpin has its left and right offsets cross over,
+ * so the quad folds inside-out and the ribbon overlaps itself. Emitting each
+ * side as its own solid avoids the fold entirely — overlapping solids are fine
+ * for a slicer, self-intersecting ones are not.
+ */
+function splitHairpins(pts, minCos = -0.5) {
+  const pieces = [];
+  let run = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    run.push(pts[i]);
+    const ax = pts[i][0] - pts[i - 1][0], ay = pts[i][1] - pts[i - 1][1];
+    const bx = pts[i + 1][0] - pts[i][0], by = pts[i + 1][1] - pts[i][1];
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la < 1e-9 || lb < 1e-9) continue;
+    if ((ax * bx + ay * by) / (la * lb) < minCos) {
+      pieces.push(run);
+      run = [pts[i]];
+    }
+  }
+  run.push(pts[pts.length - 1]);
+  if (run.length >= 2) pieces.push(run);
+  return pieces.filter(r => r.length >= 2);
+}
+
+/**
+ * Widen a polyline into draped ribbons (top surfaces only).
+ *
+ * Returns a list of ribbons rather than one, because a ribbon must never fold
+ * back over itself: solidify() welds by x/y and so assumes a single sheet of
+ * surface, and two sheets stacked at the same spot collapse into a tangle of
+ * doubled edges. Wherever the offsets cross — a tight curve, a way that
+ * reverses — the run ends and a new one begins, and the folded quad itself is
+ * dropped. Each ribbon is then a clean heightfield.
+ */
+function stripTops(pts, width, maxEdge, zOf) {
   const half = Math.max(width, 0.4) / 2;
 
-  // Drop repeated points, then densify so the ribbon follows the ground.
   const clean = [];
   for (const pt of pts) {
     const last = clean[clean.length - 1];
     if (!last || Math.hypot(pt[0] - last[0], pt[1] - last[1]) > 1e-4) clean.push(pt);
   }
-  if (clean.length < 2) return buf;
+  if (clean.length < 2) return [];
 
   const dense = [clean[0]];
   for (let i = 1; i < clean.length; i++) {
@@ -889,8 +1049,16 @@ function stripTop(pts, width, maxEdge, zOf) {
     R.push([dense[i][0] - nx * half, dense[i][1] - ny * half]);
   }
 
+  const runs = [];
+  let buf = null;
+  const cross = (o, p, q) => (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
+
   for (let i = 0; i < dense.length - 1; i++) {
     const l0 = L[i], r0 = R[i], l1 = L[i + 1], r1 = R[i + 1];
+    // Both halves of the quad must wind the same way round for the ribbon to
+    // still be a single upward-facing sheet here.
+    if (cross(l0, r0, r1) <= 0 || cross(l0, r1, l1) <= 0) { buf = null; continue; }
+    if (!buf) { buf = new MeshBuf(32); runs.push(buf); }
     buf.tri(l0[0], l0[1], zOf(l0[0], l0[1]),
             r0[0], r0[1], zOf(r0[0], r0[1]),
             r1[0], r1[1], zOf(r1[0], r1[1]));
@@ -898,7 +1066,7 @@ function stripTop(pts, width, maxEdge, zOf) {
             r1[0], r1[1], zOf(r1[0], r1[1]),
             l1[0], l1[1], zOf(l1[0], l1[1]));
   }
-  return buf;
+  return runs;
 }
 
 // Inward offset by mitred vertex normals. Selections are convex, so this
