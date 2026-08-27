@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Terra — 3D Printable Map Generator — joshhicks.info</title>
+  <meta name="description" content="Draw an area on a map and get a 3D printable model of the terrain, buildings, roads, water and greenery. Runs entirely in your browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --moss-dark:   #3A4A2C;
+      --moss-mid:    #5A7040;
+      --moss-light:  #8FAF6E;
+      --soil-mid:    #8B6340;
+      --bg:          #141810;
+      --bg2:         #191E12;
+      --bg3:         #1E2418;
+      --border:      #252E1A;
+      --text:        #D4CDB8;
+      --muted:       #7A7560;
+      --dim:         #4E5A40;
+      --accent:      #8FAF6E;
+      --warn:        #C08A3E;
+      --panel-w:     286px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Tool header ────────────────────────────────────── */
+    .tool-header {
+      height: 48px;
+      background: var(--moss-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 10;
+    }
+    .tool-header-back {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: #8A8070; font-size: 0.82rem; font-weight: 500;
+      text-decoration: none; transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem; font-weight: 500;
+      color: var(--moss-light); letter-spacing: 0.04em;
+    }
+    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+    .sidebar {
+      width: var(--panel-w);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; flex-shrink: 0;
+      scrollbar-width: thin; scrollbar-color: #2a3420 transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #2a3420; border-radius: 2px; }
+
+    .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+    .panel:last-child { border-bottom: none; }
+    .panel-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.64rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--muted); margin-bottom: 10px;
+    }
+
+    /* Segmented control */
+    .seg {
+      display: flex; border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; margin-bottom: 8px;
+    }
+    .seg button {
+      flex: 1; padding: 5px 6px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .seg button + button { border-left: 1px solid var(--border); }
+    .seg button.active { background: var(--moss-dark); color: var(--moss-light); }
+    .seg button:disabled { opacity: 0.35; cursor: default; }
+
+    .ctrl-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .ctrl-label { font-size: 0.75rem; color: var(--text); flex: 1; white-space: nowrap; }
+    .ctrl-hint {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: var(--muted); margin-top: -3px; margin-bottom: 8px; line-height: 1.5;
+    }
+    .ctrl-input, select.ctrl-input {
+      width: 78px; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); border-radius: 5px;
+      padding: 4px 7px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+      color: var(--text); text-align: right; outline: none;
+      transition: border-color 0.15s;
+    }
+    select.ctrl-input { width: 100%; text-align: left; cursor: pointer; }
+    .ctrl-input:focus { border-color: var(--moss-light); }
+    input[type=range] { accent-color: var(--moss-light); width: 100%; }
+    .range-row { margin-bottom: 10px; }
+    .range-row .ctrl-row { margin-bottom: 3px; }
+    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #C8BEA8; }
+
+    /* Search */
+    .search-wrap { display: flex; gap: 6px; }
+    .search-wrap input {
+      flex: 1; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); border-radius: 5px;
+      padding: 6px 8px; font-family: inherit; font-size: 0.75rem;
+      color: var(--text); outline: none;
+    }
+    .search-wrap input:focus { border-color: var(--moss-light); }
+    .search-wrap button {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); cursor: pointer;
+      padding: 0 9px; font-size: 0.75rem;
+    }
+    .search-wrap button:hover { color: var(--moss-light); border-color: var(--moss-mid); }
+    .results { margin-top: 8px; display: none; }
+    .results.show { display: block; }
+    .result {
+      padding: 6px 8px; font-size: 0.7rem; line-height: 1.4;
+      color: var(--muted); cursor: pointer; border-radius: 4px;
+      border: 1px solid transparent;
+    }
+    .result:hover { background: var(--bg3); color: var(--text); border-color: var(--border); }
+
+    /* Layer rows */
+    .layer-row {
+      display: flex; align-items: center; gap: 9px;
+      padding: 5px 0;
+    }
+    .swatch {
+      width: 15px; height: 15px; border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.14); flex-shrink: 0;
+      padding: 0; cursor: pointer; background: none;
+    }
+    .swatch::-webkit-color-swatch-wrapper { padding: 0; }
+    .swatch::-webkit-color-swatch { border: none; border-radius: 2px; }
+    .swatch::-moz-color-swatch { border: none; border-radius: 2px; }
+    .layer-name { flex: 1; font-size: 0.75rem; }
+    .layer-count {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem; color: var(--dim);
+    }
+
+    /* Toggle */
+    .toggle {
+      position: relative; width: 32px; height: 17px; flex-shrink: 0;
+      background: #2A3320; border-radius: 9px; cursor: pointer;
+      transition: background 0.18s; border: none; padding: 0;
+    }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #6B6656; transition: transform 0.18s, background 0.18s;
+    }
+    .toggle.on { background: var(--moss-dark); }
+    .toggle.on::after { transform: translateX(15px); background: var(--moss-light); }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 9px;
+      background: var(--moss-dark); border: 1px solid var(--moss-mid);
+      border-radius: 6px; color: var(--moss-light);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--moss-mid); color: #fff; }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn-sub {
+      background: var(--bg3); border-color: var(--border); color: var(--muted);
+      margin-top: 6px; padding: 7px;
+    }
+    .btn-sub:hover:not(:disabled) { background: #26301C; color: var(--text); }
+
+    .info-strip {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      color: var(--muted); line-height: 1.75;
+    }
+    .info-strip b { color: #C8BEA8; font-weight: 500; }
+    .info-strip .warn { color: var(--warn); }
+    .info-strip .ok { color: var(--moss-light); }
+
+    .attribution {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.58rem; color: var(--dim);
+      line-height: 1.6;
+    }
+    .attribution a { color: var(--muted); }
+
+    /* ── Viewport ───────────────────────────────────────── */
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+    #map { position: absolute; inset: 0; }
+    #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .view.hidden { display: none; visibility: hidden; }
+
+    .view-switch {
+      position: absolute; top: 12px; left: 12px; z-index: 5;
+      display: flex; border: 1px solid var(--border); border-radius: 6px;
+      overflow: hidden; background: rgba(20,24,16,0.9); backdrop-filter: blur(6px);
+    }
+    .view-switch button {
+      padding: 6px 14px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem; background: transparent; border: none;
+      color: var(--muted); cursor: pointer;
+    }
+    .view-switch button + button { border-left: 1px solid var(--border); }
+    .view-switch button.active { background: var(--moss-dark); color: var(--moss-light); }
+    .view-switch button:disabled { opacity: 0.35; cursor: default; }
+
+    .viewport-hint {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 0.68rem; color: rgba(255,255,255,0.28);
+      pointer-events: none; white-space: nowrap; z-index: 4;
+      background: rgba(20,24,16,0.7); backdrop-filter: blur(6px);
+      padding: 5px 13px; border-radius: 20px;
+    }
+    .viewport-stats {
+      position: absolute; top: 12px; right: 14px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: rgba(255,255,255,0.3); text-align: right;
+      pointer-events: none; line-height: 1.6; z-index: 4;
+    }
+
+
+    /* Progress overlay */
+    .overlay {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(20,24,16,0.86); backdrop-filter: blur(3px);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+    }
+    .overlay.show { display: flex; }
+    .overlay .stage {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text);
+    }
+    .bar { width: 210px; height: 3px; background: #252E1A; border-radius: 2px; overflow: hidden; }
+    .bar span { display: block; height: 100%; width: 0; background: var(--moss-light); transition: width 0.2s; }
+    .overlay .sub { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--dim); }
+    .overlay button {
+      margin-top: 4px; background: transparent; border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem; padding: 5px 12px; cursor: pointer;
+    }
+    .overlay button:hover { color: var(--text); border-color: var(--moss-mid); }
+
+    .error-box {
+      margin-top: 8px; padding: 8px 9px; border-radius: 5px;
+      background: rgba(140,29,24,0.12); border: 1px solid rgba(180,70,50,0.35);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.63rem;
+      color: #D89A86; line-height: 1.5; display: none;
+    }
+    .error-box.show { display: block; }
+
+    /* MapLibre chrome, darkened to match */
+    .maplibregl-ctrl-attrib { display: none !important; }
+    .maplibregl-ctrl-group {
+      background: rgba(25,30,18,0.92) !important;
+      border: 1px solid var(--border) !important;
+      box-shadow: none !important;
+    }
+    .maplibregl-ctrl-group button + button { border-top: 1px solid var(--border) !important; }
+    .maplibregl-ctrl-group button span { filter: invert(0.75) sepia(0.3) hue-rotate(45deg); }
+    .maplibregl-ctrl-scale {
+      background: rgba(25,30,18,0.9) !important;
+      border-color: var(--border) !important;
+      color: var(--muted) !important;
+      font-family: 'IBM Plex Mono', monospace !important;
+      font-size: 0.62rem !important;
+    }
+
+    .no-webgl {
+      position: absolute; inset: 0; display: flex;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 2rem; text-align: center; color: var(--muted);
+    }
+    .no-webgl h2 { font-size: 0.95rem; color: var(--text); font-weight: 500; }
+    .no-webgl p { font-size: 0.78rem; max-width: 34rem; line-height: 1.6; }
+
+    @media (max-width: 860px) {
+      .body-wrap { flex-direction: column; }
+      .sidebar { width: 100%; max-height: 45%; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-title">Terra</span>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<div class="body-wrap">
+  <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Location</div>
+      <div class="search-wrap">
+        <input id="search" type="text" placeholder="City, mountain, address…" autocomplete="off" />
+        <button id="search-go" title="Search">→</button>
+      </div>
+      <div class="results" id="results"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Area</div>
+      <div class="seg" id="seg-shape">
+        <button class="active" data-val="rect">Rectangle</button>
+        <button data-val="circle">Circle</button>
+      </div>
+      <button class="btn btn-sub" id="btn-draw" style="margin-top:2px">Draw area</button>
+      <div class="info-strip" id="area-info" style="margin-top:9px">No area selected</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Model Size</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Width</span>
+        <input class="ctrl-input" id="p-width" type="number" min="20" max="600" step="5" value="180" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Printer</span>
+      </div>
+      <select class="ctrl-input" id="p-bed">
+        <option value="256,256,256" selected>Bambu A1 / P1S / X1C — 256³</option>
+        <option value="180,180,180">Bambu A1 mini — 180³</option>
+        <option value="250,210,220">Prusa MK4 / MK3S — 250×210</option>
+        <option value="220,220,250">Ender 3 — 220×220</option>
+        <option value="350,350,350">Bambu X1E / large — 350³</option>
+        <option value="0,0,0">No limit</option>
+      </select>
+      <button class="btn btn-sub" id="btn-fit">Fit to bed</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Terrain</div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Vertical exaggeration</span>
+          <span class="val" id="v-exag">1.5×</span>
+        </div>
+        <input type="range" id="p-exag" min="0.5" max="6" step="0.1" value="1.5" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Base thickness</span>
+        <input class="ctrl-input" id="p-base" type="number" min="0.4" max="20" step="0.2" value="3" />
+      </div>
+      <div class="ctrl-row"><span class="ctrl-label">Quality</span></div>
+      <div class="seg" id="seg-quality">
+        <button data-val="160">Draft</button>
+        <button class="active" data-val="320">Standard</button>
+        <button data-val="560">High</button>
+        <button data-val="800">Ultra</button>
+      </div>
+      <div class="ctrl-hint" id="quality-hint">Grid resolution across the model.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Layers</div>
+      <div id="layer-list"></div>
+      <div id="frame-opts" style="display:none; margin-top:10px">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Frame width</span>
+          <input class="ctrl-input" id="p-framew" type="number" min="0.8" max="20" step="0.5" value="3" />
+        </div>
+        <div class="ctrl-row">
+          <span class="ctrl-label">Frame lip height</span>
+          <input class="ctrl-input" id="p-framer" type="number" min="0" max="20" step="0.5" value="2" />
+        </div>
+        <div class="ctrl-hint">The border band the terrain is inset out of.</div>
+      </div>
+
+      <div class="ctrl-row" style="margin-top:10px">
+        <span class="ctrl-label">Minor roads &amp; paths</span>
+        <button class="toggle" id="p-minor"></button>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Flatten water surfaces</span>
+        <button class="toggle on" id="p-flatwater"></button>
+      </div>
+      <div class="range-row" style="margin-top:8px">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Building height</span>
+          <span class="val" id="v-bscale">1.0×</span>
+        </div>
+        <input type="range" id="p-bscale" min="0.2" max="4" step="0.1" value="1" />
+      </div>
+    </div>
+
+    <div class="panel">
+      <button class="btn" id="btn-generate" disabled>Generate model</button>
+      <div class="error-box" id="error"></div>
+      <div class="info-strip" id="stats" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Export</div>
+      <button class="btn" id="btn-3mf" disabled>Multicolor 3MF</button>
+      <button class="btn btn-sub" id="btn-stl" disabled>Merged STL</button>
+      <button class="btn btn-sub" id="btn-zip" disabled>One STL per layer (zip)</button>
+      <div class="ctrl-hint" style="margin-top:9px">
+        3MF carries each layer as its own coloured part. If your slicer merges
+        them, use the per-layer zip and assign filaments by hand.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="attribution">
+        Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>
+        contributors, ODbL. Basemap tiles by
+        <a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a>.
+        Elevation: SRTM / GMTED via AWS Terrain Tiles. Everything runs in your browser —
+        nothing is uploaded.
+      </div>
+    </div>
+  </aside>
+
+  <div class="viewport-wrap">
+    <div class="view-switch">
+      <button id="tab-map" class="active">Map</button>
+      <button id="tab-model" disabled>Model</button>
+    </div>
+
+    <div id="map" class="view"></div>
+    <canvas id="three-canvas" class="view hidden"></canvas>
+
+
+    <div class="viewport-stats" id="vstats"></div>
+    <div class="viewport-hint" id="vhint">Search or pan to a place, then draw an area</div>
+
+    <div class="overlay" id="overlay">
+      <div class="stage" id="ov-stage">Working…</div>
+      <div class="bar"><span id="ov-bar"></span></div>
+      <div class="sub" id="ov-sub"></div>
+      <button id="ov-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.0/dist/maplibre-gl.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { fetchDem, fetchOsm, geocode } from './sources.js';
+import { LAYERS, DEFAULTS } from './geometry.js';
+import { exportStl, exportStlPerLayer, export3mf, download } from './export.js';
+
+const $ = id => document.getElementById(id);
+const DEBUG = new URLSearchParams(location.search).has('debug');
+
+// Both the map and the preview need WebGL. Without it every later line throws
+// on a half-built page, so fail loudly and early instead.
+function webglAvailable() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+  } catch { return false; }
+}
+
+if (!webglAvailable()) {
+  document.querySelector('.viewport-wrap').innerHTML =
+    '<div class="no-webgl">' +
+    '<h2>WebGL isn\'t available in this browser</h2>' +
+    '<p>Terra needs it for both the map and the 3D preview. ' +
+    'Try a different browser, or check whether hardware acceleration is ' +
+    'switched off in your browser settings.</p></div>';
+  document.querySelectorAll('.sidebar button, .sidebar input, .sidebar select')
+    .forEach(el => { el.disabled = true; });
+  throw new Error('terra: WebGL unavailable');
+}
+
+/* ── State ─────────────────────────────────────────────────────────────── */
+
+const state = {
+  shape: 'rect',
+  selection: null,
+  dem: null,
+  osm: null,
+  demKey: null,          // identifies what the cached dem/osm belong to
+  model: null,
+  worker: null,
+  abort: null,
+  colors: Object.fromEntries(LAYERS.map(l => [l.id, l.color])),
+  enabled: { ...DEFAULTS.enabled }
+};
+
+/* ── Dark basemap ──────────────────────────────────────────────────────── */
+
+const STYLE = {
+  version: 8,
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  sources: {
+    omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' }
+  },
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#141810' } },
+    { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': 'landcover',
+      paint: { 'fill-color': '#1B2415', 'fill-opacity': 0.85 } },
+    { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park',
+      paint: { 'fill-color': '#1D2717', 'fill-opacity': 0.8 } },
+    { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water',
+      paint: { 'fill-color': '#16211F' } },
+    { id: 'waterway', type: 'line', source: 'omt', 'source-layer': 'waterway',
+      paint: { 'line-color': '#16211F', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 16, 3] } },
+    { id: 'building', type: 'fill', source: 'omt', 'source-layer': 'building',
+      minzoom: 13, paint: { 'fill-color': '#232A1C', 'fill-outline-color': '#2B331F' } },
+    { id: 'road-minor', type: 'line', source: 'omt', 'source-layer': 'transportation',
+      filter: ['!in', 'class', 'motorway', 'trunk', 'primary'],
+      paint: { 'line-color': '#242C1B', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 18, 5] } },
+    { id: 'road-major', type: 'line', source: 'omt', 'source-layer': 'transportation',
+      filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
+      paint: { 'line-color': '#31391F', 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.6, 18, 8] } },
+    { id: 'boundary', type: 'line', source: 'omt', 'source-layer': 'boundary',
+      filter: ['<=', 'admin_level', 4],
+      paint: { 'line-color': '#3A4A2C', 'line-dasharray': [3, 2], 'line-width': 0.8 } },
+    { id: 'place', type: 'symbol', source: 'omt', 'source-layer': 'place',
+      filter: ['in', 'class', 'city', 'town', 'village', 'country', 'state'],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 4, 10, 12, 14],
+        'text-max-width': 8
+      },
+      paint: { 'text-color': '#7A7560', 'text-halo-color': '#141810', 'text-halo-width': 1.4 } }
+  ]
+};
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: STYLE,
+  center: [-121.7603, 46.8523],   // Mount Rainier — a good first impression
+  zoom: 11,
+  attributionControl: false
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+map.on('load', () => {
+  map.addSource('sel', { type: 'geojson', data: emptyFc() });
+  map.addLayer({
+    id: 'sel-fill', type: 'fill', source: 'sel',
+    paint: { 'fill-color': '#8FAF6E', 'fill-opacity': 0.12 }
+  });
+  map.addLayer({
+    id: 'sel-line', type: 'line', source: 'sel',
+    paint: { 'line-color': '#8FAF6E', 'line-width': 1.6 }
+  });
+});
+
+const emptyFc = () => ({ type: 'FeatureCollection', features: [] });
+
+function drawSelection(sel) {
+  const src = map.getSource('sel');
+  if (!src) return;
+  src.setData(sel
+    ? { type: 'FeatureCollection', features: [{
+        type: 'Feature', properties: {},
+        geometry: { type: 'Polygon', coordinates: [[...sel.ring, sel.ring[0]]] }
+      }] }
+    : emptyFc());
+}
+
+/* ── Area drawing ──────────────────────────────────────────────────────── */
+
+let armed = false, dragging = null;
+
+function setArmed(on) {
+  armed = on;
+  map.getCanvas().style.cursor = on ? 'crosshair' : '';
+  if (on) { map.dragPan.disable(); map.doubleClickZoom.disable(); }
+  else { map.dragPan.enable(); map.doubleClickZoom.enable(); }
+  $('btn-draw').textContent = on
+    ? (state.shape === 'rect' ? 'Drag to draw a rectangle…' : 'Drag out from the centre…')
+    : (state.selection ? 'Redraw area' : 'Draw area');
+  $('vhint').textContent = on
+    ? 'Drag on the map to set the area · Esc to cancel'
+    : (state.selection ? 'Adjust settings, then Generate model' : 'Search or pan to a place, then draw an area');
+}
+
+function rectRing(a, b) {
+  const w = Math.min(a.lng, b.lng), e = Math.max(a.lng, b.lng);
+  const s = Math.min(a.lat, b.lat), n = Math.max(a.lat, b.lat);
+  return [[w, s], [e, s], [e, n], [w, n]];
+}
+
+function circleRing(centre, edge, segments = 96) {
+  const latRad = centre.lat * Math.PI / 180;
+  const mPerLon = 111320 * Math.cos(latRad), mPerLat = 110540;
+  const dx = (edge.lng - centre.lng) * mPerLon;
+  const dy = (edge.lat - centre.lat) * mPerLat;
+  const r = Math.hypot(dx, dy);
+  const ring = [];
+  for (let i = 0; i < segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    ring.push([
+      centre.lng + (r * Math.cos(t)) / mPerLon,
+      centre.lat + (r * Math.sin(t)) / mPerLat
+    ]);
+  }
+  return ring;
+}
+
+function makeSelection(ring, type) {
+  let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+  for (const [lon, lat] of ring) {
+    west = Math.min(west, lon); east = Math.max(east, lon);
+    south = Math.min(south, lat); north = Math.max(north, lat);
+  }
+  return { type, ring, bbox: { west, east, south, north } };
+}
+
+map.on('mousedown', e => {
+  if (!armed) return;
+  e.preventDefault();
+  dragging = e.lngLat;
+});
+
+map.on('mousemove', e => {
+  if (!armed || !dragging) return;
+  const ring = state.shape === 'rect'
+    ? rectRing(dragging, e.lngLat)
+    : circleRing(dragging, e.lngLat);
+  drawSelection(makeSelection(ring, state.shape));
+});
+
+// MapLibre's mouse events don't fire for touch, so mirror the same drag onto
+// touch events and remember the last position — touchend carries no point.
+let lastTouch = null;
+map.on('touchstart', e => {
+  if (!armed) return;
+  e.preventDefault();
+  dragging = e.lngLat;
+  lastTouch = e.lngLat;
+});
+map.on('touchmove', e => {
+  if (!armed || !dragging) return;
+  e.preventDefault();
+  lastTouch = e.lngLat;
+  const ring = state.shape === 'rect'
+    ? rectRing(dragging, e.lngLat)
+    : circleRing(dragging, e.lngLat);
+  drawSelection(makeSelection(ring, state.shape));
+});
+map.on('touchend', e => finishDraw(e.lngLat || lastTouch));
+
+map.on('mouseup', e => finishDraw(e.lngLat));
+
+function finishDraw(end) {
+  if (!armed || !dragging || !end) return;
+  const start = dragging;
+  dragging = null;
+  const e = { lngLat: end };
+  const ring = state.shape === 'rect'
+    ? rectRing(start, e.lngLat)
+    : circleRing(start, e.lngLat);
+  const sel = makeSelection(ring, state.shape);
+  const span = spanMetres(sel.bbox);
+  if (span.width < 50 || span.height < 50) {   // stray click, not a drag
+    drawSelection(state.selection);
+    setArmed(false);
+    return;
+  }
+  state.selection = sel;
+  state.demKey = null;                          // force a refetch
+  drawSelection(sel);
+  setArmed(false);
+  refreshArea();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && armed) {
+    dragging = null;
+    drawSelection(state.selection);
+    setArmed(false);
+  }
+});
+
+function spanMetres(bbox) {
+  const lat0 = (bbox.north + bbox.south) / 2;
+  return {
+    width: (bbox.east - bbox.west) * 111320 * Math.cos(lat0 * Math.PI / 180),
+    height: (bbox.north - bbox.south) * 110540
+  };
+}
+
+/* ── Parameter plumbing ────────────────────────────────────────────────── */
+
+function params() {
+  return {
+    widthMm: +$('p-width').value,
+    baseThicknessMm: +$('p-base').value,
+    exaggeration: +$('p-exag').value,
+    quality: +document.querySelector('#seg-quality .active').dataset.val,
+    buildingScale: +$('p-bscale').value,
+    frameWidthMm: +$('p-framew').value,
+    frameRaiseMm: +$('p-framer').value,
+    includeMinorRoads: $('p-minor').classList.contains('on'),
+    flattenWater: $('p-flatwater').classList.contains('on'),
+    enabled: { ...state.enabled }
+  };
+}
+
+function bed() {
+  const [x, y, z] = $('p-bed').value.split(',').map(Number);
+  return { x, y, z };
+}
+
+function refreshArea() {
+  const sel = state.selection;
+  if (!sel) {
+    $('area-info').textContent = 'No area selected';
+    $('btn-generate').disabled = true;
+    return;
+  }
+  const span = spanMetres(sel.bbox);
+  const areaKm2 = sel.type === 'circle'
+    ? Math.PI * Math.pow(span.width / 2000, 2)
+    : (span.width / 1000) * (span.height / 1000);
+
+  const p = params();
+  const depthMm = p.widthMm * span.height / span.width;
+  const b = bed();
+  const fits = !b.x || (p.widthMm <= b.x && depthMm <= b.y);
+  const scale = Math.round(span.width / (p.widthMm / 1000));
+
+  $('area-info').innerHTML =
+    `<b>${areaKm2 < 1 ? areaKm2.toFixed(2) : areaKm2.toFixed(1)} km²</b> · ` +
+    `${fmtDist(span.width)} × ${fmtDist(span.height)}<br>` +
+    `Model <b>${p.widthMm} × ${depthMm.toFixed(0)} mm</b> ` +
+    `<span class="${fits ? 'ok' : 'warn'}">${fits ? '· fits bed' : '· exceeds bed'}</span><br>` +
+    `Scale approx <b>1:${scale.toLocaleString()}</b>`;
+
+  const cells = p.quality * p.quality * (span.height / span.width);
+  $('quality-hint').textContent =
+    `~${Math.round(cells / 1000)}k terrain cells · ` +
+    `${(span.width / p.quality).toFixed(0)} m per sample`;
+
+  $('btn-generate').disabled = false;
+}
+
+const fmtDist = m => m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
+
+/* ── Layer list ────────────────────────────────────────────────────────── */
+
+const layerList = $('layer-list');
+for (const def of LAYERS) {
+  const row = document.createElement('div');
+  row.className = 'layer-row';
+  row.innerHTML =
+    `<button class="toggle${state.enabled[def.id] ? ' on' : ''}" data-layer="${def.id}"></button>` +
+    `<input class="swatch" type="color" value="${def.color}" data-color="${def.id}" />` +
+    `<span class="layer-name">${def.name}</span>` +
+    `<span class="layer-count" data-count="${def.id}"></span>`;
+  layerList.appendChild(row);
+}
+
+layerList.addEventListener('click', e => {
+  const t = e.target.closest('[data-layer]');
+  if (!t) return;
+  const id = t.dataset.layer;
+  state.enabled[id] = !state.enabled[id];
+  t.classList.toggle('on', state.enabled[id]);
+  if (id === 'frame') {
+    $('frame-opts').style.display = state.enabled.frame ? 'block' : 'none';
+    // The frame changes where the terrain stops, so it always needs a rebuild.
+    markStale();
+  }
+  if (!state.model) return;
+  setPreviewVisibility();
+  // Switching a layer back on can't conjure geometry that was never built.
+  if (state.enabled[id] && !state.model.layers.some(l => l.id === id)) markStale();
+});
+
+layerList.addEventListener('input', e => {
+  const t = e.target.closest('[data-color]');
+  if (!t) return;
+  state.colors[t.dataset.color] = t.value;
+  const mesh = meshes[t.dataset.color];
+  if (mesh) mesh.material.color.set(t.value);
+});
+
+/* ── Simple controls ───────────────────────────────────────────────────── */
+
+function wireSeg(id, onPick) {
+  $(id).addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    [...e.currentTarget.children].forEach(c => c.classList.toggle('active', c === b));
+    onPick(b.dataset.val);
+  });
+}
+
+wireSeg('seg-shape', v => { state.shape = v; setArmed(false); });
+wireSeg('seg-quality', () => { refreshArea(); markStale(); });
+
+for (const id of ['p-minor', 'p-flatwater']) {
+  $(id).addEventListener('click', e => { e.currentTarget.classList.toggle('on'); markStale(); });
+}
+
+$('p-exag').addEventListener('input', e => {
+  $('v-exag').textContent = (+e.target.value).toFixed(1) + '×';
+  markStale();
+});
+$('p-bscale').addEventListener('input', e => {
+  $('v-bscale').textContent = (+e.target.value).toFixed(1) + '×';
+  markStale();
+});
+for (const id of ['p-width', 'p-base', 'p-framew', 'p-framer']) {
+  $(id).addEventListener('input', () => { refreshArea(); markStale(); });
+}
+$('p-bed').addEventListener('change', () => {
+  refreshArea();
+  if (state.model) drawBed();
+});
+
+$('btn-fit').addEventListener('click', () => {
+  if (!state.selection) return;
+  const span = spanMetres(state.selection.bbox);
+  const b = bed();
+  if (!b.x) return;
+  const margin = 0.94;
+  const w = Math.min(b.x * margin, b.y * margin * span.width / span.height);
+  $('p-width').value = Math.round(w);
+  refreshArea();
+  markStale();
+});
+
+$('btn-draw').addEventListener('click', () => setArmed(!armed));
+
+function markStale() {
+  if (!state.model) return;
+  $('btn-generate').textContent = 'Regenerate model';
+}
+
+/* ── Search ────────────────────────────────────────────────────────────── */
+
+async function runSearch() {
+  const q = $('search').value.trim();
+  if (!q) return;
+  const box = $('results');
+  box.className = 'results show';
+  box.innerHTML = '<div class="result">Searching…</div>';
+  try {
+    const hits = await geocode(q);
+    if (!hits.length) { box.innerHTML = '<div class="result">Nothing found</div>'; return; }
+    box.innerHTML = '';
+    for (const h of hits) {
+      const el = document.createElement('div');
+      el.className = 'result';
+      el.textContent = h.name;
+      el.addEventListener('click', () => {
+        if (h.bbox) map.fitBounds([[h.bbox.west, h.bbox.south], [h.bbox.east, h.bbox.north]], { padding: 40 });
+        else map.flyTo({ center: [h.lon, h.lat], zoom: 13 });
+        box.className = 'results';
+      });
+      box.appendChild(el);
+    }
+  } catch (err) {
+    box.innerHTML = `<div class="result">${err.message}</div>`;
+  }
+}
+$('search-go').addEventListener('click', runSearch);
+$('search').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+
+/* ── Generate ──────────────────────────────────────────────────────────── */
+
+const overlay = $('overlay');
+function progress(stage, frac, sub) {
+  overlay.classList.add('show');
+  $('ov-stage').textContent = stage;
+  $('ov-bar').style.width = `${Math.round(Math.max(0, Math.min(1, frac || 0)) * 100)}%`;
+  $('ov-sub').textContent = sub || '';
+}
+const hideOverlay = () => overlay.classList.remove('show');
+
+function showError(msg) {
+  const box = $('error');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+const clearError = () => $('error').classList.remove('show');
+
+$('ov-cancel').addEventListener('click', () => {
+  if (state.abort) state.abort.abort();
+  if (state.worker) { state.worker.terminate(); state.worker = null; }
+  hideOverlay();
+});
+
+$('btn-generate').addEventListener('click', generate);
+
+async function generate() {
+  if (!state.selection) return;
+  clearError();
+  const sel = state.selection;
+  const p = params();
+  const span = spanMetres(sel.bbox);
+
+  const wantsOsm = p.enabled.buildings || p.enabled.roads || p.enabled.water || p.enabled.greenery;
+  const key = JSON.stringify([sel.bbox, p.quality, wantsOsm]);
+
+  state.abort = new AbortController();
+  const signal = state.abort.signal;
+
+  try {
+    if (state.demKey !== key) {
+      const sampleM = Math.max(6, span.width / p.quality);
+      progress('Fetching elevation', 0);
+      state.dem = await fetchDem(sel.bbox, sampleM, {
+        signal, onProgress: f => progress('Fetching elevation', f)
+      });
+
+      if (wantsOsm) {
+        progress('Fetching map features', 0.1, 'overpass-api.de');
+        state.osm = await fetchOsm(sel.bbox, {
+          signal, onProgress: (f, host) => progress('Fetching map features', 0.1 + f * 0.3, host)
+        });
+        const found = state.osm.buildings.length + state.osm.roads.length +
+                      state.osm.water.length + state.osm.greenery.length;
+        if (found === 0) {
+          showError('OpenStreetMap has no buildings, roads, water or greenery mapped ' +
+                    'in this area — you will get bare terrain. That is normal over ' +
+                    'wilderness, and worth a second look over a town.');
+        }
+      } else {
+        state.osm = null;
+      }
+      state.demKey = key;
+    }
+  } catch (err) {
+    hideOverlay();
+    if (!signal.aborted) showError(err.message);
+    return;
+  }
+
+  progress('Building geometry', 0);
+  if (state.worker) state.worker.terminate();
+  const worker = new Worker('./worker.js', { type: 'module' });
+  state.worker = worker;
+
+  worker.onmessage = ev => {
+    const m = ev.data;
+    if (m.type === 'progress') { progress(m.stage, m.frac); return; }
+    if (m.type === 'error') {
+      hideOverlay();
+      showError(m.message);
+      console.error('terra: worker failed', m.stack);
+      return;
+    }
+    hideOverlay();
+    state.model = m.result;
+    if (DEBUG && m.result.checks) console.table(m.result.checks);
+    showModel(m.result);
+    worker.terminate();
+    state.worker = null;
+  };
+
+  worker.postMessage({
+    selection: sel,
+    dem: state.dem,
+    osm: state.osm,
+    params: p,
+    verify: DEBUG
+  });
+}
+
+/* ── Three.js preview ──────────────────────────────────────────────────── */
+
+const canvas = $('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x141810);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.5, 8000);
+camera.up.set(0, 0, 1);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xBFD4A8, 0x2A2418, 1.1));
+const sun = new THREE.DirectionalLight(0xFFF4E0, 1.5);
+sun.position.set(-0.6, -0.9, 1.2);
+scene.add(sun);
+const fill = new THREE.DirectionalLight(0x8FAF6E, 0.4);
+fill.position.set(1, 0.6, 0.3);
+scene.add(fill);
+
+const modelGroup = new THREE.Group();
+scene.add(modelGroup);
+let meshes = {};
+let bedOutline = null;
+let modelBox = new THREE.Box3();
+
+function showModel(result) {
+  modelGroup.clear();
+  for (const m of Object.values(meshes)) m.geometry.dispose();
+  meshes = {};
+
+  const box = modelBox = new THREE.Box3();
+  for (const layer of result.layers) {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute('position', new THREE.BufferAttribute(layer.positions, 3));
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+    box.union(geom.boundingBox);
+
+    const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+      color: state.colors[layer.id] || layer.color,
+      roughness: 0.88, metalness: 0.02, flatShading: false
+    }));
+    mesh.name = layer.id;
+    meshes[layer.id] = mesh;
+    modelGroup.add(mesh);
+    const badge = document.querySelector(`[data-count="${layer.id}"]`);
+    if (badge) badge.textContent = `${Math.round(layer.positions.length / 9 / 1000)}k`;
+  }
+  for (const def of LAYERS) {
+    if (!meshes[def.id]) {
+      const badge = document.querySelector(`[data-count="${def.id}"]`);
+      if (badge) badge.textContent = '';
+    }
+  }
+  setPreviewVisibility();
+
+  // Centre the model on the origin so orbiting feels right.
+  const centre = box.getCenter(new THREE.Vector3());
+  modelGroup.position.set(-centre.x, -centre.y, 0);
+
+  drawBed();
+
+  const size = box.getSize(new THREE.Vector3());
+  const radius = Math.max(size.x, size.y, size.z);
+  camera.position.set(radius * 0.75, -radius * 1.15, radius * 0.85);
+  controls.target.set(0, 0, size.z / 2);
+  camera.near = radius / 200;
+  camera.far = radius * 40;
+  camera.updateProjectionMatrix();
+  controls.update();
+
+  const s = result.stats;
+  $('stats').innerHTML =
+    `<b>${s.triangles.toLocaleString()}</b> triangles<br>` +
+    `<b>${s.widthMm.toFixed(0)} × ${s.depthMm.toFixed(0)} × ${s.heightMm.toFixed(1)} mm</b><br>` +
+    `Relief <b>${Math.round(s.reliefM)} m</b> (${Math.round(s.minElev)}–${Math.round(s.maxElev)} m)<br>` +
+    (s.buildings ? `<b>${s.buildings.toLocaleString()}</b> buildings · <b>${s.roads.toLocaleString()}</b> ways` : '');
+
+  $('vstats').innerHTML =
+    `${s.triangles.toLocaleString()} tris<br>1:${s.scaleDenominator.toLocaleString()}`;
+  $('vhint').textContent = 'Drag to orbit · Scroll to zoom · Right-drag to pan';
+
+  if (s.triangles > 2_000_000) {
+    showError(`${(s.triangles / 1e6).toFixed(1)}M triangles — exports will be large and slow. ` +
+              'Drop the quality preset or shrink the area if your slicer struggles.');
+  }
+
+  $('tab-model').disabled = false;
+  setView('model');
+  for (const id of ['btn-3mf', 'btn-stl', 'btn-zip']) $(id).disabled = false;
+  $('btn-generate').textContent = 'Regenerate model';
+}
+
+function setPreviewVisibility() {
+  for (const [id, mesh] of Object.entries(meshes)) mesh.visible = !!state.enabled[id];
+}
+
+function drawBed() {
+  if (bedOutline) { scene.remove(bedOutline); bedOutline.geometry.dispose(); bedOutline = null; }
+  const b = bed();
+  if (!b.x) return;
+  const hx = b.x / 2, hy = b.y / 2;
+  const pts = [
+    new THREE.Vector3(-hx, -hy, 0), new THREE.Vector3(hx, -hy, 0),
+    new THREE.Vector3(hx, hy, 0), new THREE.Vector3(-hx, hy, 0),
+    new THREE.Vector3(-hx, -hy, 0)
+  ];
+  bedOutline = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineDashedMaterial({ color: 0x3A4A2C, dashSize: 6, gapSize: 4 })
+  );
+  bedOutline.computeLineDistances();
+  scene.add(bedOutline);
+}
+
+function resize() {
+  const wrap = canvas.parentElement;
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+(function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+})();
+
+/* ── View switching ────────────────────────────────────────────────────── */
+
+function setView(which) {
+  const isMap = which === 'map';
+  $('map').classList.toggle('hidden', !isMap);
+  canvas.classList.toggle('hidden', isMap);
+  $('tab-map').classList.toggle('active', isMap);
+  $('tab-model').classList.toggle('active', !isMap);
+  if (isMap) {
+    map.resize();
+    $('vhint').textContent = state.selection
+      ? 'Adjust settings, then Generate model'
+      : 'Search or pan to a place, then draw an area';
+  } else {
+    resize();
+    $('vhint').textContent = 'Drag to orbit · Scroll to zoom · Right-drag to pan';
+  }
+  $('vstats').style.display = isMap ? 'none' : 'block';
+}
+$('tab-map').addEventListener('click', () => setView('map'));
+$('tab-model').addEventListener('click', () => { if (!$('tab-model').disabled) setView('model'); });
+
+/* ── Export ────────────────────────────────────────────────────────────── */
+
+function activeLayers() {
+  if (!state.model) return [];
+  return state.model.layers
+    .filter(l => state.enabled[l.id])
+    .map(l => ({ ...l, color: state.colors[l.id] || l.color }));
+}
+
+function baseName() {
+  const q = $('search').value.trim();
+  const slug = (q || 'model').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `terra-${slug.slice(0, 40) || 'model'}`;
+}
+
+$('btn-3mf').addEventListener('click', () => {
+  const layers = activeLayers();
+  if (!layers.length) return;
+  download(export3mf(layers, { name: baseName(), stats: state.model.stats }), `${baseName()}.3mf`);
+});
+$('btn-stl').addEventListener('click', () => {
+  const layers = activeLayers();
+  if (!layers.length) return;
+  download(exportStl(layers, { name: baseName() }), `${baseName()}.stl`);
+});
+$('btn-zip').addEventListener('click', () => {
+  const layers = activeLayers();
+  if (!layers.length) return;
+  download(exportStlPerLayer(layers, { name: baseName() }), `${baseName()}-layers.zip`);
+});
+
+/* ── Boot ──────────────────────────────────────────────────────────────── */
+
+setArmed(false);
+refreshArea();
+setView('map');
+resize();
+if (DEBUG) window.terra = state;
+</script>
+</body>
+</html>

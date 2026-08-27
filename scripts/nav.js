@@ -21,6 +21,8 @@
     { href: '/instagram-analytics/', label: 'IG Analytics'        },
     { href: '/woah/',                label: 'WebGL Demo'          },
     { href: '/scissor/',             label: 'Scissor Lattice'     },
+    { href: '/stl-depth/',           label: 'STL to Depth Map'    },
+    { href: '/terra/',               label: 'Terra'               },
   ];
 
   function isActive(href) {
