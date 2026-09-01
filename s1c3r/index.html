@@ -487,7 +487,9 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 // ─── State ───────────────────────────────────────────────────────────────────
 let geometry    = null;  // BufferGeometry in raw STL units
 let slices      = [];    // [{depth:mm, polygons:[[u,v][]]}]
-let holePosArr  = [];    // [{u,v}] array of holes in mm
+let holePosArr  = [];    // [{px,py,pz}] holes as RAW 3D points — converted to
+                         // mm with the CURRENT scale at export/preview time, so
+                         // unit or scale changes can never leave them stale
 let holeMarkers = [];    // THREE.Mesh[] in scene, one per hole
 let placingHole = false;
 let activeSlice = -1;    // index into slices[] highlighted by scrubber (-1 = all)
@@ -583,6 +585,7 @@ function loadGeometry(buffer) {
   controls.update();
 
   document.getElementById('drop-overlay').style.display = 'none';
+  document.getElementById('btn-export').disabled = true;
   document.getElementById('inp-scale').value = '1';
   updateSizeFields();
   updateModelInfo();
@@ -630,6 +633,7 @@ function onSizeInput(axis) {
   document.getElementById('inp-scale').value = newUserScale.toFixed(4);
   updateSizeFields();
   updateModelInfo();
+  resliceIfNeeded();
 }
 
 document.getElementById('inp-scale').addEventListener('input', () => {
@@ -650,7 +654,8 @@ function updateModelInfo() {
   const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
   const step  = thick + gap;
   const span  = (axis === 'x' ? s.x : axis === 'y' ? s.y : s.z) * sc;
-  const count = Math.max(1, Math.ceil(span / step));
+  // Mirrors the slicer loop exactly: planes at min + thick/2 + k·step ≤ max.
+  const count = Math.max(1, Math.floor((span - thick * 0.5) / step) + 1);
 
   document.getElementById('slice-info').innerHTML =
     `Size: ${(s.x*sc).toFixed(1)} × ${(s.y*sc).toFixed(1)} × ${(s.z*sc).toFixed(1)} mm<br>` +
@@ -658,13 +663,29 @@ function updateModelInfo() {
     `Sheets: <b>${count}</b>`;
 }
 
+// If the model is already sliced, a settings change silently invalidates the
+// computed mm polygons — re-slice so preview and export always match the
+// current settings. Markers are rebuilt for the same reason.
+function resliceIfNeeded() {
+  rebuildHoleMarkers();
+  if (slices.length) doSlice();
+}
+
 ['sel-axis', 'inp-thickness', 'inp-gap'].forEach(id =>
   document.getElementById(id).addEventListener('input', updateModelInfo)
+);
+['sel-axis', 'inp-thickness', 'inp-gap'].forEach(id =>
+  document.getElementById(id).addEventListener('change', resliceIfNeeded)
 );
 document.getElementById('sel-units').addEventListener('input', () => {
   updateSizeFields();
   updateModelInfo();
+  resliceIfNeeded();
 });
+document.getElementById('inp-scale').addEventListener('change', resliceIfNeeded);
+['sel-hole-shape', 'inp-hole-size'].forEach(id =>
+  document.getElementById(id).addEventListener('change', rebuildHoleMarkers)
+);
 
 document.getElementById('stl-input').addEventListener('change', e => {
   const file = e.target.files[0];
@@ -763,40 +784,62 @@ renderer.domElement.addEventListener('click', e => {
     return;
   }
 
-  const sc = getScale();
-  const pt = validHit.point.clone();
-
-  // u,v are the two axes perpendicular to the slice axis — these define where the hole runs through
-  const newHole = axis === 'z' ? { u: pt.x * sc, v: pt.y * sc }
-                : axis === 'x' ? { u: pt.y * sc, v: pt.z * sc }
-                :                { u: pt.x * sc, v: pt.z * sc };
-  holePosArr.push(newHole);
-
-  // Cylinder marker that spans the full model along the slice axis, so you can see it runs through
-  const bb = geometry.boundingBox;
-  const span = (axis === 'x' ? bb.max.x - bb.min.x : axis === 'y' ? bb.max.y - bb.min.y : bb.max.z - bb.min.z);
-  const holeSize    = parseFloat(document.getElementById('inp-hole-size').value) || 6;
-  const cylGeom = new THREE.CylinderGeometry(holeSize * 0.5 / sc, holeSize * 0.5 / sc, span, 16);
-  // Rotate cylinder to align with the slice axis
-  if (axis === 'z')      cylGeom.rotateX(0);   // cylinder is Y by default; need Z
-  if (axis === 'z')      cylGeom.rotateX(Math.PI / 2);
-  else if (axis === 'x') cylGeom.rotateZ(Math.PI / 2);
-  // axis === 'y' already correct (cylinder default is along Y)
-
-  const marker = new THREE.Mesh(
-    cylGeom,
-    new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.45, transparent: true, depthWrite: false })
-  );
-  // Position at the u,v location, centred along the slice axis
-  if (axis === 'z')      marker.position.set(pt.x, pt.y, (bb.min.z + bb.max.z) * 0.5);
-  else if (axis === 'x') marker.position.set((bb.min.x + bb.max.x) * 0.5, pt.y, pt.z);
-  else                   marker.position.set(pt.x, (bb.min.y + bb.max.y) * 0.5, pt.z);
-  scene.add(marker);
-  holeMarkers.push(marker);
+  const pt = validHit.point;
+  holePosArr.push({ px: pt.x, py: pt.y, pz: pt.z });
+  rebuildHoleMarkers();
   document.getElementById('btn-clear-holes').disabled = false;
 
   cancelPlaceHole(false);
 });
+
+// Project a raw hole point into the slicer's 2D sheet coordinates. Must use
+// the SAME bi/ci convention as sliceAtPlane: u = p[(ai+1)%3], v = p[(ai+2)%3].
+function holeUV(hp, axis, sc) {
+  const p  = [hp.px, hp.py, hp.pz];
+  const ai = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+  return { u: p[(ai + 1) % 3] * sc, v: p[(ai + 2) % 3] * sc };
+}
+
+// Rebuild the 3D hole markers from raw points with the CURRENT axis, units,
+// scale, hole size and hole shape — a prism matching the selected shape.
+function rebuildHoleMarkers() {
+  holeMarkers.forEach(m => { scene.remove(m); m.geometry.dispose(); m.material.dispose(); });
+  holeMarkers = [];
+  if (!geometry || !holePosArr.length) return;
+
+  const axis      = document.getElementById('sel-axis').value;
+  const sc        = getScale();
+  const holeSize  = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const holeShape = document.getElementById('sel-hole-shape').value;
+  const bb        = geometry.boundingBox;
+  const span = (axis === 'x' ? bb.max.x - bb.min.x
+              : axis === 'y' ? bb.max.y - bb.min.y
+              :                bb.max.z - bb.min.z) * 1.02;
+
+  // Prism cross-section matching the SVG hole: circle/hex/triangle use
+  // circumradius = size/2; the square's side is the size, so its
+  // circumradius is size/√2. thetaStart keeps the square axis-aligned.
+  const segs  = holeShape === 'circle' ? 24 : holeShape === 'square' ? 4
+              : holeShape === 'triangle' ? 3 : 6;
+  const theta = holeShape === 'square' ? Math.PI / 4 : 0;
+  const rMm   = holeShape === 'square' ? holeSize / Math.SQRT2 : holeSize * 0.5;
+  const r     = rMm / sc;
+
+  for (const hp of holePosArr) {
+    const g = new THREE.CylinderGeometry(r, r, span, segs, 1, false, theta);
+    if (axis === 'z')      g.rotateX(Math.PI / 2);
+    else if (axis === 'x') g.rotateZ(Math.PI / 2);
+    // axis === 'y' already correct (cylinder default is along Y)
+
+    const marker = new THREE.Mesh(g,
+      new THREE.MeshPhongMaterial({ color: 0xe94560, opacity: 0.45, transparent: true, depthWrite: false }));
+    if (axis === 'z')      marker.position.set(hp.px, hp.py, (bb.min.z + bb.max.z) * 0.5);
+    else if (axis === 'x') marker.position.set((bb.min.x + bb.max.x) * 0.5, hp.py, hp.pz);
+    else                   marker.position.set(hp.px, (bb.min.y + bb.max.y) * 0.5, hp.pz);
+    scene.add(marker);
+    holeMarkers.push(marker);
+  }
+}
 
 // ─── Slicer ───────────────────────────────────────────────────────────────────
 document.getElementById('btn-slice').addEventListener('click', doSlice);
@@ -829,6 +872,13 @@ function doSlice() {
     const polygons = sliceAtPlane(verts, tris, axis, rawPlane, sc);
     slices.push({ depth, rawPlane, polygons });
     depth += step;
+  }
+
+  // Model thinner than half a sheet along this axis: slice its middle once.
+  if (!slices.length) {
+    const mid = (minV + maxV) * 0.5;
+    slices.push({ depth: mid, rawPlane: mid / sc,
+                  polygons: sliceAtPlane(verts, tris, axis, mid / sc, sc) });
   }
 
   // Build 3D line contours for each slice (project 2D mm coords back to raw space)
@@ -1121,6 +1171,8 @@ function doExport() {
   const labelSize    = parseFloat(document.getElementById('inp-label-size').value) || 5;
   const holeSize     = parseFloat(document.getElementById('inp-hole-size').value) || 6;
   const holeShape    = document.getElementById('sel-hole-shape').value;
+  const axis         = document.getElementById('sel-axis').value;
+  const sc           = getScale();
 
   // Tight bounding box in mm across all slice polygons
   let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
@@ -1180,10 +1232,12 @@ function doExport() {
       lines.push(`    <path class="cut" d="${d}"/>`);
     }
 
-    // Alignment holes — same positions on every sheet
+    // Alignment holes — same positions on every sheet, projected with the
+    // CURRENT axis and scale so they always match the slice polygons.
     for (const hp of holePosArr) {
-      const hx = (ox + hp.u).toFixed(4);
-      const hy = (oy + hp.v).toFixed(4);
+      const { u, v } = holeUV(hp, axis, sc);
+      const hx = (ox + u).toFixed(4);
+      const hy = (oy + v).toFixed(4);
       const hr = (holeSize * 0.5).toFixed(4);
       lines.push(holeSvg(holeShape, hx, hy, hr));
     }
