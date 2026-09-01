@@ -19,11 +19,20 @@ export function gridForPanel(W, H, cellMm, maxTriangles = 2_400_000) {
 }
 
 /**
+ * Stacked-sheet mode snaps the base slab to whole sheets (at least one) so
+ * terrace boundaries align with s1c3r's slice planes.
+ */
+export function snapBase(baseMm, sheetMm) {
+  if (!(sheetMm > 0)) return Math.max(0.5, baseMm);
+  return Math.max(1, Math.round(baseMm / sheetMm)) * sheetMm;
+}
+
+/**
  * Build the solid. heights is the nx × ny relief grid (0 = slab surface);
  * base thickness is added underneath, so total height = base + max(heights).
  */
-export function buildSolid(heights, nx, ny, { widthMm: W, heightMm: H, baseMm }) {
-  const base = Math.max(0.5, baseMm); // zero-height walls would be degenerate
+export function buildSolid(heights, nx, ny, { widthMm: W, heightMm: H, baseMm, sheetMm = 0 }) {
+  const base = snapBase(baseMm, sheetMm); // ≥0.5: zero-height walls would be degenerate
   const dx = W / (nx - 1), dy = H / (ny - 1);
   // Snap grid coordinates so boundary vertices land exactly on 0/W/H and
   // shared vertices weld bit-identically everywhere they recur.

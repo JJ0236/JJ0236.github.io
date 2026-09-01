@@ -362,6 +362,24 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title">Stacked Sheets</div>
+      <div class="seg" id="seg-stacked">
+        <button class="active" data-val="off">Off</button>
+        <button data-val="on">On</button>
+      </div>
+      <div class="ctrl-row" id="row-sheet" style="display:none">
+        <span class="ctrl-label">Sheet thickness</span>
+        <input class="ctrl-input" id="p-sheet" type="number" />
+      </div>
+      <div class="ctrl-hint">
+        For laser-cut stacking: snaps the relief to whole sheets so the preview
+        matches the assembled stack, and enlarges or simplifies features too
+        fine to survive slicing. Slice the exported STL in s1c3r at this same
+        thickness. Base and depth round to whole sheets.
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Quality</div>
       <div class="seg" id="seg-quality">
         <button data-val="1.2">Draft</button>
@@ -429,9 +447,11 @@ const state = {
   sizeMinMm: 8, sizeMaxMm: 40,
   density: 0.85, seed: 42,
   gradient: 'none', swell: 0, frameMm: 0,
+  stacked: false, sheetMm: 3.175,
   cellMm: 0.6,
   color: '#E08A2E',
   positions: null,
+  lastBuild: null,
   worker: null
 };
 
@@ -442,7 +462,8 @@ const DIM_FIELDS = [
   { id: 'p-base',   key: 'baseMm',   min: 1,  max: 30 },
   { id: 'p-smin',   key: 'sizeMinMm', min: 2, max: 100 },
   { id: 'p-smax',   key: 'sizeMaxMm', min: 4, max: 120 },
-  { id: 'p-frame',  key: 'frameMm',  min: 0,  max: 40 }
+  { id: 'p-frame',  key: 'frameMm',  min: 0,  max: 40 },
+  { id: 'p-sheet',  key: 'sheetMm',  min: 0.5, max: 25 }
 ];
 
 const toUnit = mm => state.unit === 'mm' ? mm : mm / MM_PER_IN;
@@ -474,6 +495,11 @@ function segWire(id, fn) {
 
 segWire('seg-units', v => { state.unit = v; refreshDimInputs(); });
 segWire('seg-gradient', v => { state.gradient = v; rebuild(); });
+segWire('seg-stacked', v => {
+  state.stacked = v === 'on';
+  $('row-sheet').style.display = state.stacked ? '' : 'none';
+  rebuild();
+});
 segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
 
 /* Shape chips — multi-select, at least one always on. */
@@ -618,10 +644,17 @@ function build() {
     }
     $('overlay').classList.remove('show');
     state.positions = m.result.positions;
+    state.lastBuild = m.result;
     const mb = (m.result.triangles * 50 + 84) / 1048576;
-    $('stats').textContent =
+    let text =
       `${m.result.featureCount} features · ${m.result.triangles.toLocaleString()} triangles\n` +
       `STL ≈ ${mb < 1 ? mb.toFixed(2) : mb.toFixed(1)} MB · built in ${m.result.ms} ms`;
+    if (m.result.sheetMm > 0) {
+      const relief = Math.round((m.result.totalMm - m.result.baseMm) / m.result.sheetMm);
+      const base   = Math.round(m.result.baseMm / m.result.sheetMm);
+      text += `\n${relief} relief + ${base} base sheets of ${fmt(m.result.sheetMm)} ${state.unit}`;
+    }
+    $('stats').textContent = text;
     $('btn-stl').disabled = $('btn-3mf').disabled = false;
     showModel(m.result.positions);
     worker.terminate();
@@ -634,14 +667,15 @@ function build() {
     sizeMinMm: Math.min(state.sizeMinMm, state.sizeMaxMm),
     sizeMaxMm: state.sizeMaxMm,
     density: state.density, seed: state.seed, cellMm: state.cellMm,
-    gradient: state.gradient, swell: state.swell, frameMm: state.frameMm
+    gradient: state.gradient, swell: state.swell, frameMm: state.frameMm,
+    sheetMm: state.stacked ? state.sheetMm : 0
   });
 }
 
 /* ── Export ────────────────────────────────────────────────────────────── */
 
 function baseName() {
-  const total = state.baseMm + state.depthMm;
+  const total = state.lastBuild?.totalMm ?? (state.baseMm + state.depthMm);
   const dims = state.unit === 'mm'
     ? `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}mm`
     : `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}in`;
@@ -661,7 +695,7 @@ $('btn-3mf').addEventListener('click', () => {
   const stats = {
     widthMm: Math.round(state.widthMm * 10) / 10,
     heightMm: Math.round(state.heightMm * 10) / 10,
-    totalMm: Math.round((state.baseMm + state.depthMm) * 10) / 10
+    totalMm: Math.round((state.lastBuild?.totalMm ?? (state.baseMm + state.depthMm)) * 10) / 10
   };
   download(export3mf(state.positions, { name: baseName(), color: state.color, stats }),
            baseName() + '.3mf');
@@ -718,7 +752,8 @@ function showModel(positions) {
   controls.update();
 
   $('vstats').textContent =
-    `${fmt(state.widthMm)} × ${fmt(state.heightMm)} × ${fmt(state.baseMm + state.depthMm)} ${state.unit}`;
+    `${fmt(state.widthMm)} × ${fmt(state.heightMm)} × ` +
+    `${fmt(state.lastBuild?.totalMm ?? (state.baseMm + state.depthMm))} ${state.unit}`;
 }
 
 function resize() {
@@ -776,6 +811,14 @@ $('btn-snap').addEventListener('click', () => {
   if (['linear', 'radial'].includes(q.get('gradient'))) state.gradient = q.get('gradient');
   const frame = parseFloat(q.get('frame'));
   if (frame > 0 && frame <= 40) state.frameMm = frame;
+  const sheet = parseFloat(q.get('sheet'));
+  if (sheet >= 0.5 && sheet <= 25) {
+    state.stacked = true;
+    state.sheetMm = sheet;
+    $('row-sheet').style.display = '';
+    document.querySelectorAll('#seg-stacked button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === 'on'));
+  }
 }
 
 syncControls();

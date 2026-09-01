@@ -28,16 +28,28 @@ export function makeRng(seed) {
 // Dart-throwing pack, big features first, on a spatial hash so thousands of
 // features stay fast. Centers may sit slightly off-panel so features clip at
 // the edge like the reference panels.
+// Stacked-sheet mode: minimum feature height (mm) so a bump still reads once
+// the relief is cut into sheets of sheetMm and stacked — at least ~2.5 sheets,
+// capped so very thick sheets can't demand more than the relief depth allows.
+export function sheetFloor(params) {
+  const s = params.sheetMm || 0;
+  return s > 0 ? Math.min(params.depthMm * 0.85, s * 2.5) : 0;
+}
+
 export function generateFeatures(params) {
   const { widthMm: W, heightMm: H, sizeMinMm, sizeMaxMm, density, seed,
-          shapes = ['dome'], gradient = 'none', frameMm = 0 } = params;
+          shapes = ['dome'], gradient = 'none', frameMm = 0, sheetMm = 0 } = params;
   const rng = makeRng(seed);
 
   // Pattern area shrinks inside an optional border frame.
   const fx = Math.min(frameMm, W * 0.4), fy = Math.min(frameMm, H * 0.4);
   const PW = W - 2 * fx, PH = H - 2 * fy;
 
-  const rMin = Math.max(0.5, sizeMinMm / 2);
+  const hFloor = sheetFloor(params);
+
+  // In stacked mode the radius floor also rises so bumps keep a sane aspect
+  // ratio at the enforced minimum height.
+  const rMin = Math.max(0.5, sizeMinMm / 2, hFloor);
   const rMax = Math.max(rMin, sizeMaxMm / 2);
 
   // How tightly discs may pack: 1 would be kissing circles, lower lets them
@@ -140,6 +152,23 @@ export function generateFeatures(params) {
   for (const f of placed) hMax = Math.max(hMax, f.h);
   if (hMax > 0) for (const f of placed) f.h = (f.h / hMax) * params.depthMm;
 
+  // Stacked-sheet constraints: cut sheets can't reproduce detail finer than
+  // one sheet, so features that would slice into mush get simplified.
+  if (sheetMm > 0) {
+    for (const f of placed) {
+      f.h = Math.max(f.h, Math.min(params.depthMm, hFloor));
+      if (f.kind === 'ripple' &&
+          (0.45 * f.h < sheetMm * 1.5 || f.r / f.waves < sheetMm * 1.5)) {
+        f.kind = 'dome'; // ridges thinner than a sheet vanish when stacked
+      }
+      if (f.kind === 'steps') {
+        const terraces = Math.floor(f.h / sheetMm);
+        if (terraces < 2) f.kind = 'dome';
+        else f.steps = Math.min(f.steps, terraces);
+      }
+    }
+  }
+
   return placed;
 }
 
@@ -198,7 +227,8 @@ export function featureHeight(f, dx, dy) {
 // layer on the panel-wide effects: wave swell, peak normalization to the
 // requested depth, and the flat border frame.
 export function buildHeightfield(features, params, nx, ny) {
-  const { widthMm: W, heightMm: H, depthMm, swell = 0, frameMm = 0, seed = 0 } = params;
+  const { widthMm: W, heightMm: H, depthMm, swell = 0, frameMm = 0, seed = 0,
+          sheetMm = 0 } = params;
   const dx = W / (nx - 1), dy = H / (ny - 1);
   const heights = new Float32Array(nx * ny);
 
@@ -257,9 +287,19 @@ export function buildHeightfield(features, params, nx, ny) {
     for (let i = 0; i < heights.length; i++) heights[i] *= s;
   }
 
+  // Stacked-sheet mode: quantize the relief to whole sheets so the preview
+  // and export match what the stacked laser-cut sheets can actually build.
+  if (sheetMm > 0) {
+    for (let i = 0; i < heights.length; i++) {
+      heights[i] = Math.round(heights[i] / sheetMm) * sheetMm;
+    }
+  }
+
   // Flat raised border frame, stamped last so it stays crisp.
   if (frameMm > 0) {
-    const frameH = depthMm * 0.4;
+    const frameH = sheetMm > 0
+      ? Math.max(sheetMm, Math.round(depthMm * 0.4 / sheetMm) * sheetMm)
+      : depthMm * 0.4;
     for (let j = 0; j < ny; j++) {
       const y = j * dy;
       for (let i = 0; i < nx; i++) {
