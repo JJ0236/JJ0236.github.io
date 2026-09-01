@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Relief — 3D Printable Panel Generator — joshhicks.info</title>
-  <meta name="description" content="Procedurally generate 3D printable relief wall panels — packed bubbles, angular shards, or both — with exact real-world dimensions and STL/3MF export. Runs entirely in your browser." />
+  <title>Imprint — Photo to Slat Relief — joshhicks.info</title>
+  <meta name="description" content="Turn any photo into a 3D relief panel — brightness becomes depth. Preview it as stacked laser-cut slats and export a slicer-ready STL or 3MF. Runs entirely in your browser." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -12,19 +12,18 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --clay-dark:   #4A3120;
-      --clay-mid:    #7A522E;
-      --clay-light:  #D98E4A;
-      --bg:          #171310;
-      --bg2:         #1C1712;
-      --bg3:         #221B14;
-      --border:      #2C231A;
-      --text:        #D4C8B8;
-      --muted:       #7A7060;
-      --dim:         #5A4E40;
-      --accent:      #D98E4A;
-      --warn:        #C08A3E;
-      --panel-w:     286px;
+      --ink-dark:   #26344E;
+      --ink-mid:    #3E5478;
+      --ink-light:  #8FB0E8;
+      --bg:         #101318;
+      --bg2:        #14181F;
+      --bg3:        #1A1F29;
+      --border:     #232B3A;
+      --text:       #C4CBD8;
+      --muted:      #6E7788;
+      --dim:        #454E60;
+      --accent:     #8FB0E8;
+      --panel-w:    286px;
     }
 
     body {
@@ -37,33 +36,27 @@
       overflow: hidden;
     }
 
-    /* ── Tool header ────────────────────────────────────── */
     .tool-header {
       height: 48px;
-      background: var(--clay-dark);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 1.5rem;
-      flex-shrink: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      z-index: 10;
+      background: var(--ink-dark);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem; flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 10;
     }
     .tool-header-back {
       display: flex; align-items: center; gap: 0.4rem;
-      color: #8A8070; font-size: 0.82rem; font-weight: 500;
+      color: #7A8296; font-size: 0.82rem; font-weight: 500;
       text-decoration: none; transition: color 0.2s;
     }
-    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back:hover { color: #D0D6E2; }
     .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
     .tool-header-title {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 0.78rem; font-weight: 500;
-      color: var(--clay-light); letter-spacing: 0.04em;
+      color: var(--ink-light); letter-spacing: 0.04em;
     }
-    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
+    .tool-header-site { font-size: 0.68rem; color: #5A6070; letter-spacing: 0.06em; }
 
-    /* ── Layout ─────────────────────────────────────────── */
     .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
     .sidebar {
@@ -72,11 +65,10 @@
       border-right: 1px solid var(--border);
       display: flex; flex-direction: column;
       overflow-y: auto; flex-shrink: 0;
-      scrollbar-width: thin; scrollbar-color: #342a20 transparent;
+      scrollbar-width: thin; scrollbar-color: #26304a transparent;
     }
     .sidebar::-webkit-scrollbar { width: 4px; }
-    .sidebar::-webkit-scrollbar-track { background: transparent; }
-    .sidebar::-webkit-scrollbar-thumb { background: #342a20; border-radius: 2px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #26304a; border-radius: 2px; }
 
     .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
     .panel:last-child { border-bottom: none; }
@@ -98,7 +90,7 @@
       cursor: pointer; transition: background 0.15s, color 0.15s;
     }
     .seg button + button { border-left: 1px solid var(--border); }
-    .seg button.active { background: var(--clay-dark); color: var(--clay-light); }
+    .seg button.active { background: var(--ink-dark); color: var(--ink-light); }
 
     .ctrl-row {
       display: flex; align-items: center; justify-content: space-between;
@@ -117,40 +109,61 @@
       color: var(--text); text-align: right; outline: none;
       transition: border-color 0.15s;
     }
-    .ctrl-input:focus { border-color: var(--clay-light); }
-    input[type=range] { accent-color: var(--clay-light); width: 100%; }
+    .ctrl-input:focus { border-color: var(--ink-light); }
+    .ctrl-input:disabled { opacity: 0.55; }
+    input[type=range] { accent-color: var(--ink-light); width: 100%; }
     .range-row { margin-bottom: 10px; }
     .range-row .ctrl-row { margin-bottom: 3px; }
-    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #C8B8A0; }
+    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #A8B4C8; }
 
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .chip {
-      padding: 4px 10px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 20px; color: var(--muted); cursor: pointer;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    .btn {
+      width: 100%; padding: 9px;
+      background: var(--ink-dark); border: 1px solid var(--ink-mid);
+      border-radius: 6px; color: var(--ink-light);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
     }
-    .chip:hover { border-color: var(--clay-mid); }
-    .chip.active { background: var(--clay-dark); border-color: var(--clay-mid); color: var(--clay-light); }
+    .btn:hover:not(:disabled) { background: var(--ink-mid); color: #fff; }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn-sub {
+      background: var(--bg3); border-color: var(--border); color: var(--muted);
+      margin-top: 6px; padding: 7px;
+    }
+    .btn-sub:hover:not(:disabled) { background: #202636; color: var(--text); }
 
-    .preset-row { display: flex; gap: 6px; margin-bottom: 10px; }
-    .preset-row button {
-      flex: 1; padding: 4px 6px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem;
-      background: transparent; border: 1px solid var(--border);
-      border-radius: 5px; color: var(--muted); cursor: pointer;
+    .thumb-wrap {
+      position: relative; border: 1px dashed var(--border); border-radius: 6px;
+      margin-bottom: 8px; overflow: hidden; cursor: pointer;
+      min-height: 90px; display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s;
     }
-    .preset-row button:hover { color: var(--clay-light); border-color: var(--clay-mid); }
+    .thumb-wrap:hover { border-color: var(--ink-mid); }
+    .thumb-wrap img { display: block; width: 100%; filter: grayscale(1); }
+    .thumb-wrap .thumb-hint {
+      position: absolute; inset: auto 0 0 0; padding: 4px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem;
+      color: #B8C2D4; background: rgba(16,19,24,0.72); text-align: center;
+    }
+    input[type=file] { display: none; }
 
-    .seed-wrap { display: flex; gap: 6px; }
-    .seed-wrap .ctrl-input { flex: 1; width: auto; }
-    .seed-wrap button {
-      background: var(--bg3); border: 1px solid var(--border);
-      border-radius: 5px; color: var(--muted); cursor: pointer;
-      padding: 0 10px; font-size: 0.85rem;
+    /* Toggle */
+    .toggle {
+      position: relative; width: 32px; height: 17px; flex-shrink: 0;
+      background: #222B3E; border-radius: 9px; cursor: pointer;
+      transition: background 0.18s; border: none; padding: 0;
     }
-    .seed-wrap button:hover { color: var(--clay-light); border-color: var(--clay-mid); }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #5E6678; transition: transform 0.18s, background 0.18s;
+    }
+    .toggle.on { background: var(--ink-dark); }
+    .toggle.on::after { transform: translateX(15px); background: var(--ink-light); }
+
+    .info-strip {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      color: var(--muted); line-height: 1.75; white-space: pre-line;
+    }
 
     .swatches { display: flex; gap: 7px; flex-wrap: wrap; }
     .swatch {
@@ -159,52 +172,15 @@
       transition: transform 0.12s;
     }
     .swatch:hover { transform: scale(1.12); }
-    .swatch.active { outline: 2px solid var(--clay-light); outline-offset: 1px; }
-
-    .btn {
-      width: 100%; padding: 9px;
-      background: var(--clay-dark); border: 1px solid var(--clay-mid);
-      border-radius: 6px; color: var(--clay-light);
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
-      cursor: pointer; transition: background 0.15s, color 0.15s;
-    }
-    .btn:hover:not(:disabled) { background: var(--clay-mid); color: #fff; }
-    .btn:disabled { opacity: 0.35; cursor: default; }
-    .btn-sub {
-      background: var(--bg3); border-color: var(--border); color: var(--muted);
-      margin-top: 6px; padding: 7px;
-    }
-    .btn-sub:hover:not(:disabled) { background: #2A2118; color: var(--text); }
-
-    .info-strip {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
-      color: var(--muted); line-height: 1.75;
-    }
-    .info-strip b { color: #C8B8A0; font-weight: 500; }
+    .swatch.active { outline: 2px solid var(--ink-light); outline-offset: 1px; }
 
     .attribution {
       font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.58rem; color: var(--dim);
-      line-height: 1.6;
+      font-size: 0.58rem; color: var(--dim); line-height: 1.6;
     }
 
-    /* ── Viewport ───────────────────────────────────────── */
-    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #1E1813; }
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #171B22; }
     #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-
-    .view-tools {
-      position: absolute; top: 12px; left: 12px; z-index: 5;
-      display: flex; gap: 6px;
-    }
-    .view-tools button {
-      padding: 6px 12px; font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px;
-      background: rgba(23,19,16,0.85); backdrop-filter: blur(6px);
-      color: var(--muted); cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .view-tools button:hover { color: var(--text); border-color: var(--clay-mid); }
-    .view-tools button.active { color: var(--clay-light); border-color: var(--clay-mid); }
 
     .viewport-stats {
       position: absolute; top: 12px; right: 14px;
@@ -216,13 +192,26 @@
       position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
       font-size: 0.68rem; color: rgba(255,255,255,0.28);
       pointer-events: none; white-space: nowrap; z-index: 4;
-      background: rgba(23,19,16,0.7); backdrop-filter: blur(6px);
+      background: rgba(16,19,24,0.7); backdrop-filter: blur(6px);
       padding: 5px 13px; border-radius: 20px;
     }
+    .view-tools {
+      position: absolute; top: 12px; left: 12px; z-index: 5;
+      display: flex; gap: 6px;
+    }
+    .view-tools button {
+      padding: 6px 12px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px;
+      background: rgba(16,19,24,0.85); backdrop-filter: blur(6px);
+      color: var(--muted); cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .view-tools button:hover { color: var(--text); border-color: var(--ink-mid); }
+    .view-tools button.active { color: var(--ink-light); border-color: var(--ink-mid); }
 
     .overlay {
       position: absolute; inset: 0; z-index: 20;
-      background: rgba(23,19,16,0.75); backdrop-filter: blur(3px);
+      background: rgba(16,19,24,0.75); backdrop-filter: blur(3px);
       display: none; flex-direction: column;
       align-items: center; justify-content: center; gap: 14px;
     }
@@ -263,12 +252,47 @@
     </svg>
     Projects
   </a>
-  <span class="tool-header-title">Relief</span>
+  <span class="tool-header-title">Imprint</span>
   <span class="tool-header-site">joshhicks.info</span>
 </header>
 
 <div class="body-wrap">
   <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Image</div>
+      <div class="thumb-wrap" id="thumb-wrap" title="Click or drop an image">
+        <img id="thumb" alt="" />
+        <div class="thumb-hint" id="thumb-hint">Click or drop a photo (JPG/PNG)</div>
+      </div>
+      <input type="file" id="img-input" accept="image/*" />
+      <div class="ctrl-row">
+        <span class="ctrl-label">Invert (dark = raised)</span>
+        <button class="toggle" id="tog-invert" aria-label="Invert"></button>
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Brightness</span>
+          <span class="val" id="v-bright">0</span>
+        </div>
+        <input type="range" id="p-bright" min="-0.5" max="0.5" step="0.05" value="0" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Contrast</span>
+          <span class="val" id="v-contrast">1.0×</span>
+        </div>
+        <input type="range" id="p-contrast" min="0.4" max="3" step="0.1" value="1" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Smoothing</span>
+          <span class="val" id="v-blur">1.5</span>
+        </div>
+        <input type="range" id="p-blur" min="0" max="8" step="0.5" value="1.5" />
+      </div>
+      <div class="ctrl-hint">Brightness becomes height. Smoothing (mm) softens noise so slats cut cleanly.</div>
+    </div>
 
     <div class="panel">
       <div class="panel-title">Panel Size</div>
@@ -281,8 +305,8 @@
         <input class="ctrl-input" id="p-width" type="number" />
       </div>
       <div class="ctrl-row">
-        <span class="ctrl-label">Height</span>
-        <input class="ctrl-input" id="p-height" type="number" />
+        <span class="ctrl-label">Height (auto)</span>
+        <input class="ctrl-input" id="p-height" type="number" disabled />
       </div>
       <div class="ctrl-row">
         <span class="ctrl-label">Relief depth</span>
@@ -292,73 +316,7 @@
         <span class="ctrl-label">Base thickness</span>
         <input class="ctrl-input" id="p-base" type="number" />
       </div>
-      <div class="ctrl-hint">Exported at exactly these dimensions. Depth is how far the bumps rise above the base.</div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Pattern</div>
-      <div class="preset-row" id="presets">
-        <button data-preset="bubbles">Bubbles</button>
-        <button data-preset="shards">Shards</button>
-        <button data-preset="chaos">Chaos</button>
-      </div>
-      <div class="chips" id="shape-chips">
-        <button class="chip active" data-kind="dome">Bubbles</button>
-        <button class="chip" data-kind="shard">Shards</button>
-        <button class="chip" data-kind="cone">Cones</button>
-        <button class="chip" data-kind="ring">Rings</button>
-        <button class="chip" data-kind="ripple">Ripples</button>
-        <button class="chip" data-kind="steps">Steps</button>
-        <button class="chip" data-kind="puck">Pucks</button>
-      </div>
-      <div class="ctrl-row">
-        <span class="ctrl-label">Feature size, min</span>
-        <input class="ctrl-input" id="p-smin" type="number" />
-      </div>
-      <div class="ctrl-row">
-        <span class="ctrl-label">Feature size, max</span>
-        <input class="ctrl-input" id="p-smax" type="number" />
-      </div>
-      <div class="range-row">
-        <div class="ctrl-row">
-          <span class="ctrl-label">Density</span>
-          <span class="val" id="v-density">85%</span>
-        </div>
-        <input type="range" id="p-density" min="0.3" max="1" step="0.05" value="0.85" />
-      </div>
-      <div class="ctrl-row" style="margin-bottom:4px">
-        <span class="ctrl-label">Seed</span>
-      </div>
-      <div class="seed-wrap">
-        <input class="ctrl-input" id="p-seed" type="number" value="42" />
-        <button id="btn-dice" title="Random seed">⚄</button>
-      </div>
-      <button class="btn btn-sub" id="btn-surprise" style="margin-top:10px">Surprise me</button>
-      <div class="ctrl-hint" style="margin-top:8px">Same seed + same settings always rebuilds the same panel.</div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Effects</div>
-      <div class="ctrl-row" style="margin-bottom:4px">
-        <span class="ctrl-label">Height gradient</span>
-      </div>
-      <div class="seg" id="seg-gradient">
-        <button class="active" data-val="none">None</button>
-        <button data-val="linear">Sweep</button>
-        <button data-val="radial">Peak</button>
-      </div>
-      <div class="range-row">
-        <div class="ctrl-row">
-          <span class="ctrl-label">Wave swell</span>
-          <span class="val" id="v-swell">0%</span>
-        </div>
-        <input type="range" id="p-swell" min="0" max="0.6" step="0.05" value="0" />
-      </div>
-      <div class="ctrl-row">
-        <span class="ctrl-label">Frame width</span>
-        <input class="ctrl-input" id="p-frame" type="number" />
-      </div>
-      <div class="ctrl-hint">Frame adds a flat raised border around the pattern. Swell rolls a gentle wave under everything.</div>
+      <div class="ctrl-hint">Height follows the image aspect ratio. Exported at exactly these dimensions.</div>
     </div>
 
     <div class="panel">
@@ -381,11 +339,9 @@
         </div>
       </div>
       <div class="ctrl-hint">
-        For laser-cut stacking: the panel is sliced sideways into full-height
-        slats (one connected piece each — never base-up, which makes loose
-        bits). The preview shows each slat's actual cut profile. Features are
-        kept wide enough to span several slats. Slice the exported STL in
-        s1c3r along the same axis at this thickness.
+        For laser-cut stacking: the preview shows each slat's actual cut
+        profile — full-height slats, no loose pieces. Slice the exported STL
+        in s1c3r along the same axis at this thickness.
       </div>
     </div>
 
@@ -409,15 +365,14 @@
       <button class="btn" id="btn-stl" disabled>Download STL</button>
       <button class="btn btn-sub" id="btn-3mf" disabled>Download 3MF</button>
       <div class="ctrl-hint" style="margin-top:9px">
-        Both formats carry exact millimeter dimensions. The relief has no
-        overhangs, so it prints support-free face-up on the bed.
+        Both formats carry exact millimeter dimensions. Smooth mode prints
+        support-free; stacked mode is made for s1c3r + a laser cutter.
       </div>
     </div>
 
     <div class="panel">
       <div class="attribution">
-        Everything runs in your browser — nothing is uploaded. Inspired by
-        3D printed relief wall art.
+        Everything runs in your browser — your photo is never uploaded.
       </div>
     </div>
   </aside>
@@ -429,7 +384,7 @@
       <button id="btn-snap" title="Save preview as PNG">Snapshot</button>
     </div>
     <div class="viewport-stats" id="vstats"></div>
-    <div class="viewport-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+    <div class="viewport-hint">Drag to orbit · scroll to zoom · drop an image anywhere</div>
     <div class="overlay" id="overlay"><div class="stage" id="ov-stage">Working…</div></div>
     <div class="no-webgl" id="no-webgl">
       <h2>WebGL unavailable</h2>
@@ -448,18 +403,15 @@ const MM_PER_IN = 25.4;
 
 /* ── State (always millimeters internally) ─────────────────────────────── */
 
-const ALL_SHAPES = ['dome', 'shard', 'cone', 'ring', 'ripple', 'steps', 'puck'];
-
 const state = {
   unit: 'mm',
-  widthMm: 200, heightMm: 200, depthMm: 15, baseMm: 4,
-  shapes: ['dome'],
-  sizeMinMm: 8, sizeMaxMm: 40,
-  density: 0.85, seed: 42,
-  gradient: 'none', swell: 0, frameMm: 0,
+  widthMm: 200, heightMm: 150, depthMm: 12, baseMm: 3,
+  invert: false, brightness: 0, contrast: 1, blurMm: 1.5,
   stacked: false, sheetMm: 3.175, sliceAxis: 'x',
   cellMm: 0.6,
-  color: '#E08A2E',
+  color: '#C8A86B',
+  imgName: 'sample',
+  gray: null, iw: 0, ih: 0,
   positions: null,
   lastBuild: null,
   worker: null
@@ -467,16 +419,11 @@ const state = {
 
 const DIM_FIELDS = [
   { id: 'p-width',  key: 'widthMm',  min: 20, max: 600 },
-  { id: 'p-height', key: 'heightMm', min: 20, max: 600 },
   { id: 'p-depth',  key: 'depthMm',  min: 2,  max: 80 },
   { id: 'p-base',   key: 'baseMm',   min: 1,  max: 30 },
-  { id: 'p-smin',   key: 'sizeMinMm', min: 2, max: 100 },
-  { id: 'p-smax',   key: 'sizeMaxMm', min: 4, max: 120 },
-  { id: 'p-frame',  key: 'frameMm',  min: 0,  max: 40 },
   { id: 'p-sheet',  key: 'sheetMm',  min: 0.5, max: 25 }
 ];
 
-const toUnit = mm => state.unit === 'mm' ? mm : mm / MM_PER_IN;
 const fromUnit = v => state.unit === 'mm' ? v : v * MM_PER_IN;
 const fmt = mm => state.unit === 'mm'
   ? String(Math.round(mm * 10) / 10)
@@ -489,6 +436,12 @@ function refreshDimInputs() {
     el.min = fmt(f.min); el.max = fmt(f.max);
     el.step = state.unit === 'mm' ? 1 : 0.05;
   }
+  $('p-height').value = fmt(state.heightMm);
+}
+
+function syncHeight() {
+  if (state.iw > 0) state.heightMm = state.widthMm * state.ih / state.iw;
+  $('p-height').value = fmt(state.heightMm);
 }
 
 /* ── Controls ──────────────────────────────────────────────────────────── */
@@ -506,78 +459,18 @@ function segWire(id, fn) {
 segWire('seg-units', v => { state.unit = v; refreshDimInputs(); updateVstats(); });
 
 function updateVstats() {
+  if (!state.lastBuild) return;
   $('vstats').textContent =
     `${fmt(state.widthMm)} × ${fmt(state.heightMm)} × ` +
-    `${fmt(state.lastBuild?.totalMm ?? (state.baseMm + state.depthMm))} ${state.unit}`;
+    `${fmt(state.lastBuild.totalMm)} ${state.unit}`;
 }
-segWire('seg-gradient', v => { state.gradient = v; rebuild(); });
+segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
 segWire('seg-stacked', v => {
   state.stacked = v === 'on';
   $('stacked-opts').style.display = state.stacked ? '' : 'none';
   rebuild();
 });
 segWire('seg-slats', v => { state.sliceAxis = v; rebuild(); });
-segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
-
-/* Shape chips — multi-select, at least one always on. */
-const chipWrap = $('shape-chips');
-function refreshChips() {
-  chipWrap.querySelectorAll('.chip').forEach(c =>
-    c.classList.toggle('active', state.shapes.includes(c.dataset.kind)));
-}
-chipWrap.addEventListener('click', e => {
-  const c = e.target.closest('.chip');
-  if (!c) return;
-  const k = c.dataset.kind;
-  if (state.shapes.includes(k)) {
-    if (state.shapes.length === 1) return; // keep at least one
-    state.shapes = state.shapes.filter(s => s !== k);
-  } else {
-    state.shapes = [...state.shapes, k];
-  }
-  refreshChips();
-  rebuild();
-});
-
-$('presets').addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  state.shapes = b.dataset.preset === 'bubbles' ? ['dome']
-               : b.dataset.preset === 'shards'  ? ['shard']
-               : [...ALL_SHAPES];
-  refreshChips();
-  rebuild();
-});
-
-$('btn-surprise').addEventListener('click', () => {
-  const rnd = a => a[Math.floor(Math.random() * a.length)];
-  const n = rnd([1, 1, 2, 2, 3, ALL_SHAPES.length]);
-  state.shapes = [...ALL_SHAPES].sort(() => Math.random() - 0.5).slice(0, n);
-  state.seed = Math.floor(Math.random() * 100000);
-  state.density = 0.6 + Math.random() * 0.4;
-  state.sizeMinMm = 4 + Math.random() * 10;
-  state.sizeMaxMm = state.sizeMinMm + 10 + Math.random() * 40;
-  state.gradient = rnd(['none', 'none', 'none', 'linear', 'radial']);
-  state.swell = rnd([0, 0, 0, 0.2, 0.35]);
-  state.color = COLORS[Math.floor(Math.random() * COLORS.length)];
-  syncControls();
-  rebuild();
-});
-
-function syncControls() {
-  refreshChips();
-  refreshDimInputs();
-  $('p-seed').value = state.seed;
-  $('p-density').value = state.density;
-  $('v-density').textContent = Math.round(state.density * 100) + '%';
-  $('p-swell').value = state.swell;
-  $('v-swell').textContent = Math.round(state.swell * 100) + '%';
-  document.querySelectorAll('#seg-gradient button').forEach(b =>
-    b.classList.toggle('active', b.dataset.val === state.gradient));
-  swWrap.querySelectorAll('.swatch').forEach(x =>
-    x.classList.toggle('active', x.title === state.color));
-  if (mesh) mesh.material.color.set(state.color);
-}
 
 for (const f of DIM_FIELDS) {
   $(f.id).addEventListener('change', e => {
@@ -585,41 +478,31 @@ for (const f of DIM_FIELDS) {
     if (!Number.isFinite(mm)) { refreshDimInputs(); return; }
     mm = Math.min(f.max, Math.max(f.min, mm));
     state[f.key] = mm;
-    if (state.sizeMinMm > state.sizeMaxMm) {
-      if (f.key === 'sizeMinMm') state.sizeMaxMm = state.sizeMinMm;
-      else state.sizeMinMm = state.sizeMaxMm;
-    }
+    if (f.key === 'widthMm') syncHeight();
     refreshDimInputs();
     rebuild();
   });
 }
 
-$('p-swell').addEventListener('input', e => {
-  state.swell = parseFloat(e.target.value);
-  $('v-swell').textContent = Math.round(state.swell * 100) + '%';
-});
-$('p-swell').addEventListener('change', rebuild);
-
-$('p-density').addEventListener('input', e => {
-  state.density = parseFloat(e.target.value);
-  $('v-density').textContent = Math.round(state.density * 100) + '%';
-});
-$('p-density').addEventListener('change', rebuild);
-
-$('p-seed').addEventListener('change', e => {
-  state.seed = Math.abs(parseInt(e.target.value, 10) || 0);
-  e.target.value = state.seed;
+$('tog-invert').addEventListener('click', e => {
+  state.invert = !state.invert;
+  e.currentTarget.classList.toggle('on', state.invert);
   rebuild();
 });
-$('btn-dice').addEventListener('click', () => {
-  state.seed = Math.floor(Math.random() * 100000);
-  $('p-seed').value = state.seed;
-  rebuild();
-});
+const slider = (id, valId, key, fmtV) => {
+  $(id).addEventListener('input', e => {
+    state[key] = parseFloat(e.target.value);
+    $(valId).textContent = fmtV(state[key]);
+  });
+  $(id).addEventListener('change', rebuild);
+};
+slider('p-bright', 'v-bright', 'brightness', v => v.toFixed(2));
+slider('p-contrast', 'v-contrast', 'contrast', v => v.toFixed(1) + '×');
+slider('p-blur', 'v-blur', 'blurMm', v => v.toFixed(1));
 
-/* Preview colors sampled from the reference panels. */
-const COLORS = ['#E08A2E', '#C23B2E', '#7CA341', '#A8D8E8', '#3A5BA0',
-                '#F2A7B8', '#E8D34A', '#4A3B78', '#3FA8B8', '#B8B8B8'];
+/* Preview colors — woods and painted tones. */
+const COLORS = ['#C8A86B', '#8B6340', '#E8DCC8', '#8FB0E8', '#C23B2E',
+                '#7CA341', '#3A5BA0', '#E8D34A', '#B8B8B8', '#3E3E3E'];
 const swWrap = $('swatches');
 for (const c of COLORS) {
   const b = document.createElement('button');
@@ -634,6 +517,77 @@ for (const c of COLORS) {
   swWrap.appendChild(b);
 }
 
+/* ── Image loading ─────────────────────────────────────────────────────── */
+
+const MAX_SIDE = 1024;
+
+function useCanvas(canvas, name) {
+  const g = canvas.getContext('2d');
+  const { width: w, height: h } = canvas;
+  const data = g.getImageData(0, 0, w, h).data;
+  const gray = new Float32Array(w * h);
+  for (let i = 0; i < gray.length; i++) {
+    const o = i * 4;
+    gray[i] = (0.2126 * data[o] + 0.7152 * data[o + 1] + 0.0722 * data[o + 2]) / 255;
+  }
+  state.gray = gray; state.iw = w; state.ih = h;
+  state.imgName = (name || 'image').replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '_').slice(0, 40) || 'image';
+  $('thumb').src = canvas.toDataURL('image/jpeg', 0.7);
+  $('thumb-hint').textContent = `${state.imgName} · ${w}×${h} — click to replace`;
+  syncHeight();
+  refreshDimInputs();
+  rebuild();
+}
+
+async function loadFile(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const s = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(2, Math.round(bmp.width * s));
+    c.height = Math.max(2, Math.round(bmp.height * s));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    useCanvas(c, file.name);
+  } catch {
+    $('stats').textContent = 'Could not read that image.';
+  }
+}
+
+$('thumb-wrap').addEventListener('click', () => $('img-input').click());
+$('img-input').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+});
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/'));
+  if (f) loadFile(f);
+});
+
+/* Built-in sample so the page comes alive before any upload: soft dunes. */
+function loadSample() {
+  const w = 512, h = 384;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0, 0, w, h);
+  grad.addColorStop(0, '#1a1a1a'); grad.addColorStop(1, '#3a3a3a');
+  g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  let a = 7;
+  const rnd = () => (a = (a * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * w, y = rnd() * h, r = 40 + rnd() * 130;
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    const lum = 90 + Math.floor(rnd() * 165);
+    rg.addColorStop(0, `rgba(${lum},${lum},${lum},0.85)`);
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  useCanvas(c, 'sample');
+}
+
 /* ── Worker build ──────────────────────────────────────────────────────── */
 
 let debounceT = 0;
@@ -643,9 +597,10 @@ function rebuild() {
 }
 
 function build() {
+  if (!state.gray) return;
   if (state.worker) state.worker.terminate();
   $('overlay').classList.add('show');
-  $('ov-stage').textContent = 'Placing features…';
+  $('ov-stage').textContent = 'Processing image…';
   $('btn-stl').disabled = $('btn-3mf').disabled = true;
 
   const worker = new Worker('./worker.js', { type: 'module' });
@@ -656,7 +611,7 @@ function build() {
     if (m.type === 'error') {
       $('overlay').classList.remove('show');
       $('stats').textContent = 'Error: ' + m.message;
-      console.error('relief: worker failed', m.stack);
+      console.error('imprint: worker failed', m.stack);
       return;
     }
     $('overlay').classList.remove('show');
@@ -664,8 +619,8 @@ function build() {
     state.lastBuild = m.result;
     const mb = (m.result.triangles * 50 + 84) / 1048576;
     let text =
-      `${m.result.featureCount} features · ${m.result.triangles.toLocaleString()} triangles\n` +
-      `STL ≈ ${mb < 1 ? mb.toFixed(2) : mb.toFixed(1)} MB · built in ${m.result.ms} ms`;
+      `${m.result.triangles.toLocaleString()} triangles · ` +
+      `STL ≈ ${mb < 1 ? mb.toFixed(2) : mb.toFixed(1)} MB · ${m.result.ms} ms`;
     if (m.result.sheetMm > 0) {
       text += `\n${m.result.slats} slats of ${fmt(m.result.sheetMm)} ${state.unit} ` +
               `(slice along ${state.sliceAxis.toUpperCase()} in s1c3r)`;
@@ -677,15 +632,16 @@ function build() {
     state.worker = null;
   };
   worker.postMessage({
-    widthMm: state.widthMm, heightMm: state.heightMm,
-    depthMm: state.depthMm, baseMm: state.baseMm,
-    shapes: state.shapes.slice(),
-    sizeMinMm: Math.min(state.sizeMinMm, state.sizeMaxMm),
-    sizeMaxMm: state.sizeMaxMm,
-    density: state.density, seed: state.seed, cellMm: state.cellMm,
-    gradient: state.gradient, swell: state.swell, frameMm: state.frameMm,
-    sheetMm: state.stacked ? state.sheetMm : 0,
-    sliceAxis: state.sliceAxis
+    gray: state.gray, iw: state.iw, ih: state.ih,
+    params: {
+      widthMm: state.widthMm, heightMm: state.heightMm,
+      depthMm: state.depthMm, baseMm: state.baseMm,
+      invert: state.invert, brightness: state.brightness,
+      contrast: state.contrast, blurMm: state.blurMm,
+      cellMm: state.cellMm,
+      sheetMm: state.stacked ? state.sheetMm : 0,
+      sliceAxis: state.sliceAxis
+    }
   });
 }
 
@@ -693,14 +649,8 @@ function build() {
 
 function baseName() {
   const total = state.lastBuild?.totalMm ?? (state.baseMm + state.depthMm);
-  const dims = state.unit === 'mm'
-    ? `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}mm`
-    : `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}in`;
-  const pat = state.shapes.length === ALL_SHAPES.length ? 'chaos'
-            : state.shapes.length > 1 ? 'mix'
-            : { dome: 'bubbles', shard: 'shards', cone: 'cones', ring: 'rings',
-                ripple: 'ripples', steps: 'steps', puck: 'pucks' }[state.shapes[0]];
-  return `relief_${dims}_${pat}_s${state.seed}`;
+  const dims = `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}${state.unit}`;
+  return `imprint_${state.imgName}_${dims}`;
 }
 
 $('btn-stl').addEventListener('click', () => {
@@ -730,16 +680,16 @@ let controls = null;
 try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setClearColor(0x1e1813);
+  renderer.setClearColor(0x171b22);
 
   controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
 
-  scene.add(new THREE.HemisphereLight(0xE8DCC8, 0x2A2018, 1.0));
-  const sun = new THREE.DirectionalLight(0xFFF0DC, 1.6);
+  scene.add(new THREE.HemisphereLight(0xD8E0F0, 0x1A2028, 1.0));
+  const sun = new THREE.DirectionalLight(0xFFF4E4, 1.6);
   sun.position.set(-0.5, -0.8, 1.1);
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0xD98E4A, 0.35);
+  const fill = new THREE.DirectionalLight(0x8FB0E8, 0.3);
   fill.position.set(1, 0.5, 0.4);
   scene.add(fill);
 } catch (e) {
@@ -759,7 +709,6 @@ function showModel(positions) {
   mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
     color: state.color, roughness: 0.82, metalness: 0.0
   }));
-  // Center on origin for pleasant orbiting.
   mesh.position.set(-state.widthMm / 2, -state.heightMm / 2, 0);
   scene.add(mesh);
 
@@ -797,35 +746,16 @@ $('btn-spin').addEventListener('click', e => {
   controls.autoRotateSpeed = 1.6;
   e.currentTarget.classList.toggle('active', controls.autoRotate);
 });
-
 $('btn-snap').addEventListener('click', () => {
   if (!renderer || !mesh) return;
-  renderer.render(scene, camera); // fresh frame — the drawing buffer isn't preserved
+  renderer.render(scene, camera);
   canvas.toBlob(b => { if (b) download(b, baseName() + '.png'); }, 'image/png');
 });
 
 /* ── Boot ──────────────────────────────────────────────────────────────── */
 
-// Optional prefill via URL, e.g. /relief/?pattern=chaos&seed=7
-// or /relief/?shapes=ring,ripple&swell=0.3
 {
   const q = new URLSearchParams(location.search);
-  const PRESETS = {
-    bubbles: ['dome'], shards: ['shard'], mixed: ['dome', 'shard'],
-    chaos: [...ALL_SHAPES]
-  };
-  if (PRESETS[q.get('pattern')]) state.shapes = PRESETS[q.get('pattern')];
-  if (q.get('shapes')) {
-    const picked = q.get('shapes').split(',').filter(s => ALL_SHAPES.includes(s));
-    if (picked.length) state.shapes = picked;
-  }
-  const seed = parseInt(q.get('seed'), 10);
-  if (Number.isFinite(seed)) state.seed = Math.abs(seed);
-  const swell = parseFloat(q.get('swell'));
-  if (swell >= 0 && swell <= 0.6) state.swell = swell;
-  if (['linear', 'radial'].includes(q.get('gradient'))) state.gradient = q.get('gradient');
-  const frame = parseFloat(q.get('frame'));
-  if (frame > 0 && frame <= 40) state.frameMm = frame;
   const sheet = parseFloat(q.get('sheet'));
   if (sheet >= 0.5 && sheet <= 25) {
     state.stacked = true;
@@ -841,8 +771,8 @@ $('btn-snap').addEventListener('click', () => {
   }
 }
 
-syncControls();
-build();
+refreshDimInputs();
+loadSample();
 </script>
 
 </body>

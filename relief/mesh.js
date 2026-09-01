@@ -19,6 +19,38 @@ export function gridForPanel(W, H, cellMm, maxTriangles = 2_400_000) {
 }
 
 /**
+ * Stacked-slat mode: the panel gets sliced sideways into slats of sheetMm,
+ * and each slat is cut with one profile — its mid-line cross-section.
+ * Collapse each strip along the stacking axis onto its mid-line so preview
+ * and export match the assembled stack exactly. Mutates heights in place.
+ */
+export function slatQuantize(heights, nx, ny, { widthMm: W, heightMm: H, sheetMm = 0, sliceAxis = 'x' }) {
+  if (!(sheetMm > 0)) return heights;
+  const dx = W / (nx - 1), dy = H / (ny - 1);
+  if (sliceAxis === 'y') {
+    const snap = heights.slice();
+    for (let j = 0; j < ny; j++) {
+      const mj = Math.min(ny - 1,
+        Math.round(((Math.floor(j * dy / sheetMm) + 0.5) * sheetMm) / dy));
+      if (mj !== j) heights.set(snap.subarray(mj * nx, mj * nx + nx), j * nx);
+    }
+  } else {
+    const midCol = new Int32Array(nx);
+    for (let i = 0; i < nx; i++) {
+      midCol[i] = Math.min(nx - 1,
+        Math.round(((Math.floor(i * dx / sheetMm) + 0.5) * sheetMm) / dx));
+    }
+    const rowBuf = new Float32Array(nx);
+    for (let j = 0; j < ny; j++) {
+      const row = j * nx;
+      rowBuf.set(heights.subarray(row, row + nx));
+      for (let i = 0; i < nx; i++) heights[row + i] = rowBuf[midCol[i]];
+    }
+  }
+  return heights;
+}
+
+/**
  * Build the solid. heights is the nx × ny relief grid (0 = slab surface);
  * base thickness is added underneath, so total height = base + max(heights).
  */

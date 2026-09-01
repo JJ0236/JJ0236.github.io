@@ -9,6 +9,8 @@
 // packed reference panels do. Panel-wide effects — height gradients, a wave
 // swell, a raised border frame — are applied at rasterization time.
 
+import { slatQuantize } from './mesh.js';
+
 export const SHAPE_KINDS = ['dome', 'shard', 'cone', 'ring', 'ripple', 'steps', 'puck'];
 
 /* ── Seeded RNG (mulberry32) ───────────────────────────────────────────── */
@@ -290,32 +292,9 @@ export function buildHeightfield(features, params, nx, ny) {
     }
   }
 
-  // Stacked-slat mode: the panel will be sliced sideways into slats of
-  // sheetMm, and each slat is cut with one profile — its mid-line
-  // cross-section. Collapse each strip along the stacking axis onto its
-  // mid-line so preview and export match the assembled stack exactly.
-  if (sheetMm > 0) {
-    if (sliceAxis === 'y') {
-      const snap = heights.slice();
-      for (let j = 0; j < ny; j++) {
-        const mj = Math.min(ny - 1,
-          Math.round(((Math.floor(j * dy / sheetMm) + 0.5) * sheetMm) / dy));
-        if (mj !== j) heights.set(snap.subarray(mj * nx, mj * nx + nx), j * nx);
-      }
-    } else {
-      const midCol = new Int32Array(nx);
-      for (let i = 0; i < nx; i++) {
-        midCol[i] = Math.min(nx - 1,
-          Math.round(((Math.floor(i * dx / sheetMm) + 0.5) * sheetMm) / dx));
-      }
-      const rowBuf = new Float32Array(nx);
-      for (let j = 0; j < ny; j++) {
-        const row = j * nx;
-        rowBuf.set(heights.subarray(row, row + nx));
-        for (let i = 0; i < nx; i++) heights[row + i] = rowBuf[midCol[i]];
-      }
-    }
-  }
+  // Stacked-slat mode: collapse each sheet-wide strip along the stacking
+  // axis onto its mid-line profile (shared with the imprint tool).
+  slatQuantize(heights, nx, ny, { widthMm: W, heightMm: H, sheetMm, sliceAxis });
 
   return heights;
 }
