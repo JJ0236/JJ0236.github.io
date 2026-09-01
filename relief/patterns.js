@@ -28,12 +28,13 @@ export function makeRng(seed) {
 // Dart-throwing pack, big features first, on a spatial hash so thousands of
 // features stay fast. Centers may sit slightly off-panel so features clip at
 // the edge like the reference panels.
-// Stacked-sheet mode: minimum feature height (mm) so a bump still reads once
-// the relief is cut into sheets of sheetMm and stacked — at least ~2.5 sheets,
-// capped so very thick sheets can't demand more than the relief depth allows.
-export function sheetFloor(params) {
+// Stacked-slat mode: the panel is sliced SIDEWAYS into full-height slats
+// (never base-up, which would leave loose feature-top islands), so height
+// detail is free but detail along the stacking axis is limited to one sheet.
+// A feature must span ~3 sheets across to read — this is the radius floor.
+export function sheetMinRadius(params) {
   const s = params.sheetMm || 0;
-  return s > 0 ? Math.min(params.depthMm * 0.85, s * 2.5) : 0;
+  return s > 0 ? s * 1.5 : 0;
 }
 
 export function generateFeatures(params) {
@@ -45,11 +46,9 @@ export function generateFeatures(params) {
   const fx = Math.min(frameMm, W * 0.4), fy = Math.min(frameMm, H * 0.4);
   const PW = W - 2 * fx, PH = H - 2 * fy;
 
-  const hFloor = sheetFloor(params);
+  const rFloor = sheetMinRadius(params);
 
-  // In stacked mode the radius floor also rises so bumps keep a sane aspect
-  // ratio at the enforced minimum height.
-  const rMin = Math.max(0.5, sizeMinMm / 2, hFloor);
+  const rMin = Math.max(0.5, sizeMinMm / 2, rFloor);
   const rMax = Math.max(rMin, sizeMaxMm / 2);
 
   // How tightly discs may pack: 1 would be kissing circles, lower lets them
@@ -152,20 +151,12 @@ export function generateFeatures(params) {
   for (const f of placed) hMax = Math.max(hMax, f.h);
   if (hMax > 0) for (const f of placed) f.h = (f.h / hMax) * params.depthMm;
 
-  // Stacked-sheet constraints: cut sheets can't reproduce detail finer than
-  // one sheet, so features that would slice into mush get simplified.
+  // Stacked-slat constraint: ripple rings spaced tighter than ~1.5 sheets
+  // along the stacking axis would alias into mush — demote those to domes.
+  // Height detail costs nothing (the laser cuts any slat profile).
   if (sheetMm > 0) {
     for (const f of placed) {
-      f.h = Math.max(f.h, Math.min(params.depthMm, hFloor));
-      if (f.kind === 'ripple' &&
-          (0.45 * f.h < sheetMm * 1.5 || f.r / f.waves < sheetMm * 1.5)) {
-        f.kind = 'dome'; // ridges thinner than a sheet vanish when stacked
-      }
-      if (f.kind === 'steps') {
-        const terraces = Math.floor(f.h / sheetMm);
-        if (terraces < 2) f.kind = 'dome';
-        else f.steps = Math.min(f.steps, terraces);
-      }
+      if (f.kind === 'ripple' && f.r / f.waves < sheetMm * 1.5) f.kind = 'dome';
     }
   }
 
@@ -228,7 +219,7 @@ export function featureHeight(f, dx, dy) {
 // requested depth, and the flat border frame.
 export function buildHeightfield(features, params, nx, ny) {
   const { widthMm: W, heightMm: H, depthMm, swell = 0, frameMm = 0, seed = 0,
-          sheetMm = 0 } = params;
+          sheetMm = 0, sliceAxis = 'x' } = params;
   const dx = W / (nx - 1), dy = H / (ny - 1);
   const heights = new Float32Array(nx * ny);
 
@@ -287,23 +278,41 @@ export function buildHeightfield(features, params, nx, ny) {
     for (let i = 0; i < heights.length; i++) heights[i] *= s;
   }
 
-  // Stacked-sheet mode: quantize the relief to whole sheets so the preview
-  // and export match what the stacked laser-cut sheets can actually build.
-  if (sheetMm > 0) {
-    for (let i = 0; i < heights.length; i++) {
-      heights[i] = Math.round(heights[i] / sheetMm) * sheetMm;
-    }
-  }
-
-  // Flat raised border frame, stamped last so it stays crisp.
+  // Flat raised border frame, stamped before slat quantization so each slat's
+  // profile carries the frame at its ends.
   if (frameMm > 0) {
-    const frameH = sheetMm > 0
-      ? Math.max(sheetMm, Math.round(depthMm * 0.4 / sheetMm) * sheetMm)
-      : depthMm * 0.4;
+    const frameH = depthMm * 0.4;
     for (let j = 0; j < ny; j++) {
       const y = j * dy;
       for (let i = 0; i < nx; i++) {
         if (inBand(i * dx, y)) heights[j * nx + i] = frameH;
+      }
+    }
+  }
+
+  // Stacked-slat mode: the panel will be sliced sideways into slats of
+  // sheetMm, and each slat is cut with one profile — its mid-line
+  // cross-section. Collapse each strip along the stacking axis onto its
+  // mid-line so preview and export match the assembled stack exactly.
+  if (sheetMm > 0) {
+    if (sliceAxis === 'y') {
+      const snap = heights.slice();
+      for (let j = 0; j < ny; j++) {
+        const mj = Math.min(ny - 1,
+          Math.round(((Math.floor(j * dy / sheetMm) + 0.5) * sheetMm) / dy));
+        if (mj !== j) heights.set(snap.subarray(mj * nx, mj * nx + nx), j * nx);
+      }
+    } else {
+      const midCol = new Int32Array(nx);
+      for (let i = 0; i < nx; i++) {
+        midCol[i] = Math.min(nx - 1,
+          Math.round(((Math.floor(i * dx / sheetMm) + 0.5) * sheetMm) / dx));
+      }
+      const rowBuf = new Float32Array(nx);
+      for (let j = 0; j < ny; j++) {
+        const row = j * nx;
+        rowBuf.set(heights.subarray(row, row + nx));
+        for (let i = 0; i < nx; i++) heights[row + i] = rowBuf[midCol[i]];
       }
     }
   }
