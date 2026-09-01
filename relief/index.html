@@ -123,6 +123,26 @@
     .range-row .ctrl-row { margin-bottom: 3px; }
     .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #C8B8A0; }
 
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .chip {
+      padding: 4px 10px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 20px; color: var(--muted); cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .chip:hover { border-color: var(--clay-mid); }
+    .chip.active { background: var(--clay-dark); border-color: var(--clay-mid); color: var(--clay-light); }
+
+    .preset-row { display: flex; gap: 6px; margin-bottom: 10px; }
+    .preset-row button {
+      flex: 1; padding: 4px 6px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem;
+      background: transparent; border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); cursor: pointer;
+    }
+    .preset-row button:hover { color: var(--clay-light); border-color: var(--clay-mid); }
+
     .seed-wrap { display: flex; gap: 6px; }
     .seed-wrap .ctrl-input { flex: 1; width: auto; }
     .seed-wrap button {
@@ -171,6 +191,20 @@
     /* ── Viewport ───────────────────────────────────────── */
     .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #1E1813; }
     #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    .view-tools {
+      position: absolute; top: 12px; left: 12px; z-index: 5;
+      display: flex; gap: 6px;
+    }
+    .view-tools button {
+      padding: 6px 12px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px;
+      background: rgba(23,19,16,0.85); backdrop-filter: blur(6px);
+      color: var(--muted); cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .view-tools button:hover { color: var(--text); border-color: var(--clay-mid); }
+    .view-tools button.active { color: var(--clay-light); border-color: var(--clay-mid); }
 
     .viewport-stats {
       position: absolute; top: 12px; right: 14px;
@@ -263,17 +297,19 @@
 
     <div class="panel">
       <div class="panel-title">Pattern</div>
-      <div class="seg" id="seg-pattern">
-        <button class="active" data-val="bubbles">Bubbles</button>
-        <button data-val="shards">Shards</button>
-        <button data-val="mixed">Mixed</button>
+      <div class="preset-row" id="presets">
+        <button data-preset="bubbles">Bubbles</button>
+        <button data-preset="shards">Shards</button>
+        <button data-preset="chaos">Chaos</button>
       </div>
-      <div class="range-row" id="row-mix" style="display:none">
-        <div class="ctrl-row">
-          <span class="ctrl-label">Shard ratio</span>
-          <span class="val" id="v-mix">50%</span>
-        </div>
-        <input type="range" id="p-mix" min="0.1" max="0.9" step="0.05" value="0.5" />
+      <div class="chips" id="shape-chips">
+        <button class="chip active" data-kind="dome">Bubbles</button>
+        <button class="chip" data-kind="shard">Shards</button>
+        <button class="chip" data-kind="cone">Cones</button>
+        <button class="chip" data-kind="ring">Rings</button>
+        <button class="chip" data-kind="ripple">Ripples</button>
+        <button class="chip" data-kind="steps">Steps</button>
+        <button class="chip" data-kind="puck">Pucks</button>
       </div>
       <div class="ctrl-row">
         <span class="ctrl-label">Feature size, min</span>
@@ -297,7 +333,32 @@
         <input class="ctrl-input" id="p-seed" type="number" value="42" />
         <button id="btn-dice" title="Random seed">⚄</button>
       </div>
+      <button class="btn btn-sub" id="btn-surprise" style="margin-top:10px">Surprise me</button>
       <div class="ctrl-hint" style="margin-top:8px">Same seed + same settings always rebuilds the same panel.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Effects</div>
+      <div class="ctrl-row" style="margin-bottom:4px">
+        <span class="ctrl-label">Height gradient</span>
+      </div>
+      <div class="seg" id="seg-gradient">
+        <button class="active" data-val="none">None</button>
+        <button data-val="linear">Sweep</button>
+        <button data-val="radial">Peak</button>
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Wave swell</span>
+          <span class="val" id="v-swell">0%</span>
+        </div>
+        <input type="range" id="p-swell" min="0" max="0.6" step="0.05" value="0" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Frame width</span>
+        <input class="ctrl-input" id="p-frame" type="number" />
+      </div>
+      <div class="ctrl-hint">Frame adds a flat raised border around the pattern. Swell rolls a gentle wave under everything.</div>
     </div>
 
     <div class="panel">
@@ -335,6 +396,10 @@
 
   <div class="viewport-wrap">
     <canvas id="three-canvas"></canvas>
+    <div class="view-tools">
+      <button id="btn-spin" title="Auto-rotate">Spin</button>
+      <button id="btn-snap" title="Save preview as PNG">Snapshot</button>
+    </div>
     <div class="viewport-stats" id="vstats"></div>
     <div class="viewport-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
     <div class="overlay" id="overlay"><div class="stage" id="ov-stage">Working…</div></div>
@@ -355,12 +420,15 @@ const MM_PER_IN = 25.4;
 
 /* ── State (always millimeters internally) ─────────────────────────────── */
 
+const ALL_SHAPES = ['dome', 'shard', 'cone', 'ring', 'ripple', 'steps', 'puck'];
+
 const state = {
   unit: 'mm',
   widthMm: 200, heightMm: 200, depthMm: 15, baseMm: 4,
-  pattern: 'bubbles', mixRatio: 0.5,
+  shapes: ['dome'],
   sizeMinMm: 8, sizeMaxMm: 40,
   density: 0.85, seed: 42,
+  gradient: 'none', swell: 0, frameMm: 0,
   cellMm: 0.6,
   color: '#E08A2E',
   positions: null,
@@ -373,7 +441,8 @@ const DIM_FIELDS = [
   { id: 'p-depth',  key: 'depthMm',  min: 2,  max: 80 },
   { id: 'p-base',   key: 'baseMm',   min: 1,  max: 30 },
   { id: 'p-smin',   key: 'sizeMinMm', min: 2, max: 100 },
-  { id: 'p-smax',   key: 'sizeMaxMm', min: 4, max: 120 }
+  { id: 'p-smax',   key: 'sizeMaxMm', min: 4, max: 120 },
+  { id: 'p-frame',  key: 'frameMm',  min: 0,  max: 40 }
 ];
 
 const toUnit = mm => state.unit === 'mm' ? mm : mm / MM_PER_IN;
@@ -404,12 +473,68 @@ function segWire(id, fn) {
 }
 
 segWire('seg-units', v => { state.unit = v; refreshDimInputs(); });
-segWire('seg-pattern', v => {
-  state.pattern = v;
-  $('row-mix').style.display = v === 'mixed' ? '' : 'none';
+segWire('seg-gradient', v => { state.gradient = v; rebuild(); });
+segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
+
+/* Shape chips — multi-select, at least one always on. */
+const chipWrap = $('shape-chips');
+function refreshChips() {
+  chipWrap.querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('active', state.shapes.includes(c.dataset.kind)));
+}
+chipWrap.addEventListener('click', e => {
+  const c = e.target.closest('.chip');
+  if (!c) return;
+  const k = c.dataset.kind;
+  if (state.shapes.includes(k)) {
+    if (state.shapes.length === 1) return; // keep at least one
+    state.shapes = state.shapes.filter(s => s !== k);
+  } else {
+    state.shapes = [...state.shapes, k];
+  }
+  refreshChips();
   rebuild();
 });
-segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
+
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  state.shapes = b.dataset.preset === 'bubbles' ? ['dome']
+               : b.dataset.preset === 'shards'  ? ['shard']
+               : [...ALL_SHAPES];
+  refreshChips();
+  rebuild();
+});
+
+$('btn-surprise').addEventListener('click', () => {
+  const rnd = a => a[Math.floor(Math.random() * a.length)];
+  const n = rnd([1, 1, 2, 2, 3, ALL_SHAPES.length]);
+  state.shapes = [...ALL_SHAPES].sort(() => Math.random() - 0.5).slice(0, n);
+  state.seed = Math.floor(Math.random() * 100000);
+  state.density = 0.6 + Math.random() * 0.4;
+  state.sizeMinMm = 4 + Math.random() * 10;
+  state.sizeMaxMm = state.sizeMinMm + 10 + Math.random() * 40;
+  state.gradient = rnd(['none', 'none', 'none', 'linear', 'radial']);
+  state.swell = rnd([0, 0, 0, 0.2, 0.35]);
+  state.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+  syncControls();
+  rebuild();
+});
+
+function syncControls() {
+  refreshChips();
+  refreshDimInputs();
+  $('p-seed').value = state.seed;
+  $('p-density').value = state.density;
+  $('v-density').textContent = Math.round(state.density * 100) + '%';
+  $('p-swell').value = state.swell;
+  $('v-swell').textContent = Math.round(state.swell * 100) + '%';
+  document.querySelectorAll('#seg-gradient button').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === state.gradient));
+  swWrap.querySelectorAll('.swatch').forEach(x =>
+    x.classList.toggle('active', x.title === state.color));
+  if (mesh) mesh.material.color.set(state.color);
+}
 
 for (const f of DIM_FIELDS) {
   $(f.id).addEventListener('change', e => {
@@ -426,11 +551,11 @@ for (const f of DIM_FIELDS) {
   });
 }
 
-$('p-mix').addEventListener('input', e => {
-  state.mixRatio = parseFloat(e.target.value);
-  $('v-mix').textContent = Math.round(state.mixRatio * 100) + '%';
+$('p-swell').addEventListener('input', e => {
+  state.swell = parseFloat(e.target.value);
+  $('v-swell').textContent = Math.round(state.swell * 100) + '%';
 });
-$('p-mix').addEventListener('change', rebuild);
+$('p-swell').addEventListener('change', rebuild);
 
 $('p-density').addEventListener('input', e => {
   state.density = parseFloat(e.target.value);
@@ -505,10 +630,11 @@ function build() {
   worker.postMessage({
     widthMm: state.widthMm, heightMm: state.heightMm,
     depthMm: state.depthMm, baseMm: state.baseMm,
-    pattern: state.pattern, mixRatio: state.mixRatio,
+    shapes: state.shapes.slice(),
     sizeMinMm: Math.min(state.sizeMinMm, state.sizeMaxMm),
     sizeMaxMm: state.sizeMaxMm,
-    density: state.density, seed: state.seed, cellMm: state.cellMm
+    density: state.density, seed: state.seed, cellMm: state.cellMm,
+    gradient: state.gradient, swell: state.swell, frameMm: state.frameMm
   });
 }
 
@@ -519,7 +645,11 @@ function baseName() {
   const dims = state.unit === 'mm'
     ? `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}mm`
     : `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}in`;
-  return `relief_${dims}_${state.pattern}_s${state.seed}`;
+  const pat = state.shapes.length === ALL_SHAPES.length ? 'chaos'
+            : state.shapes.length > 1 ? 'mix'
+            : { dome: 'bubbles', shard: 'shards', cone: 'cones', ring: 'rings',
+                ripple: 'ripples', steps: 'steps', puck: 'pucks' }[state.shapes[0]];
+  return `relief_${dims}_${pat}_s${state.seed}`;
 }
 
 $('btn-stl').addEventListener('click', () => {
@@ -611,23 +741,44 @@ function tick() {
 }
 tick();
 
+$('btn-spin').addEventListener('click', e => {
+  if (!controls) return;
+  controls.autoRotate = !controls.autoRotate;
+  controls.autoRotateSpeed = 1.6;
+  e.currentTarget.classList.toggle('active', controls.autoRotate);
+});
+
+$('btn-snap').addEventListener('click', () => {
+  if (!renderer || !mesh) return;
+  renderer.render(scene, camera); // fresh frame — the drawing buffer isn't preserved
+  canvas.toBlob(b => { if (b) download(b, baseName() + '.png'); }, 'image/png');
+});
+
 /* ── Boot ──────────────────────────────────────────────────────────────── */
 
-// Optional prefill via URL, e.g. /relief/?pattern=shards&seed=7
+// Optional prefill via URL, e.g. /relief/?pattern=chaos&seed=7
+// or /relief/?shapes=ring,ripple&swell=0.3
 {
   const q = new URLSearchParams(location.search);
-  const pat = q.get('pattern');
-  if (['bubbles', 'shards', 'mixed'].includes(pat)) {
-    state.pattern = pat;
-    $('row-mix').style.display = pat === 'mixed' ? '' : 'none';
-    document.querySelectorAll('#seg-pattern button').forEach(b =>
-      b.classList.toggle('active', b.dataset.val === pat));
+  const PRESETS = {
+    bubbles: ['dome'], shards: ['shard'], mixed: ['dome', 'shard'],
+    chaos: [...ALL_SHAPES]
+  };
+  if (PRESETS[q.get('pattern')]) state.shapes = PRESETS[q.get('pattern')];
+  if (q.get('shapes')) {
+    const picked = q.get('shapes').split(',').filter(s => ALL_SHAPES.includes(s));
+    if (picked.length) state.shapes = picked;
   }
   const seed = parseInt(q.get('seed'), 10);
-  if (Number.isFinite(seed)) { state.seed = Math.abs(seed); $('p-seed').value = state.seed; }
+  if (Number.isFinite(seed)) state.seed = Math.abs(seed);
+  const swell = parseFloat(q.get('swell'));
+  if (swell >= 0 && swell <= 0.6) state.swell = swell;
+  if (['linear', 'radial'].includes(q.get('gradient'))) state.gradient = q.get('gradient');
+  const frame = parseFloat(q.get('frame'));
+  if (frame > 0 && frame <= 40) state.frameMm = frame;
 }
 
-refreshDimInputs();
+syncControls();
 build();
 </script>
 
