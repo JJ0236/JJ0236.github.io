@@ -347,12 +347,12 @@
       </label>
 
       <label class="row">
-        <span>Sheet thickness (mm)</span>
+        <span>Sheet thickness (<span class="u">mm</span>)</span>
         <input id="inp-thickness" type="number" min="0.1" max="200" step="0.1" value="3.175"/>
       </label>
 
       <label class="row">
-        <span>Gap between sheets (mm)</span>
+        <span>Gap between sheets (<span class="u">mm</span>)</span>
         <input id="inp-gap" type="number" min="0" max="50" step="0.1" value="0"/>
       </label>
       <div style="font-size:.72rem;color:#666;margin-bottom:4px">Set 0 for no gap (flush assembly)</div>
@@ -373,7 +373,7 @@
       </label>
 
       <label class="row">
-        <span>Hole size (mm)</span>
+        <span>Hole size (<span class="u">mm</span>)</span>
         <input id="inp-hole-size" type="number" min="1" max="50" step="0.5" value="6"/>
       </label>
 
@@ -390,7 +390,7 @@
         <input type="checkbox" id="chk-labels" checked style="width:auto"/>
       </label>
       <label class="row">
-        <span>Label font size (mm)</span>
+        <span>Label font size (<span class="u">mm</span>)</span>
         <input id="inp-label-size" type="number" min="1" max="30" step="0.5" value="5"/>
       </label>
     </div>
@@ -417,15 +417,15 @@
         <input id="inp-scale" type="number" min="0.001" max="1000" step="0.01" value="1"/>
       </label>
       <label class="row">
-        <span>Width X (mm)</span>
+        <span>Width X (<span class="u">mm</span>)</span>
         <input id="inp-size-x" type="number" min="0.001" step="0.1" placeholder="—"/>
       </label>
       <label class="row">
-        <span>Depth Y (mm)</span>
+        <span>Depth Y (<span class="u">mm</span>)</span>
         <input id="inp-size-y" type="number" min="0.001" step="0.1" placeholder="—"/>
       </label>
       <label class="row">
-        <span>Height Z (mm)</span>
+        <span>Height Z (<span class="u">mm</span>)</span>
         <input id="inp-size-z" type="number" min="0.001" step="0.1" placeholder="—"/>
       </label>
       <div style="font-size:.72rem;color:#666;margin-bottom:4px">Edit any dimension to scale proportionally</div>
@@ -439,7 +439,7 @@
         <input id="inp-cols" type="number" min="1" max="50" step="1" value="5"/>
       </label>
       <label class="row">
-        <span>Margin between (mm)</span>
+        <span>Margin between (<span class="u">mm</span>)</span>
         <input id="inp-tile-margin" type="number" min="0" max="50" step="1" value="5"/>
       </label>
       <div style="font-size:.72rem;color:#666;margin-bottom:4px">SVG auto-sizes to fit all sheets at 1:1 mm scale</div>
@@ -609,15 +609,62 @@ function getScale() {
   return unitScale * userScale;
 }
 
+// ─── Display units: every dimension input/readout works in the selected unit ─
+// Internally ALL math stays in millimeters; dispUnit is the factor from the
+// displayed value to mm (mm=1, cm=10, in=25.4) and always mirrors sel-units.
+const UNIT_NAMES = { 1: 'mm', 10: 'cm', 25.4: 'in' };
+let dispUnit = 1;
+const fmtVal = v => String(parseFloat(v.toFixed(4)));
+
+function readMm(id, defMm) {
+  const el = document.getElementById(id);
+  // A unit switch stores the exact mm value; the displayed number is rounded
+  // for readability. Use the exact value unless the user has edited the field.
+  if (el.dataset.mm !== undefined && el.value === el.dataset.disp) {
+    return parseFloat(el.dataset.mm);
+  }
+  const v = parseFloat(el.value);
+  return Number.isFinite(v) ? v * dispUnit : defMm;
+}
+const toDisp = mm => mm / dispUnit;
+const unitName = () => UNIT_NAMES[dispUnit] || 'mm';
+
+// Inputs whose displayed value converts in place on a unit switch.
+const UNIT_FIELDS = ['inp-thickness', 'inp-gap', 'inp-hole-size',
+                     'inp-label-size', 'inp-tile-margin'];
+// Remember each field's min/max in mm (as authored in the markup).
+const FIELD_LIMITS = {};
+for (const id of UNIT_FIELDS) {
+  const el = document.getElementById(id);
+  FIELD_LIMITS[id] = { min: parseFloat(el.min), max: parseFloat(el.max) };
+  el.step = 'any';
+}
+
+function applyDisplayUnits() {
+  const nu = getUnitScale();
+  if (nu === dispUnit) return;
+  for (const id of UNIT_FIELDS) {
+    const el = document.getElementById(id);
+    const mm = readMm(id, 0); // exact if unedited since the last switch
+    el.value = fmtVal(mm / nu);
+    el.dataset.mm = mm;       // keep full precision across round trips
+    el.dataset.disp = el.value;
+    el.min = fmtVal(FIELD_LIMITS[id].min / nu);
+    el.max = fmtVal(FIELD_LIMITS[id].max / nu);
+  }
+  dispUnit = nu;
+  document.querySelectorAll('span.u').forEach(s => s.textContent = unitName());
+}
+
 function updateSizeFields() {
   if (!geometry) return;
   const bb = geometry.boundingBox;
   const s  = new THREE.Vector3();
   bb.getSize(s);
   const sc = getScale();
-  document.getElementById('inp-size-x').value = (s.x * sc).toFixed(2);
-  document.getElementById('inp-size-y').value = (s.y * sc).toFixed(2);
-  document.getElementById('inp-size-z').value = (s.z * sc).toFixed(2);
+  document.getElementById('inp-size-x').value = fmtVal(toDisp(s.x * sc));
+  document.getElementById('inp-size-y').value = fmtVal(toDisp(s.y * sc));
+  document.getElementById('inp-size-z').value = fmtVal(toDisp(s.z * sc));
 }
 
 function onSizeInput(axis) {
@@ -627,7 +674,7 @@ function onSizeInput(axis) {
   bb.getSize(s);
   const rawDim = axis === 'x' ? s.x : axis === 'y' ? s.y : s.z;
   if (rawDim === 0) return;
-  const targetMm = parseFloat(document.getElementById(`inp-size-${axis}`).value);
+  const targetMm = readMm(`inp-size-${axis}`, 0);
   if (!targetMm || targetMm <= 0) return;
   const newUserScale = targetMm / (rawDim * getUnitScale());
   document.getElementById('inp-scale').value = newUserScale.toFixed(4);
@@ -650,16 +697,17 @@ function updateModelInfo() {
   const s  = new THREE.Vector3(); bb.getSize(s);
   const sc = getScale();
   const axis  = document.getElementById('sel-axis').value;
-  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
-  const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
+  const thick = readMm('inp-thickness', 3.175);
+  const gap   = readMm('inp-gap', 0);
   const step  = thick + gap;
   const span  = (axis === 'x' ? s.x : axis === 'y' ? s.y : s.z) * sc;
   // Mirrors the slicer loop exactly: planes at min + thick/2 + k·step ≤ max.
   const count = Math.max(1, Math.floor((span - thick * 0.5) / step) + 1);
 
+  const un = unitName();
   document.getElementById('slice-info').innerHTML =
-    `Size: ${(s.x*sc).toFixed(1)} × ${(s.y*sc).toFixed(1)} × ${(s.z*sc).toFixed(1)} mm<br>` +
-    `Axis: <b>${axis.toUpperCase()}</b> | Step: ${step.toFixed(2)} mm<br>` +
+    `Size: ${toDisp(s.x*sc).toFixed(2)} × ${toDisp(s.y*sc).toFixed(2)} × ${toDisp(s.z*sc).toFixed(2)} ${un}<br>` +
+    `Axis: <b>${axis.toUpperCase()}</b> | Step: ${toDisp(step).toFixed(un === 'mm' ? 2 : 3)} ${un}<br>` +
     `Sheets: <b>${count}</b>`;
 }
 
@@ -678,6 +726,7 @@ function resliceIfNeeded() {
   document.getElementById(id).addEventListener('change', resliceIfNeeded)
 );
 document.getElementById('sel-units').addEventListener('input', () => {
+  applyDisplayUnits();   // convert every dimension input/label in place first
   updateSizeFields();
   updateModelInfo();
   resliceIfNeeded();
@@ -809,7 +858,7 @@ function rebuildHoleMarkers() {
 
   const axis      = document.getElementById('sel-axis').value;
   const sc        = getScale();
-  const holeSize  = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const holeSize  = readMm('inp-hole-size', 6);
   const holeShape = document.getElementById('sel-hole-shape').value;
   const bb        = geometry.boundingBox;
   const span = (axis === 'x' ? bb.max.x - bb.min.x
@@ -849,8 +898,8 @@ function doSlice() {
   setStatus('Slicing…');
 
   const axis  = document.getElementById('sel-axis').value;
-  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
-  const gap   = parseFloat(document.getElementById('inp-gap').value) || 0;
+  const thick = readMm('inp-thickness', 3.175);
+  const gap   = readMm('inp-gap', 0);
   const sc    = getScale(); // raw unit → mm
   const step  = thick + gap; // mm per slice
 
@@ -1098,7 +1147,7 @@ function buildAssembly() {
   assemblyGroup.clear();
   if (!slices.length) return;
 
-  const thick = parseFloat(document.getElementById('inp-thickness').value) || 3.175;
+  const thick = readMm('inp-thickness', 3.175);
   const sc    = getScale();
   const axis  = document.getElementById('sel-axis').value;
 
@@ -1166,10 +1215,10 @@ function doExport() {
   if (!slices.length) return;
 
   const sheetsPerRow = Math.max(1, parseInt(document.getElementById('inp-cols').value)  || 5);
-  const tileMargin   = parseFloat(document.getElementById('inp-tile-margin').value) || 5;
+  const tileMargin   = readMm('inp-tile-margin', 5);
   const showLabels   = document.getElementById('chk-labels').checked;
-  const labelSize    = parseFloat(document.getElementById('inp-label-size').value) || 5;
-  const holeSize     = parseFloat(document.getElementById('inp-hole-size').value) || 6;
+  const labelSize    = readMm('inp-label-size', 5);
+  const holeSize     = readMm('inp-hole-size', 6);
   const holeShape    = document.getElementById('sel-hole-shape').value;
   const axis         = document.getElementById('sel-axis').value;
   const sc           = getScale();
@@ -1260,7 +1309,9 @@ function doExport() {
   a.download = 's1c3r-sheets.svg';
   a.click();
   URL.revokeObjectURL(a.href);
-  setStatus(`Exported ${slices.length} sheets — ${pageW.toFixed(0)} × ${pageH.toFixed(0)} mm`);
+  setStatus(`Exported ${slices.length} sheets — ` +
+    `${toDisp(pageW).toFixed(unitName() === 'mm' ? 0 : 2)} × ` +
+    `${toDisp(pageH).toFixed(unitName() === 'mm' ? 0 : 2)} ${unitName()}`);
 }
 
 function holeSvg(shape, cx, cy, r) {

@@ -159,23 +159,42 @@ check('hole is off-center (test is meaningful)',
   Math.abs(px) > 0.5 && Math.abs(py) > 0.5, `px=${px.toFixed(2)} py=${py.toFixed(2)}`);
 check('sheet is 20mm', /20\.0x20\.0 mm each/.test(svgMm));
 
-// ── 4. Switch units to inch → auto-reslice + hole scales with it ────────────
+// ── 4. Switch units to inch → whole app re-expresses in inches ──────────────
 let before = await svgCount();
 await page.select('#sel-units', '25.4');
 await page.waitForFunction(() => /sheets/.test(document.getElementById('status').textContent));
 const inchCount = parseInt(
   (await page.$eval('#status', el => el.textContent)).match(/(\d+) sheets/)[1], 10);
 check('auto-resliced on unit change (160 sheets for 508mm span)', inchCount === 160, `got ${inchCount}`);
+
+const inpVal = id => page.$eval('#' + id, el => parseFloat(el.value));
+check('thickness re-expressed in inches (3.175mm → 0.125)',
+  eqApprox(await inpVal('inp-thickness'), 0.125, 1e-4), `got ${await inpVal('inp-thickness')}`);
+check('hole size re-expressed in inches (6mm → 0.2362)',
+  eqApprox(await inpVal('inp-hole-size'), 6 / 25.4, 1e-3), `got ${await inpVal('inp-hole-size')}`);
+check('size X shows 20 (20 raw units × 1in each)',
+  eqApprox(await inpVal('inp-size-x'), 20, 1e-3), `got ${await inpVal('inp-size-x')}`);
+const unitSpans = await page.$$eval('span.u', els => els.map(e => e.textContent));
+check('all unit labels say "in"', unitSpans.length >= 8 && unitSpans.every(t => t === 'in'),
+  unitSpans.join(','));
+check('model info shows inches',
+  / in(<|$)/.test(await page.$eval('#slice-info', el => el.innerHTML)));
 await page.click('#btn-export');
 await page.waitForFunction(n => window.__svgs.length > n, {}, before);
 const hIn = holeCircle(await lastSvg());
 check('inch export: hole position scaled by 25.4',
   hIn && eqApprox(hIn.cx, 5 + (px + 10) * 25.4, 0.6) && eqApprox(hIn.cy, 5 + (py + 10) * 25.4, 0.6),
   hIn && `cx=${hIn.cx} expected≈${(5 + (px + 10) * 25.4).toFixed(1)}`);
+check('inch export: hole radius still 3mm (physical size unchanged)',
+  hIn && eqApprox(hIn.r, 3, 1e-3), hIn && `r=${hIn.r}`);
 
 // ── 5. Back to mm, switch axis to Y → hole must use slicer's (u=z, v=x) ─────
 await page.select('#sel-units', '1');
 await page.waitForFunction(() => /sheets/.test(document.getElementById('status').textContent));
+check('thickness restored to mm (0.125 → 3.175)',
+  eqApprox(await inpVal('inp-thickness'), 3.175, 1e-4), `got ${await inpVal('inp-thickness')}`);
+check('unit labels back to "mm"',
+  (await page.$$eval('span.u', els => els.map(e => e.textContent))).every(t => t === 'mm'));
 before = await svgCount();
 await page.select('#sel-axis', 'y');
 await new Promise(r => setTimeout(r, 300)); // reslice
