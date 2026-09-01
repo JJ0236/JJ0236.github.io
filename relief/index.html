@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relief — 3D Printable Panel Generator — joshhicks.info</title>
+  <meta name="description" content="Procedurally generate 3D printable relief wall panels — packed bubbles, angular shards, or both — with exact real-world dimensions and STL/3MF export. Runs entirely in your browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --clay-dark:   #4A3120;
+      --clay-mid:    #7A522E;
+      --clay-light:  #D98E4A;
+      --bg:          #171310;
+      --bg2:         #1C1712;
+      --bg3:         #221B14;
+      --border:      #2C231A;
+      --text:        #D4C8B8;
+      --muted:       #7A7060;
+      --dim:         #5A4E40;
+      --accent:      #D98E4A;
+      --warn:        #C08A3E;
+      --panel-w:     286px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Tool header ────────────────────────────────────── */
+    .tool-header {
+      height: 48px;
+      background: var(--clay-dark);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 10;
+    }
+    .tool-header-back {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: #8A8070; font-size: 0.82rem; font-weight: 500;
+      text-decoration: none; transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D9D0C1; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem; font-weight: 500;
+      color: var(--clay-light); letter-spacing: 0.04em;
+    }
+    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+    .sidebar {
+      width: var(--panel-w);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; flex-shrink: 0;
+      scrollbar-width: thin; scrollbar-color: #342a20 transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: #342a20; border-radius: 2px; }
+
+    .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+    .panel:last-child { border-bottom: none; }
+    .panel-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.64rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--muted); margin-bottom: 10px;
+    }
+
+    .seg {
+      display: flex; border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; margin-bottom: 8px;
+    }
+    .seg button {
+      flex: 1; padding: 5px 6px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .seg button + button { border-left: 1px solid var(--border); }
+    .seg button.active { background: var(--clay-dark); color: var(--clay-light); }
+
+    .ctrl-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .ctrl-label { font-size: 0.75rem; color: var(--text); flex: 1; white-space: nowrap; }
+    .ctrl-hint {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: var(--muted); margin-top: -3px; margin-bottom: 8px; line-height: 1.5;
+    }
+    .ctrl-input {
+      width: 78px; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); border-radius: 5px;
+      padding: 4px 7px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+      color: var(--text); text-align: right; outline: none;
+      transition: border-color 0.15s;
+    }
+    .ctrl-input:focus { border-color: var(--clay-light); }
+    input[type=range] { accent-color: var(--clay-light); width: 100%; }
+    .range-row { margin-bottom: 10px; }
+    .range-row .ctrl-row { margin-bottom: 3px; }
+    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #C8B8A0; }
+
+    .seed-wrap { display: flex; gap: 6px; }
+    .seed-wrap .ctrl-input { flex: 1; width: auto; }
+    .seed-wrap button {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); cursor: pointer;
+      padding: 0 10px; font-size: 0.85rem;
+    }
+    .seed-wrap button:hover { color: var(--clay-light); border-color: var(--clay-mid); }
+
+    .swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+    .swatch {
+      width: 22px; height: 22px; border-radius: 5px; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.12); padding: 0;
+      transition: transform 0.12s;
+    }
+    .swatch:hover { transform: scale(1.12); }
+    .swatch.active { outline: 2px solid var(--clay-light); outline-offset: 1px; }
+
+    .btn {
+      width: 100%; padding: 9px;
+      background: var(--clay-dark); border: 1px solid var(--clay-mid);
+      border-radius: 6px; color: var(--clay-light);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--clay-mid); color: #fff; }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn-sub {
+      background: var(--bg3); border-color: var(--border); color: var(--muted);
+      margin-top: 6px; padding: 7px;
+    }
+    .btn-sub:hover:not(:disabled) { background: #2A2118; color: var(--text); }
+
+    .info-strip {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      color: var(--muted); line-height: 1.75;
+    }
+    .info-strip b { color: #C8B8A0; font-weight: 500; }
+
+    .attribution {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.58rem; color: var(--dim);
+      line-height: 1.6;
+    }
+
+    /* ── Viewport ───────────────────────────────────────── */
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #1E1813; }
+    #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    .viewport-stats {
+      position: absolute; top: 12px; right: 14px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: rgba(255,255,255,0.3); text-align: right;
+      pointer-events: none; line-height: 1.6; z-index: 4;
+    }
+    .viewport-hint {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 0.68rem; color: rgba(255,255,255,0.28);
+      pointer-events: none; white-space: nowrap; z-index: 4;
+      background: rgba(23,19,16,0.7); backdrop-filter: blur(6px);
+      padding: 5px 13px; border-radius: 20px;
+    }
+
+    .overlay {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(23,19,16,0.75); backdrop-filter: blur(3px);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+    }
+    .overlay.show { display: flex; }
+    .overlay .stage {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text);
+    }
+
+    .no-webgl {
+      position: absolute; inset: 0; display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 2rem; text-align: center; color: var(--muted);
+    }
+    .no-webgl.show { display: flex; }
+    .no-webgl h2 { font-size: 0.95rem; color: var(--text); font-weight: 500; }
+    .no-webgl p { font-size: 0.78rem; max-width: 34rem; line-height: 1.6; }
+
+    @media (max-width: 860px) {
+      .body-wrap { flex-direction: column; }
+      .sidebar { width: 100%; max-height: 45%; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="9,1 4,7 9,13"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-title">Relief</span>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<div class="body-wrap">
+  <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Panel Size</div>
+      <div class="seg" id="seg-units">
+        <button class="active" data-val="mm">mm</button>
+        <button data-val="in">inches</button>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Width</span>
+        <input class="ctrl-input" id="p-width" type="number" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Height</span>
+        <input class="ctrl-input" id="p-height" type="number" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Relief depth</span>
+        <input class="ctrl-input" id="p-depth" type="number" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Base thickness</span>
+        <input class="ctrl-input" id="p-base" type="number" />
+      </div>
+      <div class="ctrl-hint">Exported at exactly these dimensions. Depth is how far the bumps rise above the base.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Pattern</div>
+      <div class="seg" id="seg-pattern">
+        <button class="active" data-val="bubbles">Bubbles</button>
+        <button data-val="shards">Shards</button>
+        <button data-val="mixed">Mixed</button>
+      </div>
+      <div class="range-row" id="row-mix" style="display:none">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Shard ratio</span>
+          <span class="val" id="v-mix">50%</span>
+        </div>
+        <input type="range" id="p-mix" min="0.1" max="0.9" step="0.05" value="0.5" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Feature size, min</span>
+        <input class="ctrl-input" id="p-smin" type="number" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Feature size, max</span>
+        <input class="ctrl-input" id="p-smax" type="number" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row">
+          <span class="ctrl-label">Density</span>
+          <span class="val" id="v-density">85%</span>
+        </div>
+        <input type="range" id="p-density" min="0.3" max="1" step="0.05" value="0.85" />
+      </div>
+      <div class="ctrl-row" style="margin-bottom:4px">
+        <span class="ctrl-label">Seed</span>
+      </div>
+      <div class="seed-wrap">
+        <input class="ctrl-input" id="p-seed" type="number" value="42" />
+        <button id="btn-dice" title="Random seed">⚄</button>
+      </div>
+      <div class="ctrl-hint" style="margin-top:8px">Same seed + same settings always rebuilds the same panel.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Quality</div>
+      <div class="seg" id="seg-quality">
+        <button data-val="1.2">Draft</button>
+        <button class="active" data-val="0.6">Standard</button>
+        <button data-val="0.35">Fine</button>
+      </div>
+      <div class="info-strip" id="stats">—</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Preview Color</div>
+      <div class="swatches" id="swatches"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Export</div>
+      <button class="btn" id="btn-stl" disabled>Download STL</button>
+      <button class="btn btn-sub" id="btn-3mf" disabled>Download 3MF</button>
+      <div class="ctrl-hint" style="margin-top:9px">
+        Both formats carry exact millimeter dimensions. The relief has no
+        overhangs, so it prints support-free face-up on the bed.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="attribution">
+        Everything runs in your browser — nothing is uploaded. Inspired by
+        3D printed relief wall art.
+      </div>
+    </div>
+  </aside>
+
+  <div class="viewport-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div class="viewport-stats" id="vstats"></div>
+    <div class="viewport-hint">Drag to orbit · scroll to zoom · right-drag to pan</div>
+    <div class="overlay" id="overlay"><div class="stage" id="ov-stage">Working…</div></div>
+    <div class="no-webgl" id="no-webgl">
+      <h2>WebGL unavailable</h2>
+      <p>The 3D preview needs WebGL. Exports still work — set your options and download.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { exportStl, export3mf, download } from './export.js';
+
+const $ = id => document.getElementById(id);
+const MM_PER_IN = 25.4;
+
+/* ── State (always millimeters internally) ─────────────────────────────── */
+
+const state = {
+  unit: 'mm',
+  widthMm: 200, heightMm: 200, depthMm: 15, baseMm: 4,
+  pattern: 'bubbles', mixRatio: 0.5,
+  sizeMinMm: 8, sizeMaxMm: 40,
+  density: 0.85, seed: 42,
+  cellMm: 0.6,
+  color: '#E08A2E',
+  positions: null,
+  worker: null
+};
+
+const DIM_FIELDS = [
+  { id: 'p-width',  key: 'widthMm',  min: 20, max: 600 },
+  { id: 'p-height', key: 'heightMm', min: 20, max: 600 },
+  { id: 'p-depth',  key: 'depthMm',  min: 2,  max: 80 },
+  { id: 'p-base',   key: 'baseMm',   min: 1,  max: 30 },
+  { id: 'p-smin',   key: 'sizeMinMm', min: 2, max: 100 },
+  { id: 'p-smax',   key: 'sizeMaxMm', min: 4, max: 120 }
+];
+
+const toUnit = mm => state.unit === 'mm' ? mm : mm / MM_PER_IN;
+const fromUnit = v => state.unit === 'mm' ? v : v * MM_PER_IN;
+const fmt = mm => state.unit === 'mm'
+  ? String(Math.round(mm * 10) / 10)
+  : String(Math.round(mm / MM_PER_IN * 100) / 100);
+
+function refreshDimInputs() {
+  for (const f of DIM_FIELDS) {
+    const el = $(f.id);
+    el.value = fmt(state[f.key]);
+    el.min = fmt(f.min); el.max = fmt(f.max);
+    el.step = state.unit === 'mm' ? 1 : 0.05;
+  }
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+
+function segWire(id, fn) {
+  const seg = $(id);
+  seg.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.classList.contains('active')) return;
+    seg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+    fn(b.dataset.val);
+  });
+}
+
+segWire('seg-units', v => { state.unit = v; refreshDimInputs(); });
+segWire('seg-pattern', v => {
+  state.pattern = v;
+  $('row-mix').style.display = v === 'mixed' ? '' : 'none';
+  rebuild();
+});
+segWire('seg-quality', v => { state.cellMm = parseFloat(v); rebuild(); });
+
+for (const f of DIM_FIELDS) {
+  $(f.id).addEventListener('change', e => {
+    let mm = fromUnit(parseFloat(e.target.value));
+    if (!Number.isFinite(mm)) { refreshDimInputs(); return; }
+    mm = Math.min(f.max, Math.max(f.min, mm));
+    state[f.key] = mm;
+    if (state.sizeMinMm > state.sizeMaxMm) {
+      if (f.key === 'sizeMinMm') state.sizeMaxMm = state.sizeMinMm;
+      else state.sizeMinMm = state.sizeMaxMm;
+    }
+    refreshDimInputs();
+    rebuild();
+  });
+}
+
+$('p-mix').addEventListener('input', e => {
+  state.mixRatio = parseFloat(e.target.value);
+  $('v-mix').textContent = Math.round(state.mixRatio * 100) + '%';
+});
+$('p-mix').addEventListener('change', rebuild);
+
+$('p-density').addEventListener('input', e => {
+  state.density = parseFloat(e.target.value);
+  $('v-density').textContent = Math.round(state.density * 100) + '%';
+});
+$('p-density').addEventListener('change', rebuild);
+
+$('p-seed').addEventListener('change', e => {
+  state.seed = Math.abs(parseInt(e.target.value, 10) || 0);
+  e.target.value = state.seed;
+  rebuild();
+});
+$('btn-dice').addEventListener('click', () => {
+  state.seed = Math.floor(Math.random() * 100000);
+  $('p-seed').value = state.seed;
+  rebuild();
+});
+
+/* Preview colors sampled from the reference panels. */
+const COLORS = ['#E08A2E', '#C23B2E', '#7CA341', '#A8D8E8', '#3A5BA0',
+                '#F2A7B8', '#E8D34A', '#4A3B78', '#3FA8B8', '#B8B8B8'];
+const swWrap = $('swatches');
+for (const c of COLORS) {
+  const b = document.createElement('button');
+  b.className = 'swatch' + (c === state.color ? ' active' : '');
+  b.style.background = c;
+  b.title = c;
+  b.addEventListener('click', () => {
+    swWrap.querySelectorAll('.swatch').forEach(x => x.classList.toggle('active', x === b));
+    state.color = c;
+    if (mesh) mesh.material.color.set(c);
+  });
+  swWrap.appendChild(b);
+}
+
+/* ── Worker build ──────────────────────────────────────────────────────── */
+
+let debounceT = 0;
+function rebuild() {
+  clearTimeout(debounceT);
+  debounceT = setTimeout(build, 250);
+}
+
+function build() {
+  if (state.worker) state.worker.terminate();
+  $('overlay').classList.add('show');
+  $('ov-stage').textContent = 'Placing features…';
+  $('btn-stl').disabled = $('btn-3mf').disabled = true;
+
+  const worker = new Worker('./worker.js', { type: 'module' });
+  state.worker = worker;
+  worker.onmessage = ev => {
+    const m = ev.data;
+    if (m.type === 'progress') { $('ov-stage').textContent = m.stage + '…'; return; }
+    if (m.type === 'error') {
+      $('overlay').classList.remove('show');
+      $('stats').textContent = 'Error: ' + m.message;
+      console.error('relief: worker failed', m.stack);
+      return;
+    }
+    $('overlay').classList.remove('show');
+    state.positions = m.result.positions;
+    const mb = (m.result.triangles * 50 + 84) / 1048576;
+    $('stats').textContent =
+      `${m.result.featureCount} features · ${m.result.triangles.toLocaleString()} triangles\n` +
+      `STL ≈ ${mb < 1 ? mb.toFixed(2) : mb.toFixed(1)} MB · built in ${m.result.ms} ms`;
+    $('btn-stl').disabled = $('btn-3mf').disabled = false;
+    showModel(m.result.positions);
+    worker.terminate();
+    state.worker = null;
+  };
+  worker.postMessage({
+    widthMm: state.widthMm, heightMm: state.heightMm,
+    depthMm: state.depthMm, baseMm: state.baseMm,
+    pattern: state.pattern, mixRatio: state.mixRatio,
+    sizeMinMm: Math.min(state.sizeMinMm, state.sizeMaxMm),
+    sizeMaxMm: state.sizeMaxMm,
+    density: state.density, seed: state.seed, cellMm: state.cellMm
+  });
+}
+
+/* ── Export ────────────────────────────────────────────────────────────── */
+
+function baseName() {
+  const total = state.baseMm + state.depthMm;
+  const dims = state.unit === 'mm'
+    ? `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}mm`
+    : `${fmt(state.widthMm)}x${fmt(state.heightMm)}x${fmt(total)}in`;
+  return `relief_${dims}_${state.pattern}_s${state.seed}`;
+}
+
+$('btn-stl').addEventListener('click', () => {
+  if (!state.positions) return;
+  download(exportStl(state.positions, { name: baseName() }), baseName() + '.stl');
+});
+$('btn-3mf').addEventListener('click', () => {
+  if (!state.positions) return;
+  const stats = {
+    widthMm: Math.round(state.widthMm * 10) / 10,
+    heightMm: Math.round(state.heightMm * 10) / 10,
+    totalMm: Math.round((state.baseMm + state.depthMm) * 10) / 10
+  };
+  download(export3mf(state.positions, { name: baseName(), color: state.color, stats }),
+           baseName() + '.3mf');
+});
+
+/* ── Three.js preview ──────────────────────────────────────────────────── */
+
+const canvas = $('three-canvas');
+let renderer = null, mesh = null;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(42, 1, 1, 6000);
+camera.up.set(0, 0, 1);
+let controls = null;
+
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x1e1813);
+
+  controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+
+  scene.add(new THREE.HemisphereLight(0xE8DCC8, 0x2A2018, 1.0));
+  const sun = new THREE.DirectionalLight(0xFFF0DC, 1.6);
+  sun.position.set(-0.5, -0.8, 1.1);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xD98E4A, 0.35);
+  fill.position.set(1, 0.5, 0.4);
+  scene.add(fill);
+} catch (e) {
+  $('no-webgl').classList.add('show');
+}
+
+function showModel(positions) {
+  if (!renderer) return;
+  if (mesh) {
+    scene.remove(mesh);
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geom.computeVertexNormals();
+  mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+    color: state.color, roughness: 0.82, metalness: 0.0
+  }));
+  // Center on origin for pleasant orbiting.
+  mesh.position.set(-state.widthMm / 2, -state.heightMm / 2, 0);
+  scene.add(mesh);
+
+  const d = Math.max(state.widthMm, state.heightMm);
+  camera.position.set(d * 0.28, -d * 1.25, d * 1.1);
+  controls.target.set(0, 0, state.baseMm + state.depthMm / 2);
+  controls.update();
+
+  $('vstats').textContent =
+    `${fmt(state.widthMm)} × ${fmt(state.heightMm)} × ${fmt(state.baseMm + state.depthMm)} ${state.unit}`;
+}
+
+function resize() {
+  if (!renderer) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (!renderer) return;
+  resize();
+  if (controls) controls.update();
+  renderer.render(scene, camera);
+}
+tick();
+
+/* ── Boot ──────────────────────────────────────────────────────────────── */
+
+// Optional prefill via URL, e.g. /relief/?pattern=shards&seed=7
+{
+  const q = new URLSearchParams(location.search);
+  const pat = q.get('pattern');
+  if (['bubbles', 'shards', 'mixed'].includes(pat)) {
+    state.pattern = pat;
+    $('row-mix').style.display = pat === 'mixed' ? '' : 'none';
+    document.querySelectorAll('#seg-pattern button').forEach(b =>
+      b.classList.toggle('active', b.dataset.val === pat));
+  }
+  const seed = parseInt(q.get('seed'), 10);
+  if (Number.isFinite(seed)) { state.seed = Math.abs(seed); $('p-seed').value = state.seed; }
+}
+
+refreshDimInputs();
+build();
+</script>
+
+</body>
+</html>
