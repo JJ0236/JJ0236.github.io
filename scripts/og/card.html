@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="stylesheet" href="/styles/main.css" />
+<style>
+  html, body { margin:0; padding:0; background:#3A4A2C; }
+  body::before { display:none; }
+  .card {
+    width: 1200px; height: 630px;
+    background:
+      radial-gradient(1100px 620px at 88% 12%, rgba(143,175,110,0.20), transparent 62%),
+      linear-gradient(158deg, #46583A 0%, #3A4A2C 46%, #2E3B23 100%);
+    display: flex; align-items: center; gap: 54px;
+    padding: 0 68px; box-sizing: border-box;
+    position: relative; overflow: hidden;
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+  }
+  /* faint grid texture */
+  .card::after {
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.028) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.028) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(760px 520px at 22% 46%, #000 12%, transparent 78%);
+    -webkit-mask-image: radial-gradient(760px 520px at 22% 46%, #000 12%, transparent 78%);
+  }
+
+  .left { width: 570px; flex-shrink: 0; position: relative; z-index: 2; }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 23px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: #A8C888; display: flex; align-items: center; gap: 13px;
+  }
+  .eyebrow::before {
+    content:''; width: 42px; height: 3px; background: #A8C888; border-radius: 2px;
+  }
+
+  .name {
+    font-size: 100px; font-weight: 700; color: #F4F0E6;
+    letter-spacing: -0.035em; line-height: 0.98; margin-top: 22px;
+  }
+
+  .rule {
+    width: 88px; height: 4px; background: #8FAF6E;
+    border-radius: 2px; margin: 28px 0 26px;
+  }
+
+  .tagline {
+    font-size: 32px; line-height: 1.4; color: #D5CFBF;
+    font-weight: 400; letter-spacing: -0.005em;
+  }
+  .tagline b { color: #F4F0E6; font-weight: 600; }
+
+  .domain {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px; color: #A8C888; margin-top: 32px; letter-spacing: 0.02em;
+  }
+
+  /* ── thumbnail collage ── */
+  .shots {
+    position: relative; z-index: 2;
+    display: grid; grid-template-columns: repeat(2, 202px);
+    gap: 16px; flex-shrink: 0;
+  }
+  .shot {
+    width: 202px; height: 126px; border-radius: 9px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow: 0 14px 30px rgba(0,0,0,0.34);
+    background: #E8DFCE;
+  }
+  .shot img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display:block; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="left">
+      <div class="eyebrow">Web Design &amp; Development</div>
+      <div class="name">Josh Hicks</div>
+      <div class="rule"></div>
+      <div class="tagline">
+        Websites for <b>Northwest Arkansas</b><br />businesses and organizations.
+      </div>
+      <div class="domain">joshhicks.info</div>
+    </div>
+    <div class="shots">
+      <div class="shot"><img src="/assets/portfolio/nwa-kennel-club.jpg" alt="" /></div>
+      <div class="shot"><img src="/assets/portfolio/aviatrix-charters.jpg" alt="" /></div>
+      <div class="shot"><img src="/assets/portfolio/grt-rubber.jpg" alt="" /></div>
+      <div class="shot"><img src="/assets/portfolio/vendorville.jpg" alt="" /></div>
+    </div>
+  </div>
+</body>
+</html>
