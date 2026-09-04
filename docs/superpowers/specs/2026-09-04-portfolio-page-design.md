@@ -77,9 +77,13 @@ Slugs: `nwa-kennel-club`, `aviatrix-charters`, `grt-rubber`, `vendorville`.
 scrolling. Its five cards (Projects spanning two columns) consume exactly six
 cells, so a sixth card would overflow into a third row and break the layout.
 
-Resolution: Portfolio takes the wide `hub-card--featured` slot; Projects
-becomes a standard card. Cell count is unchanged, and a visitor arriving from
-a business card sees client work first.
+Resolution: Portfolio takes the wide `hub-card--featured` slot and Projects
+drops to a standard card. That is one card too many for six cells, so the
+LAZAR card is dropped from the hub — it stays reachable from the sidebar
+Tools list and from `/projects/`, which is where a tool belongs. Final hub:
+Portfolio (wide), About, Experience, Projects, Contact = six cells exactly.
+
+A visitor arriving from a business card now sees client work first.
 
 ## Removing testflight
 

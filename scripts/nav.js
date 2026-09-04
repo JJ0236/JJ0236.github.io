@@ -7,6 +7,7 @@
 (function () {
   const NAV_LINKS = [
     { href: '/',            label: 'Home',       icon: homeIcon()       },
+    { href: '/portfolio/',  label: 'Portfolio',  icon: portfolioIcon()  },
     { href: '/about/',      label: 'About',      icon: aboutIcon()      },
     { href: '/experience/', label: 'Experience', icon: experienceIcon() },
     { href: '/projects/',   label: 'Projects',   icon: projectsIcon()   },
@@ -33,6 +34,10 @@
 
   function homeIcon() {
     return `<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M7 18v-7h6v7"/></svg>`;
+  }
+
+  function portfolioIcon() {
+    return `<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="16" height="12" rx="1.5"/><line x1="2" y1="7.5" x2="18" y2="7.5"/><circle cx="4.6" cy="5.75" r="0.45" fill="currentColor" stroke="none"/><circle cx="6.4" cy="5.75" r="0.45" fill="currentColor" stroke="none"/><circle cx="8.2" cy="5.75" r="0.45" fill="currentColor" stroke="none"/></svg>`;
   }
 
   function aboutIcon() {

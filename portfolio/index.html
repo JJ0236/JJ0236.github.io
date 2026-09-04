@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio — Josh Hicks</title>
+  <meta name="description" content="Websites Josh Hicks designs and builds for Northwest Arkansas businesses and organizations — kennel club, aviation charter, industrial manufacturing, and a retail marketplace." />
+  <link rel="canonical" href="https://joshhicks.info/portfolio/" />
+  <meta property="og:title" content="Portfolio — Josh Hicks" />
+  <meta property="og:description" content="Websites designed and built for Northwest Arkansas businesses and organizations." />
+  <meta property="og:url" content="https://joshhicks.info/portfolio/" />
+  <meta property="og:image" content="https://joshhicks.info/assets/portfolio/nwa-kennel-club.jpg" />
+  <meta property="og:type" content="website" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .portfolio-wrapper { max-width: var(--content-max); }
+
+    /* ── Intro ─────────────────────────────────────────────── */
+    .portfolio-lede {
+      font-size: var(--text-lg);
+      color: var(--slate-dark);
+      line-height: 1.7;
+      max-width: 62ch;
+      margin-bottom: var(--space-4);
+    }
+    .portfolio-process {
+      font-size: var(--text-sm);
+      color: var(--slate-mid);
+      line-height: 1.7;
+      max-width: 62ch;
+      margin-bottom: var(--space-12);
+    }
+
+    /* ── Work grid ─────────────────────────────────────────── */
+    .work-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-6);
+    }
+
+    .work-card {
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      box-shadow: var(--shadow-xs);
+      transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
+    }
+    .work-card:hover {
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-4px);
+      border-color: var(--soil-mid);
+    }
+
+    .work-shot {
+      position: relative;
+      background: var(--bark-light);
+      border-bottom: 1px solid var(--slate-subtle);
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+    }
+    .work-shot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      transition: transform 400ms ease;
+    }
+    .work-card:hover .work-shot img { transform: scale(1.03); }
+
+    .work-status {
+      position: absolute;
+      top: var(--space-3);
+      right: var(--space-3);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      padding: 3px var(--space-2);
+      border-radius: var(--radius-sm);
+      background: rgba(28, 24, 16, 0.78);
+      color: #E9E2D4;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+    .work-status::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--slate-light);
+    }
+    .work-status--live::before {
+      background: #7FD37F;
+      box-shadow: 0 0 0 3px rgba(127, 211, 127, 0.25);
+    }
+
+    .work-body {
+      padding: var(--space-6);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      flex: 1;
+    }
+    .work-name {
+      font-size: var(--text-lg);
+      font-weight: 600;
+      color: var(--soil-dark);
+      line-height: 1.25;
+    }
+    .work-role {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-mid);
+      letter-spacing: 0.03em;
+    }
+    .work-desc {
+      font-size: var(--text-sm);
+      color: var(--slate-dark);
+      line-height: 1.6;
+      flex: 1;
+    }
+    .work-card .tags { margin-top: var(--space-1); }
+    .work-visit {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-mid);
+      margin-top: var(--space-3);
+    }
+    .work-card:hover .work-visit { color: var(--moss-dark); }
+
+    /* ── Closing CTA ───────────────────────────────────────── */
+    .portfolio-cta {
+      margin-top: var(--space-12);
+      background: var(--moss-dark);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      box-shadow: var(--shadow-md);
+    }
+    .portfolio-cta .cta-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--moss-light);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .portfolio-cta .cta-title {
+      font-size: var(--text-2xl);
+      font-weight: 700;
+      color: var(--sidebar-text);
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-top: var(--space-3);
+    }
+    .portfolio-cta .cta-desc {
+      font-size: var(--text-base);
+      color: var(--sidebar-muted);
+      line-height: 1.7;
+      max-width: 56ch;
+      margin-top: var(--space-3);
+    }
+    .cta-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-3) var(--space-6);
+      border-radius: var(--radius-sm);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      text-decoration: none;
+      transition: background var(--transition), color var(--transition);
+    }
+    .cta-btn--solid {
+      background: var(--moss-light);
+      color: var(--moss-dark);
+    }
+    .cta-btn--solid:hover { background: #A6C486; color: var(--moss-dark); }
+    .cta-btn--ghost {
+      border: 1px solid rgba(255,255,255,0.22);
+      color: var(--sidebar-text);
+    }
+    .cta-btn--ghost:hover {
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+    }
+
+    @media (max-width: 820px) {
+      .work-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      .portfolio-cta { padding: var(--space-6); }
+      .cta-actions { flex-direction: column; align-items: stretch; }
+      .cta-btn { justify-content: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .work-card, .work-shot img { transition: none; }
+      .work-card:hover { transform: none; }
+      .work-card:hover .work-shot img { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="portfolio-wrapper">
+
+        <header class="page-header">
+          <h1 class="page-title">Portfolio</h1>
+          <div class="page-subtitle">// Websites for Northwest Arkansas businesses and organizations</div>
+        </header>
+
+        <p class="portfolio-lede">
+          I design and build websites end to end — the look, the words, the code, and the
+          handoff. Every site below started as a conversation about what the organization
+          actually needed people to do, then worked backward from there.
+        </p>
+        <p class="portfolio-process">
+          How it goes: we talk through your audience and what you need the site to accomplish,
+          I put a design in front of you before anything gets built, and you see working pages
+          as they come together rather than one reveal at the end. Sites are fast, work on
+          phones, and are built so you can keep them current after launch.
+        </p>
+
+        <div class="work-grid">
+
+          <a class="work-card fade-up" href="https://nwakennelclub.vercel.app/" target="_blank" rel="noopener">
+            <div class="work-shot">
+              <img src="/assets/portfolio/nwa-kennel-club.jpg" width="1200" height="750" loading="lazy" decoding="async"
+                   alt="Northwest Arkansas Kennel Club homepage, with the headline &quot;Where Dogs Are the Stars&quot; beside a photo of a pointer running at a coursing event." />
+              <span class="work-status">Preview build</span>
+            </div>
+            <div class="work-body">
+              <div class="work-name">Northwest Arkansas Kennel Club</div>
+              <div class="work-role">Design &amp; build</div>
+              <p class="work-desc">
+                An AKC member club running licensed dog sports in the Ozarks since 1961.
+                The site had to make five different event types legible to newcomers and
+                regulars at once, keep a year-round calendar current, and make clear that
+                you do not need a membership to enter.
+              </p>
+              <div class="tags">
+                <span class="tag">Events calendar</span>
+                <span class="tag">Membership</span>
+                <span class="tag">Nonprofit</span>
+              </div>
+              <div class="work-visit">nwakennelclub.vercel.app →</div>
+            </div>
+          </a>
+
+          <a class="work-card fade-up" href="https://aviatrixcharters.com" target="_blank" rel="noopener">
+            <div class="work-shot">
+              <img src="/assets/portfolio/aviatrix-charters.jpg" width="1200" height="750" loading="lazy" decoding="async"
+                   alt="Aviatrix Charters homepage, with the company name set large around a technical top-down illustration of an aircraft." />
+              <span class="work-status work-status--live">Live</span>
+            </div>
+            <div class="work-body">
+              <div class="work-name">Aviatrix Charters</div>
+              <div class="work-role">Design &amp; build</div>
+              <p class="work-desc">
+                Private charter and aerial ecotourism out of Thaden Field in Bentonville.
+                A three-aircraft fleet and fourteen curated Ozark experiences, presented so
+                a first-time visitor can move from browsing to a booking request without
+                ever needing to know what a PC-12 is.
+              </p>
+              <div class="tags">
+                <span class="tag">Booking flow</span>
+                <span class="tag">3D + motion</span>
+                <span class="tag">Tourism</span>
+              </div>
+              <div class="work-visit">aviatrixcharters.com →</div>
+            </div>
+          </a>
+
+          <a class="work-card fade-up" href="https://grtrubba.vercel.app/" target="_blank" rel="noopener">
+            <div class="work-shot">
+              <img src="/assets/portfolio/grt-rubber.jpg" width="1200" height="750" loading="lazy" decoding="async"
+                   alt="GRT Rubber Technologies homepage, with the headline &quot;We move industry&quot; beside a photo of an excavator loading a haul truck." />
+              <span class="work-status">Preview build</span>
+            </div>
+            <div class="work-body">
+              <div class="work-name">GRT Rubber Technologies</div>
+              <div class="work-role">Design &amp; build</div>
+              <p class="work-desc">
+                An industrial rubber manufacturer running three plants and serving mining,
+                cement, steel, and agriculture. A deep catalog organized two ways at once —
+                by product and by industry — so a plant engineer and a purchasing manager
+                each land on the right page.
+              </p>
+              <div class="tags">
+                <span class="tag">Product catalog</span>
+                <span class="tag">Case studies</span>
+                <span class="tag">Manufacturing</span>
+              </div>
+              <div class="work-visit">grtrubba.vercel.app →</div>
+            </div>
+          </a>
+
+          <a class="work-card fade-up" href="https://vendorville-site.vercel.app" target="_blank" rel="noopener">
+            <div class="work-shot">
+              <img src="/assets/portfolio/vendorville.jpg" width="1200" height="750" loading="lazy" decoding="async"
+                   alt="Vendorville homepage, with the headline &quot;Find Walmart Help Fast&quot; beside a sample expert profile card showing a 96% match." />
+              <span class="work-status">Preview build</span>
+            </div>
+            <div class="work-body">
+              <div class="work-name">Vendorville</div>
+              <div class="work-role">Design &amp; build</div>
+              <p class="work-desc">
+                A Bentonville marketplace matching suppliers with vetted Walmart and Sam's
+                Club retail experts. More application than brochure — profiles, matching,
+                accounts, and billing — with the marketing site and the product sharing one
+                design language.
+              </p>
+              <div class="tags">
+                <span class="tag">Marketplace</span>
+                <span class="tag">Accounts</span>
+                <span class="tag">Billing</span>
+              </div>
+              <div class="work-visit">vendorville-site.vercel.app →</div>
+            </div>
+          </a>
+
+        </div>
+
+        <section class="portfolio-cta fade-up">
+          <div class="cta-label">Available for work</div>
+          <div class="cta-title">Need a site built, or an old one rebuilt?</div>
+          <p class="cta-desc">
+            I take on a small number of projects at a time, which means you deal with the
+            person doing the work. Tell me about your organization and what is not working
+            about your current site, and I will tell you honestly whether I am the right fit.
+          </p>
+          <div class="cta-actions">
+            <a class="cta-btn cta-btn--solid" href="mailto:findme@joshhicks.info?subject=Website%20project">Email me</a>
+            <a class="cta-btn cta-btn--ghost" href="/contact/">More ways to reach me</a>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>
