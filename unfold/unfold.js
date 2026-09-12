@@ -139,6 +139,40 @@ function convexHull(pts) {
 
 const rot2 = (p, th) => [p[0] * Math.cos(th) - p[1] * Math.sin(th), p[0] * Math.sin(th) + p[1] * Math.cos(th)];
 
+
+/* ── Layout primitives, shared with the solver ───────────────────────────── */
+
+// Local 2D coordinates of every face (right-handed basis in its plane), the
+// dual-graph adjacency, and the rigid placement of a face against a placed
+// neighbour across their shared edge.
+export function prepareLayout(mesh, verts3 = mesh.verts) {
+  const { faces, edges } = mesh;
+  const local = faces.map(f => {
+    const p0 = verts3[f.verts[0]];
+    const u = norm3(sub3(verts3[f.verts[1]], p0));
+    const w = cross3(f.normal, u);
+    return f.verts.map(i => { const d = sub3(verts3[i], p0); return [dot3(d, u), dot3(d, w)]; });
+  });
+  const adj = faces.map(() => []);
+  for (const e of edges) {
+    adj[e.sides[0].face].push({ e, to: e.sides[1].face });
+    adj[e.sides[1].face].push({ e, to: e.sides[0].face });
+  }
+  const edgeIndexIn = (f, e) => e.sides.find(s => s.face === f).index;
+  // The child's copy of the edge runs the other way round, so it lands on the
+  // far side automatically.
+  const placeAgainst = (posP, p, f, e) => {
+    const ip = edgeIndexIn(p, e), ic = edgeIndexIn(f, e);
+    const Pa = posP[ip], Pb = posP[(ip + 1) % posP.length];
+    const Cb = local[f][ic], Ca = local[f][(ic + 1) % local[f].length];
+    const th = Math.atan2(Pb[1] - Pa[1], Pb[0] - Pa[0]) - Math.atan2(Cb[1] - Ca[1], Cb[0] - Ca[0]);
+    const rCa = rot2(Ca, th);
+    const tx = Pa[0] - rCa[0], ty = Pa[1] - rCa[1];
+    return local[f].map(q => { const r = rot2(q, th); return [r[0] + tx, r[1] + ty]; });
+  };
+  return { local, adj, edgeIndexIn, placeAgainst };
+}
+
 /* ── The unfolder ────────────────────────────────────────────────────────── */
 
 export const DEFAULTS = { scale: 1, sheet: { w: 210, h: 297 }, margin: 5, tabs: true, tabH: 6, tabAngle: 60, labels: true, scoreFace: 'inside', gap: 3, onePiece: false, mvMarks: true };
@@ -151,34 +185,8 @@ export function unfold(mesh, options = {}) {
   const tabAllow = opts.tabs ? 2 * opts.tabH : 0;
   const warnings = mesh.warnings.slice();
 
-  // Local 2D coordinates of every face: right-handed basis in its plane.
-  const local = faces.map(f => {
-    const p0 = verts3[f.verts[0]];
-    const u = norm3(sub3(verts3[f.verts[1]], p0));
-    const w = cross3(f.normal, u);
-    return f.verts.map(i => { const d = sub3(verts3[i], p0); return [dot3(d, u), dot3(d, w)]; });
-  });
+  const { local, adj, edgeIndexIn, placeAgainst } = prepareLayout(mesh, verts3);
 
-  // Face adjacency.
-  const adj = faces.map(() => []);
-  for (const e of edges) {
-    adj[e.sides[0].face].push({ e, to: e.sides[1].face });
-    adj[e.sides[1].face].push({ e, to: e.sides[0].face });
-  }
-  const edgeIndexIn = (f, e) => e.sides.find(s => s.face === f).index;
-
-  // Rigid placement of face f against its placed parent p across edge e: the
-  // child's copy of the edge runs the other way round, so it lands on the far
-  // side automatically.
-  const placeAgainst = (posP, p, f, e) => {
-    const ip = edgeIndexIn(p, e), ic = edgeIndexIn(f, e);
-    const Pa = posP[ip], Pb = posP[(ip + 1) % posP.length];
-    const Cb = local[f][ic], Ca = local[f][(ic + 1) % local[f].length];
-    const th = Math.atan2(Pb[1] - Pa[1], Pb[0] - Pa[0]) - Math.atan2(Cb[1] - Ca[1], Cb[0] - Ca[0]);
-    const rCa = rot2(Ca, th);
-    const tx = Pa[0] - rCa[0], ty = Pa[1] - rCa[1];
-    return local[f].map(q => { const r = rot2(q, th); return [r[0] + tx, r[1] + ty]; });
-  };
   // Sheet limit, only enforced when pieces are allowed to multiply.
   const sheetFit = opts.onePiece ? null : (polys, cand) => {
     const b = bbox(polys.flat().concat(cand));
@@ -239,28 +247,30 @@ export function unfold(mesh, options = {}) {
     }
   }
 
-  // Labels: cut edges numbered, the number on both faces and on the tab.
+  // Labels: cut edges numbered. With a tab, the number goes on the tab and on
+  // the face edge it glues to; without one, on both faces. 2 mm throughout.
   const labels = [];
   const labelFor = new Map();
   if (opts.labels) {
     cutEdges.forEach((e, k) => {
       const text = String(k + 1);
       labelFor.set(e.id, text);
-      const size = Math.max(2, Math.min(6, e.len * 0.25));
+      const size = 2;
+      const tab = tabs.find(t => t.edge === e);
       for (const side of e.sides) {
+        if (tab && side.face === tab.face && side.index === tab.index) continue;
         const f = side.face, n = pos[f].length;
         const A = pos[f][side.index], B = pos[f][(side.index + 1) % n];
         const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
         const lx = -dy / L, ly = dx / L;             // left = inside the face
-        const off = size * 0.9;
+        const off = size * 0.8;
         labels.push({ island: islandOf[f], x: (A[0] + B[0]) / 2 + lx * off, y: (A[1] + B[1]) / 2 + ly * off, dx: dx / L, dy: dy / L, text, size });
       }
-      const tab = tabs.find(t => t.edge === e);
       if (tab) {
         const c = centroid2(tab.poly);
         const A = tab.poly[0], B = tab.poly[3];
         const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
-        labels.push({ island: tab.island, x: c[0], y: c[1], dx: dx / L, dy: dy / L, text, size: Math.min(size, tab.h * 0.7) });
+        labels.push({ island: tab.island, x: c[0], y: c[1], dx: dx / L, dy: dy / L, text, size: Math.min(size, tab.h * 0.6) });
       }
     });
   }
@@ -424,7 +434,7 @@ export function unfold(mesh, options = {}) {
   const stats = {
     faces: faces.length, islands: islands.length, sheets: sheets.length,
     folds: foldEdges.length, cuts: cutEdges.length, tabs: tabs.length, noTab,
-    netW: pageW, netH: pageH, tries: tree.tries,
+    netW: pageW, netH: pageH, tries: tree.tries, info: tree.info || '',
   };
   return { opts, mesh, uW: pageW, uH: pageH, sheetW: uW, sheetH: uH, islands, sheets, order, parent, islandOf, flat3, target, rootPose, hinge, islandCentre, foldEdges, cutEdges, stats, warnings, SHEET_GAP, tree };
 }
@@ -504,32 +514,6 @@ export function growForest(faces, adj, local, placeAgainst, o) {
   return best;
 }
 
-/* ── One piece, simplifying as needed ────────────────────────────────────── */
-
-// Searches for a single-piece net; when none turns up at this face count,
-// decimates the mesh and tries again, stopping at minFaces. yieldFn lets a
-// page repaint between rounds. Returns the best net found and the mesh it
-// came from.
-export async function solveOnePiece(mesh, options, { minFaces = 20, onProgress, yieldFn } = {}) {
-  const [{ decimate }, { buildMesh }] = await Promise.all([import('./decimate.js'), import('./mesh.js')]);
-  let m = mesh, rounds = 0, r = null;
-  const from = mesh.faces.length;
-  for (;;) {
-    r = unfold(m, { ...options, onePiece: true });
-    onProgress?.({ faces: m.faces.length, islands: r.stats.islands, rounds });
-    if (r.stats.islands === 1 || m.faces.length <= minFaces || m.triCount <= 4) break;
-    const target = Math.max(4, Math.floor(m.triCount * 0.82));
-    let next;
-    try { next = buildMesh(decimate(m, target)); } catch { break; }
-    if (next.triCount >= m.triCount) break;
-    m = next; rounds++;
-    if (rounds > 80) break;
-    if (yieldFn) await yieldFn();
-  }
-  if (r.stats.islands > 1) r.warnings.push(`No one-piece net found down to ${m.faces.length} faces; showing the best ${r.stats.islands}-piece net. Lower the minimum faces to simplify further.`);
-  return { result: r, mesh: m, simplifiedFrom: from, rounds };
-}
-
 /* ── Fold animation ──────────────────────────────────────────────────────── */
 
 // Positions of every face's vertices at fold fraction t in [0, 1].
@@ -581,10 +565,10 @@ export function toPatterns(r) {
             // y-flip for outside scoring reverses handedness.
             const sgn = outside ? 1 : -1;
             const nx = sgn * uy, ny = -sgn * ux;
-            const size = Math.max(1.4, Math.min(2.2, L * 0.15));
+            const size = 1.4;
             let angle = Math.atan2(uy, ux) * 180 / Math.PI;
             if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
-            labels.push({ k: 'T', x: (x1 + x2) / 2 + nx * size * 0.75, y: (y1 + y2) / 2 + ny * size * 0.75, text: m ? 'm' : 'v', size, angle });
+            labels.push({ k: 'T', x: (x1 + x2) / 2 + nx * size * 0.7, y: (y1 + y2) / 2 + ny * size * 0.7, text: m ? 'm' : 'v', size, angle });
           }
         }
       }

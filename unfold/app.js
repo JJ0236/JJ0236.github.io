@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseStl } from './stl.js';
 import { buildMesh } from './mesh.js';
-import { unfold, foldPositions, toPatterns, solveOnePiece } from './unfold.js';
+import { unfold, foldPositions, toPatterns } from './unfold.js';
 import { SAMPLES } from './samples.js';
 import { assemble, toSvg, itemToSvg } from '../crease/export.js';
 import { totalLength } from '../crease/patterns.js';
@@ -27,7 +27,7 @@ const state = {
   size: 40, nativeLongest: 40,
   sheet: { w: 210, h: 297 }, margin: 5,
   tabs: true, tabH: 6, tabAngle: 60, labels: true, marks: true,
-  onePiece: true, minFaces: 20,
+  onePiece: true, minFaces: 20, searchSeconds: 15,
   scoreFace: 'inside', strategy: 'same', dash: 3, gap: 1.5, legend: false,
   view: '3d', fold: 0,
 };
@@ -76,7 +76,9 @@ function loadPositions(positions, name) {
   solveCache.clear();
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const v of mesh.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
-  state.nativeLongest = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+  state.nativeDims = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+  state.nativeLongest = Math.max(...state.nativeDims);
+  state.positions = positions;
   state.size = +state.nativeLongest.toFixed(1);
   $('size').value = state.size;
   $('modelInfo').textContent = `${name}: ${mesh.triCount} triangles → ${mesh.faces.length} faces, ${mesh.edges.length} edges`;
@@ -174,6 +176,8 @@ function buildSidebar() {
   toggle('marks', 'marks');
   toggle('onePiece', 'onePiece');
   num('minFaces', 'minFaces', 4, 3000);
+  num('searchSeconds', 'searchSeconds', 3, 120);
+  $('more').addEventListener('click', keepSearching);
   $('legend').addEventListener('click', () => { state.legend = !state.legend; $('legend').classList.toggle('on', state.legend); });
   seg('scoreFace', 'scoreFace');
   seg('strategy', 'strategy');
@@ -183,7 +187,7 @@ function buildSidebar() {
 
 const canvas = $('three-canvas');
 let renderer, scene, camera, controls, faceMesh, foldLines, cutLines, needsRender = true, webgl = true;
-const COL = { paper: 0xE9E4D8, paperBack: 0xCFC8B8, mountain: 0xE0655A, valley: 0x5F9BE8, cut: 0x1B1F26 };
+const COL = { paper: 0xE9E4D8, paperBack: 0xCFC8B8, mountain: 0x4A86E8, valley: 0x4A86E8, cut: 0xD23B3B };
 
 function initThree() {
   try {
@@ -430,18 +434,51 @@ function renderDownloads() {
 
 /* ── Update ──────────────────────────────────────────────────────────────── */
 
+/* ── One-piece solving, off the main thread when possible ────────────────── */
+
 const solveCache = new Map();
-let updateToken = 0;
+let updateToken = 0, solving = null, worker = null, workerBroken = false, lastSolveKey = null;
 const busy = msg => { const el = $('busy'); el.classList.toggle('show', !!msg); el.querySelector('.stage').textContent = msg || ''; };
+const progressText = p => `Searching for a one-piece net… ${p.faces} faces · ${p.overlaps ?? '?'} overlaps (best ${p.best ?? '?'})${p.rounds ? ` · simplified ${p.rounds}×` : ''} · ${((p.elapsed || 0) / 1000).toFixed(0)} s`;
+
+function getWorker() {
+  if (worker || workerBroken) return worker;
+  try { worker = new Worker('./worker.js', { type: 'module' }); }
+  catch { workerBroken = true; }
+  return worker;
+}
+
+// Runs the solver (in the worker, or inline if workers are unavailable) and
+// resolves with { mesh, tree, overlaps, simplifiedFrom, rounds }.
+function runSolver(msg) {
+  const w = getWorker();
+  if (w) return new Promise((resolve, reject) => {
+    const id = Math.random().toString(36).slice(2);
+    const onMsg = e => {
+      if (e.data.id !== id) return;
+      if (e.data.type === 'progress') busy(progressText(e.data));
+      else { w.removeEventListener('message', onMsg); if (e.data.type === 'error') reject(new Error(e.data.message)); else resolve(e.data); }
+    };
+    w.addEventListener('message', onMsg);
+    w.postMessage({ id, ...msg });
+  });
+  return import('./solver.js').then(async ({ solveOnePiece, continueSearch }) => {
+    if (msg.type === 'solve') { const r = await solveOnePiece(msg.positions, { ...msg.opts, onProgress: p => busy(progressText(p)) }); runSolver.state = r.state; return r; }
+    return continueSearch(runSolver.state, { timeLimit: msg.timeLimit, onProgress: p => busy(progressText(p)) });
+  });
+}
+
+function baseOpts() {
+  const scale = state.size / state.nativeLongest;
+  return {
+    scale, sheet: state.sheet, margin: state.margin,
+    tabs: state.tabs, tabH: state.tabH, tabAngle: state.tabAngle, labels: state.labels, mvMarks: state.marks, scoreFace: state.scoreFace,
+  };
+}
 
 async function update(reframe = false) {
   if (!mesh) return;
   const token = ++updateToken;
-  const scale = state.size / state.nativeLongest;
-  const base = {
-    scale, sheet: state.sheet, margin: state.margin,
-    tabs: state.tabs, tabH: state.tabH, tabAngle: state.tabAngle, labels: state.labels, mvMarks: state.marks, scoreFace: state.scoreFace,
-  };
   if (state.onePiece) {
     // The search depends only on topology and the face floor, never on scale
     // or tabs, so one solve serves every later slider change.
@@ -449,29 +486,72 @@ async function update(reframe = false) {
     let solved = solveCache.get(key);
     if (!solved) {
       busy('Searching for a one-piece net…');
-      const s = await solveOnePiece(mesh, base, {
-        minFaces: state.minFaces,
-        yieldFn: () => new Promise(r => setTimeout(r, 0)),
-        onProgress: p => busy(`Searching for a one-piece net… ${p.faces} faces, ${p.islands} piece${p.islands === 1 ? '' : 's'}${p.rounds ? ` · simplified ${p.rounds}×` : ''}`),
-      });
+      let r;
+      try {
+        r = await runSolver({ type: 'solve', positions: state.positions, opts: { minFaces: state.minFaces, timeLimit: state.searchSeconds * 1000 } });
+      } catch (err) {
+        busy(null); $('modelMsg').className = 'msg err'; $('modelMsg').textContent = err.message; return;
+      }
       if (token !== updateToken) return;
-      solved = { mesh: s.mesh, tree: s.result.tree, simplifiedFrom: s.simplifiedFrom, notes: s.result.warnings.filter(w => /one-piece/.test(w)) };
+      solved = { mesh: r.mesh, tree: r.tree, simplifiedFrom: r.simplifiedFrom, overlaps: r.overlaps, rounds: r.rounds };
       solveCache.set(key, solved);
+      lastSolveKey = key;
       busy(null);
     }
-    result = unfold(solved.mesh, { ...base, onePiece: true, tree: solved.tree });
-    result.warnings.push(...solved.notes);
+    result = unfold(solved.mesh, { ...baseOpts(), onePiece: true, tree: solved.tree });
+    if (solved.overlaps) result.warnings.push(`${solved.overlaps} overlap${solved.overlaps > 1 ? 's' : ''} remain at ${solved.mesh.faces.length} faces (the floor). Keep searching, lower the minimum faces, or accept the pieces.`);
     result.simplifiedFrom = solved.simplifiedFrom;
+    $('more').style.display = solved.overlaps ? '' : 'none';
   } else {
-    result = unfold(mesh, base);
+    result = unfold(mesh, baseOpts());
+    $('more').style.display = 'none';
   }
   patterns = toPatterns(result);
   assembled = patterns.map(p => assemble(p, { strategy: state.strategy, dash: state.dash, gap: state.gap, margin: state.margin }));
   updateGeometry();
   renderNet();
   renderReadouts();
+  renderDims();
   renderDownloads();
   if (reframe) { frame3d(); fitNet(); }
+}
+
+async function keepSearching() {
+  if (!lastSolveKey || !solveCache.has(lastSolveKey)) return;
+  const token = ++updateToken;
+  busy('Searching for a one-piece net… continuing');
+  let r;
+  try { r = await runSolver({ type: 'more', timeLimit: state.searchSeconds * 1000 }); }
+  catch (err) { busy(null); $('modelMsg').className = 'msg err'; $('modelMsg').textContent = err.message; return; }
+  if (token !== updateToken) return;
+  busy(null);
+  solveCache.set(lastSolveKey, { mesh: r.mesh, tree: r.tree, simplifiedFrom: r.simplifiedFrom, overlaps: r.overlaps, rounds: r.rounds });
+  update();
+}
+
+/* ── Dimensions overlay: inches, uniform scaling from any axis ───────────── */
+
+function renderDims() {
+  const s = state.size / state.nativeLongest;
+  const names = ['W', 'D', 'H'];
+  const host = $('dims');
+  if (!host.dataset.built) {
+    host.dataset.built = '1';
+    host.innerHTML = '<div class="dims-title">Built size</div>' + names.map((n, k) =>
+      `<div class="dims-row"><span class="dims-k">${n}</span><input class="ctrl-input dims-in" data-k="${k}" type="number" step="0.05" min="0.1" /><span class="dims-unit">in</span><span class="dims-mm" data-k="${k}"></span></div>`).join('') +
+      '<div class="dims-net" id="dimsNet"></div>';
+    for (const inp of host.querySelectorAll('.dims-in')) inp.addEventListener('change', () => {
+      const k = +inp.dataset.k, inches = parseFloat(inp.value);
+      if (!(inches > 0)) return;
+      // Uniform: this axis becomes the typed size and the others follow.
+      state.size = Math.min(2000, Math.max(5, inches * 25.4 * state.nativeLongest / state.nativeDims[k]));
+      $('size').value = +state.size.toFixed(1);
+      update();
+    });
+  }
+  for (const inp of host.querySelectorAll('.dims-in')) { const k = +inp.dataset.k; if (document.activeElement !== inp) inp.value = (state.nativeDims[k] * s / 25.4).toFixed(2); }
+  for (const el of host.querySelectorAll('.dims-mm')) el.textContent = `${(state.nativeDims[+el.dataset.k] * s).toFixed(1)} mm`;
+  if (result) $('dimsNet').textContent = `net ${(result.stats.netW / 25.4).toFixed(1)} × ${(result.stats.netH / 25.4).toFixed(1)} in`;
 }
 
 buildSamples();

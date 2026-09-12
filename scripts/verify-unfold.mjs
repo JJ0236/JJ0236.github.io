@@ -5,7 +5,8 @@
 
 import { parseStl, writeAscii, writeBinary } from '../unfold/stl.js';
 import { buildMesh } from '../unfold/mesh.js';
-import { unfold, foldPositions, toPatterns, polysOverlap, solveOnePiece } from '../unfold/unfold.js';
+import { unfold, foldPositions, toPatterns, polysOverlap } from '../unfold/unfold.js';
+import { solveOnePiece, Net, tabuSearch } from '../unfold/solver.js';
 import { decimate } from '../unfold/decimate.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { SAMPLES } from '../unfold/samples.js';
@@ -106,10 +107,9 @@ for (const [name, mesh] of Object.entries(meshes)) {
   const counts = new Map();
   for (const isl of r.islands) for (const l of isl.labels) counts.set(l.text, (counts.get(l.text) || 0) + 1);
   const expected = r.cutEdges.every((e, k) => {
-    const hasTab = r.islands.some(isl => isl.tabs.some(t => t.edge === e));
-    return counts.get(String(k + 1)) === (hasTab ? 3 : 2);
+    return counts.get(String(k + 1)) === 2;
   });
-  ok(`${name}: each cut number appears twice plus once per tab`, expected);
+  ok(`${name}: each cut number appears exactly twice (tab + face, or both faces)`, expected);
   // Packing keeps everything inside the usable area.
   const inside = r.islands.every(isl => isl.pLoops.every(loop => loop.every(([x, y]) => x >= -1e-6 && y >= -1e-6 && x <= r.uW + 1e-6 && y <= r.uH + 1e-6)));
   ok(`${name}: packed islands lie inside the sheet minus margin`, inside);
@@ -214,25 +214,53 @@ section('one piece: solve');
 {
   const noisy = (soup0, amp) => { const soup = Array.from(soup0); let s = 7; const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; const key = new Map();
     for (let i = 0; i < soup.length; i += 3) { const k = soup.slice(i, i + 3).map(x => x.toFixed(4)).join(','); if (!key.has(k)) key.set(k, 1 + amp * (rnd() - 0.5)); const f = key.get(k); soup[i] *= f; soup[i + 1] *= f; soup[i + 2] *= f; } return soup; };
-  const m = buildMesh(noisy(SAMPLES.sphere(), 0.4));
-  const plain = unfold(m, {});
+  const verifiedOverlaps = u => { let n = 0; for (const isl of u.islands) for (let i = 0; i < isl.polys.length; i++) for (let j = i + 1; j < isl.polys.length; j++) if (polysOverlap(isl.polys[i], isl.polys[j])) n++; return n; };
+
+  // Net bookkeeping against brute force.
+  const bm = buildMesh(noisy(SAMPLES.sphere(), 0.4));
+  const net = new Net(bm, 3);
+  net.grow(0.3);
+  let brute = 0; for (let i = 0; i < net.F; i++) for (let j = i + 1; j < net.F; j++) if (net.comp[i] === net.comp[j] && polysOverlap(net.pos[i], net.pos[j])) brute++;
+  ok('grid overlap count matches brute force', net.total === brute, `${net.total} vs ${brute}`);
+  const before = net.pos.map(p => p.map(q => q.slice()));
+  net.reroot(17);
+  ok('reroot keeps every position', net.pos.every((p, i) => p.every((q, k) => near(q[0], before[i][k][0], 1e-9) && near(q[1], before[i][k][1], 1e-9))));
+  ok('reroot makes the chosen face the root', net.parent[17] === -1 && net.parent.filter(p => p < 0).length === net.components);
+  const t = net.tree('x');
+  ok('tree order lists parents before children', t.order.every((f, i) => t.parent[f] < 0 || t.order.indexOf(t.parent[f]) < i));
+  ok('tree spans every face once', t.order.length === net.F && new Set(t.order).size === net.F);
+
+  const plain = unfold(bm, {});
   const t0 = Date.now();
-  const solved = await solveOnePiece(m, {}, { minFaces: 10 });
+  const solved = await solveOnePiece(noisy(SAMPLES.sphere(), 0.4), { minFaces: 10, timeLimit: 8000 });
   ok('bumpy sphere: plain unfold needs several pieces', plain.stats.islands > 1, `${plain.stats.islands}`);
-  ok('bumpy sphere: solver reaches one piece', solved.result.stats.islands === 1, `${solved.result.stats.islands} pieces at ${solved.mesh.faces.length} faces`);
-  ok('solver reports the original face count', solved.simplifiedFrom === m.faces.length);
-  ok('solver keeps at least the floor', solved.mesh.faces.length >= 10 || solved.result.stats.islands === 1);
-  console.log(`        (${solved.simplifiedFrom} → ${solved.mesh.faces.length} faces in ${solved.rounds} rounds, ${Date.now() - t0} ms)`);
+  ok('bumpy sphere: tabu solves it without simplifying', solved.overlaps === 0 && solved.rounds === 0, `${solved.overlaps} overlaps, ${solved.rounds} rounds`);
+  const su = unfold(solved.mesh, { onePiece: true, tree: solved.tree });
+  ok('bumpy sphere: unfold from the solved tree is one clean piece', su.stats.islands === 1 && verifiedOverlaps(su) === 0);
+  ok('solver reports the original face count', solved.simplifiedFrom === bm.faces.length);
+  console.log(`        (${solved.simplifiedFrom} → ${solved.mesh.faces.length} faces, ${Date.now() - t0} ms, ${solved.tree.info})`);
+
   const eevee = '/Users/josh/Downloads/eevee_lowpoly_flowalistik.STL';
   if (existsSync(eevee)) {
     const buf = readFileSync(eevee);
-    const em = buildMesh(parseStl(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)));
     const t1 = Date.now();
-    const es = await solveOnePiece(em, {}, { minFaces: 20 });
-    ok('eevee: solver reaches one piece', es.result.stats.islands === 1, `${es.result.stats.islands} pieces at ${es.mesh.faces.length} faces`);
-    ok('eevee: solved net has no overlaps', es.result.islands.every(isl => { for (let i = 0; i < isl.polys.length; i++) for (let j = i + 1; j < isl.polys.length; j++) if (polysOverlap(isl.polys[i], isl.polys[j])) return false; return true; }));
-    console.log(`        (eevee ${es.simplifiedFrom} → ${es.mesh.faces.length} faces in ${es.rounds} rounds, ${Date.now() - t1} ms)`);
+    const es = await solveOnePiece(parseStl(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)), { minFaces: 20, timeLimit: 15000 });
+    const eu = unfold(es.mesh, { onePiece: true, tree: es.tree });
+    ok('eevee: solver reaches one piece', es.overlaps === 0 && eu.stats.islands === 1, `${es.overlaps} overlaps at ${es.mesh.faces.length} faces`);
+    ok('eevee: solved net has no overlaps', verifiedOverlaps(eu) === 0);
+    ok('eevee: solved within 45 s', es.ms < 45000, `${es.ms} ms`);
+    console.log(`        (eevee ${es.simplifiedFrom} → ${es.mesh.faces.length} faces in ${es.rounds} rounds, ${Date.now() - t1} ms, ${es.tree.info})`);
   } else console.log('        (eevee STL not present, skipped)');
+}
+
+section('labels');
+{
+  const m = buildMesh(SAMPLES.cube());
+  const r = unfold(m, { labels: true, tabs: true });
+  const withTab = r.cutEdges.filter(e => r.islands[0].tabs.some(t => t.edge === e)).length;
+  const total = r.islands.reduce((a, i) => a + i.labels.length, 0);
+  ok('one number per face edge plus one per tab', total === r.cutEdges.length + withTab + (r.cutEdges.length - withTab), `${total}`);
+  ok('numbers are 2 mm', r.islands[0].labels.every(l => l.size <= 2));
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

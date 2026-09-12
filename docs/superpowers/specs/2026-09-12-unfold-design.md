@@ -106,3 +106,29 @@ with:
   the scored face, which now defaults to inside.
 - **Samples.** Dodecahedron, sphere, star, house and torus added; icons are
   drawn from the solids.
+
+## Revision, 2026-09-12 (evening): tabu search
+
+Random-restart growth still needed seven rounds of blind simplification on a
+221-face model. Replaced the search with `unfold/solver.js`:
+
+- **Tabu search over the unfold tree** (Zawallich, *Unfolding Polyhedra via
+  Tabu Search*, 2023). One spanning tree, objective = overlapping face pairs
+  counted on a uniform grid. Each iteration re-roots so the chosen overlapping
+  face drags the smallest subtree, then moves it to the neighbour that lowers
+  the count most; a tabu list (3·log₃F) blocks undoing moves; stalls trigger a
+  regrown start with the global best kept.
+- **Fallback simplification** (after Bhargava et al., *Mesh Simplification for
+  Unfolding*, 2024): when the time budget (default 15 s) runs out with
+  overlaps, quadric collapse removes 12 % of triangles per round with the
+  edges of the overlapping faces collapsing first, and a short search runs
+  again, down to the minimum face count. Saddle-vertex nudging was tried and
+  dropped: it did not converge in practice.
+- Runs in a Web Worker (`unfold/worker.js`) with live progress and a **Keep
+  searching** button; inline fallback when workers are unavailable.
+- Results: 288-face torus 0.2 s, 310-face bumpy sphere 5 s, both unsimplified;
+  the 217-face test model reaches one piece at 100–135 faces in about 25 s.
+- Labels: 2 mm, one number per edge on the tab and its mate; m/v marks 1.4 mm.
+  On-screen previews use the laser colours (red cut, one blue for creases).
+- 3D view shows built W × D × H in inches with mm; editing any one scales the
+  model uniformly and flows straight into the export.

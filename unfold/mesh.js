@@ -32,6 +32,7 @@ export function buildMesh(positions) {
     if (i === undefined) { i = verts.length; index.set(k, i); verts.push([x, y, z]); }
     return i;
   };
+  const warnings = [];
   const tris = [];
   for (let t = 0; t < triCount; t++) {
     const a = weld(positions[t * 9], positions[t * 9 + 1], positions[t * 9 + 2]);
@@ -40,8 +41,6 @@ export function buildMesh(positions) {
     if (a === b || b === c || a === c) continue;
     tris.push([a, b, c]);
   }
-  const triNormal = tris.map(([a, b, c]) => norm(cross(sub(verts[b], verts[a]), sub(verts[c], verts[a]))));
-
   // Triangle adjacency through shared undirected edges.
   const ekey = (a, b) => a < b ? `${a},${b}` : `${b},${a}`;
   const triEdge = new Map();
@@ -52,6 +51,14 @@ export function buildMesh(positions) {
       triEdge.get(key).push(i);
     }
   });
+
+  // STL winding is often inconsistent. Propagate one orientation across
+  // shared manifold edges, then point the whole thing outward by signed
+  // volume; a mirrored face would otherwise unfold onto its own neighbour.
+  let flipped = orientConsistently(tris, triEdge);
+  if (signedVolume(tris, verts) < 0) { for (const t of tris) t.reverse(); flipped += tris.length; }
+  if (flipped) warnings.push(`${flipped} triangle${flipped > 1 ? 's' : ''} had reversed winding and were flipped.`);
+  const triNormal = tris.map(([a, b, c]) => norm(cross(sub(verts[b], verts[a]), sub(verts[c], verts[a]))));
 
   // Union-find over coplanar neighbours.
   const parent = tris.map((_, i) => i);
@@ -66,7 +73,6 @@ export function buildMesh(positions) {
   tris.forEach((_, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(i); });
 
   const faces = [];
-  const warnings = [];
   // Sliver faces with no real area cannot be laid out or folded; drop them and
   // let their edges become cuts.
   const minArea = 1e-7 * diag * diag;
@@ -158,4 +164,42 @@ function makeFace(loop, verts) {
   }
   const area = len(nrm) / 2;
   return { verts: pts, normal: norm(nrm), centroid: c, area };
+}
+
+// Flips triangles in place so every manifold edge is traversed in opposite
+// directions by its two triangles, component by component, then flips whole
+// components whose signed volume is negative. Returns the flip count.
+function orientConsistently(tris, triEdge) {
+  const dirKey = (t, a, b) => { for (let k = 0; k < 3; k++) if (t[k] === a && t[(k + 1) % 3] === b) return 1; return -1; };
+  const seen = new Uint8Array(tris.length);
+  let flips = 0;
+  for (let s = 0; s < tris.length; s++) {
+    if (seen[s]) continue;
+    const comp = [s]; seen[s] = 1;
+    for (let i = 0; i < comp.length; i++) {
+      const ti = comp[i], t = tris[ti];
+      for (let k = 0; k < 3; k++) {
+        const a = t[k], b = t[(k + 1) % 3];
+        const list = triEdge.get(a < b ? `${a},${b}` : `${b},${a}`);
+        if (!list || list.length !== 2) continue;
+        const tj = list[0] === ti ? list[1] : list[0];
+        if (seen[tj]) continue;
+        // Consistent neighbours traverse the shared edge the opposite way.
+        if (dirKey(tris[tj], a, b) === 1) { tris[tj].reverse(); flips++; }
+        seen[tj] = 1; comp.push(tj);
+      }
+    }
+  }
+  return flips;
+}
+
+// Signed volume of a triangle list against a vertex array; positive when
+// wound outward.
+export function signedVolume(tris, verts) {
+  let v = 0;
+  for (const [i, j, k] of tris) {
+    const a = verts[i], b = verts[j], c = verts[k];
+    v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
+  }
+  return v;
 }

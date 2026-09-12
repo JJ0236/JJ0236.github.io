@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildFoldModel, FoldSim, miuraKinematics, FOLD_LIMITS } from './fold.js';
 
-const COLORS = { mountain: 0xe0655a, valley: 0x5f9be8, boundary: 0x2a2f3a };
+const COLORS = { mountain: 0x4a86e8, valley: 0x4a86e8, boundary: 0xd23b3b };
 
 export class FoldView {
   constructor(container, onStatus) {

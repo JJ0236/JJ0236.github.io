@@ -25,8 +25,8 @@
       --warn:       #D8A657;
       --bad:        #D2766B;
       --good:       #7FB88A;
-      --mountain:   #E0655A;
-      --valley:     #5F9BE8;
+      --mountain:   #4A86E8;
+      --valley:     #4A86E8;
       --paper:      #E9E4D8;
       --panel-w:    296px;
     }
@@ -181,11 +181,20 @@
     #preview.dragging { cursor: grabbing; }
     #preview .sheet { fill: var(--paper); stroke: none; }
     #preview .page { fill: none; stroke: rgba(0,0,0,0.18); stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
-    #preview .cut path, #preview .cut circle, #preview .cut line { fill: none; stroke: #1B1F26; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+    #preview .cut path, #preview .cut circle, #preview .cut line { fill: none; stroke: #D23B3B; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
     #preview .tabs path { fill: rgba(38,52,78,0.10); stroke: none; }
     #preview .label text { fill: #2E7D32; font-family: sans-serif; text-anchor: middle; dominant-baseline: middle; }
     #preview .sheet-ref { fill: none; stroke: rgba(255,255,255,0.22); stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
     .readout .v.warn { color: var(--warn); }
+    .dims { position: absolute; left: 12px; bottom: 14px; z-index: 6; background: rgba(16,19,24,0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .dims-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+    .dims-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .dims-k { font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; color: var(--ink-light); width: 12px; }
+    .dims-in { width: 64px; }
+    .dims-unit { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--dim); }
+    .dims-mm { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); min-width: 56px; text-align: right; }
+    .dims-net { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); margin-top: 4px; }
+    #preview:not(.hidden) ~ .dims { display: none; }
     .overlay { position: absolute; inset: 0; z-index: 20; background: rgba(16,19,24,0.7); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; }
     .overlay.show { display: flex; }
     .overlay .stage { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text); background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 18px; }
@@ -288,6 +297,12 @@
         <input class="ctrl-input" type="number" id="minFaces" min="4" max="3000" step="1" value="20" />
       </div>
       <div class="ctrl-hint">Simplification stops here. Lower it to allow a rougher model; raise it to keep detail even if that means more pieces.</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Search time<span class="unit">s</span></span>
+        <input class="ctrl-input" type="number" id="searchSeconds" min="3" max="120" step="1" value="15" />
+      </div>
+      <button class="btn btn-sub" id="more" style="display:none">Keep searching</button>
+      <div class="ctrl-hint">Tabu search over the unfold tree (Zawallich 2023). Simplification only starts when search runs out of time.</div>
     </div>
 
     <div class="panel">
@@ -397,6 +412,7 @@
       <button id="play">Play</button>
     </div>
     <div class="overlay" id="busy"><div class="stage"></div></div>
+    <div class="dims" id="dims"></div>
     <div class="viewport-stats" id="viewStats"></div>
     <div class="viewport-hint" id="hint">Drag to orbit · scroll to zoom</div>
   </div>

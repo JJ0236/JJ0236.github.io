@@ -55,7 +55,11 @@ class MinHeap {
   get size() { return this.a.length; }
 }
 
-export function decimate(mesh, targetTris) {
+// opts.boost: vertex indices whose edges collapse first (their cost is scaled
+// by opts.boostFactor). The solver passes the vertices of overlapping faces so
+// simplification is spent where the net is failing (after Bhargava et al.).
+export function decimate(mesh, targetTris, opts = {}) {
+  const boost = opts.boost || null, boostFactor = opts.boostFactor ?? 0.02;
   const V = mesh.verts.map(v => v.slice());
   const T = mesh.tris.map(t => t.slice());
   const alive = new Array(T.length).fill(true);
@@ -73,7 +77,8 @@ export function decimate(mesh, targetTris) {
     if (a === b) return;
     if (a > b) [a, b] = [b, a];
     const best = optimalPoint(qAdd(Q[a], Q[b]), V[a], V[b]);
-    heap.push({ a, b, va: version[a], vb: version[b], cost: best.e, p: best.p });
+    const cost = boost && (boost.has(a) || boost.has(b)) ? best.e * boostFactor : best.e;
+    heap.push({ a, b, va: version[a], vb: version[b], cost, p: best.p });
   };
   const seen = new Set();
   T.forEach(t => { for (let k = 0; k < 3; k++) { const a = t[k], b = t[(k + 1) % 3]; const key = a < b ? `${a},${b}` : `${b},${a}`; if (!seen.has(key)) { seen.add(key); pushEdge(a, b); } } });
