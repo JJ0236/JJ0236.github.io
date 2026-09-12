@@ -95,3 +95,10 @@ scripts/verify-crease.mjs   node checks, no browser
 - two-sided back file mirrors valley x-coordinates exactly
 - export output parses as XML and contains the three layer groups
 - **Swap M/V** exchanges the two sets exactly
+
+## Revision, 2026-09-12
+
+Laser colours changed sitewide in `crease/export.js`: red cut, blue creases
+(one colour for mountain and valley), green labels, 0.1 pt strokes. Because the
+two crease types share a colour, each crease gets a small green m or v beside
+its midpoint on the label layer (toggle in the Laser panel).

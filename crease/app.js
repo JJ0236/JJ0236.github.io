@@ -23,7 +23,7 @@ const state = {
   margin: 5,
   strategy: 'same',
   dash: 3, gap: 1.5,
-  swap: false, legend: false,
+  swap: false, legend: false, marks: true,
   visible: { mountain: true, valley: true, cut: true },
 };
 
@@ -188,6 +188,7 @@ function buildLaser() {
   $('gap').addEventListener('change', () => { state.gap = Math.max(0.3, parseFloat($('gap').value) || 1.5); update(); });
   $('swap').addEventListener('click', () => { state.swap = !state.swap; $('swap').classList.toggle('on', state.swap); update(); });
   $('legend').addEventListener('click', () => { state.legend = !state.legend; $('legend').classList.toggle('on', state.legend); });
+  $('marks').addEventListener('click', () => { state.marks = !state.marks; $('marks').classList.toggle('on', state.marks); update(); });
 }
 
 /* ── Preview ─────────────────────────────────────────────────────────────── */
@@ -199,9 +200,9 @@ function renderPreview() {
   const { page } = asm;
   const sheet = state.sheet;
   const layers = asm.files.reduce((acc, f) => {
-    for (const l of ['mountain', 'valley', 'cut']) acc[l] = acc[l].concat(f.layers[l]);
+    for (const l of ['mountain', 'valley', 'cut', 'label']) acc[l] = acc[l].concat(f.layers[l] || []);
     return acc;
-  }, { mountain: [], valley: [], cut: [] });
+  }, { mountain: [], valley: [], cut: [], label: [] });
   // The back file is mirrored for the laser; for the preview only the front's
   // cut outline is wanted, and the valleys need un-mirroring.
   if (state.strategy === 'two') {
@@ -213,7 +214,7 @@ function renderPreview() {
   svg.innerHTML = `<g id="world" transform="matrix(${view.k} 0 0 ${view.k} ${view.tx} ${view.ty})">
     <rect class="sheet" x="0" y="0" width="${sheet.w}" height="${sheet.h}" rx="0.6"/>
     <rect class="page" x="0" y="0" width="${page.w}" height="${page.h}"/>
-    ${g('mountain', layers.mountain)}${g('valley', layers.valley)}${g('cut', layers.cut)}
+    ${g('mountain', layers.mountain)}${g('valley', layers.valley)}${g('cut', layers.cut)}<g class="label">${layers.label.map(itemToSvg).join('')}</g>
   </g>`;
   applyDashes();
 }
@@ -410,8 +411,32 @@ function bindFold() {
 
 /* ── Update loop ─────────────────────────────────────────────────────────── */
 
+// One crease colour on the sheet, so each crease gets a small m or v beside
+// its midpoint on the green label layer. Circles are marked at their top.
+function mvMarks(pat, swap) {
+  const out = [];
+  const mark = (s, isM) => {
+    const text = (isM !== swap) ? 'm' : 'v';
+    if (s.k === 'L') {
+      const L = Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+      if (L < 6) return;
+      const ux = (s.x2 - s.x1) / L, uy = (s.y2 - s.y1) / L;
+      const size = Math.max(1.4, Math.min(2.2, L * 0.12));
+      let angle = Math.atan2(uy, ux) * 180 / Math.PI;
+      if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
+      out.push({ k: 'T', x: (s.x1 + s.x2) / 2 + uy * size * 0.8, y: (s.y1 + s.y2) / 2 - ux * size * 0.8, text, size, angle });
+    } else if (s.k === 'C') {
+      out.push({ k: 'T', x: s.cx, y: s.cy - s.r + 1.8, text, size: 1.8, angle: 0 });
+    }
+  };
+  pat.mountains.forEach(s => mark(s, true));
+  pat.valleys.forEach(s => mark(s, false));
+  return out;
+}
+
 function update(refit = false) {
   pattern = build(state.pattern, state.params);
+  pattern.labels = state.marks ? mvMarks(pattern, state.swap) : [];
   asm = assemble(pattern, { swap: state.swap, strategy: state.strategy, dash: state.dash, gap: state.gap, margin: state.margin });
   renderPreview();
   renderReadouts();

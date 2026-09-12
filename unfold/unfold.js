@@ -141,7 +141,7 @@ const rot2 = (p, th) => [p[0] * Math.cos(th) - p[1] * Math.sin(th), p[0] * Math.
 
 /* ── The unfolder ────────────────────────────────────────────────────────── */
 
-export const DEFAULTS = { scale: 1, sheet: { w: 210, h: 297 }, margin: 5, tabs: true, tabH: 6, tabAngle: 60, labels: true, scoreFace: 'outside', gap: 3 };
+export const DEFAULTS = { scale: 1, sheet: { w: 210, h: 297 }, margin: 5, tabs: true, tabH: 6, tabAngle: 60, labels: true, scoreFace: 'inside', gap: 3, onePiece: false, mvMarks: true };
 
 export function unfold(mesh, options = {}) {
   const opts = { ...DEFAULTS, ...options };
@@ -159,61 +159,50 @@ export function unfold(mesh, options = {}) {
     return f.verts.map(i => { const d = sub3(verts3[i], p0); return [dot3(d, u), dot3(d, w)]; });
   });
 
-  // Face adjacency and a maximum-edge-length spanning forest (Prim from the
-  // largest face, restarted for any disconnected component).
+  // Face adjacency.
   const adj = faces.map(() => []);
   for (const e of edges) {
     adj[e.sides[0].face].push({ e, to: e.sides[1].face });
     adj[e.sides[1].face].push({ e, to: e.sides[0].face });
   }
-  const parent = new Array(faces.length).fill(-1), parentEdge = new Array(faces.length).fill(null);
-  const seen = new Array(faces.length).fill(false);
-  const order = [];
-  const byArea = faces.map((f, i) => i).sort((a, b) => faces[b].area - faces[a].area);
-  for (const start of byArea) {
-    if (seen[start]) continue;
-    seen[start] = true; order.push(start);
-    const heap = [];
-    const push = f => { for (const { e, to } of adj[f]) if (!seen[to]) heap.push({ e, to, from: f }); };
-    push(start);
-    while (heap.length) {
-      let bi = 0;
-      for (let i = 1; i < heap.length; i++) if (heap[i].e.len > heap[bi].e.len) bi = i;
-      const { e, to, from } = heap.splice(bi, 1)[0];
-      if (seen[to]) continue;
-      seen[to] = true; parent[to] = from; parentEdge[to] = e; order.push(to); push(to);
-    }
-  }
-
-  // Layout: place faces in tree order, starting a new island on overlap or
-  // when the island would no longer fit the sheet.
-  const pos = new Array(faces.length);
-  const islandOf = new Array(faces.length);
-  const islands = [];
-  const cutByOverlap = new Set();
   const edgeIndexIn = (f, e) => e.sides.find(s => s.face === f).index;
-  const newIsland = f => { islandOf[f] = islands.length; islands.push({ faces: [f], root: f, polys: [local[f]] }); pos[f] = local[f]; };
 
-  for (const f of order) {
-    if (parent[f] < 0) { newIsland(f); continue; }
-    const p = parent[f], e = parentEdge[f];
+  // Rigid placement of face f against its placed parent p across edge e: the
+  // child's copy of the edge runs the other way round, so it lands on the far
+  // side automatically.
+  const placeAgainst = (posP, p, f, e) => {
     const ip = edgeIndexIn(p, e), ic = edgeIndexIn(f, e);
-    const Pa = pos[p][ip], Pb = pos[p][(ip + 1) % pos[p].length];
-    // The child's copy runs the other way round.
+    const Pa = posP[ip], Pb = posP[(ip + 1) % posP.length];
     const Cb = local[f][ic], Ca = local[f][(ic + 1) % local[f].length];
     const th = Math.atan2(Pb[1] - Pa[1], Pb[0] - Pa[0]) - Math.atan2(Cb[1] - Ca[1], Cb[0] - Ca[0]);
     const rCa = rot2(Ca, th);
     const tx = Pa[0] - rCa[0], ty = Pa[1] - rCa[1];
-    const cand = local[f].map(q => { const r = rot2(q, th); return [r[0] + tx, r[1] + ty]; });
+    return local[f].map(q => { const r = rot2(q, th); return [r[0] + tx, r[1] + ty]; });
+  };
+  // Sheet limit, only enforced when pieces are allowed to multiply.
+  const sheetFit = opts.onePiece ? null : (polys, cand) => {
+    const b = bbox(polys.flat().concat(cand));
+    return (b.w + tabAllow <= uW && b.h + tabAllow <= uH) || (b.w + tabAllow <= uH && b.h + tabAllow <= uW);
+  };
+
+  const tree = opts.tree || growForest(faces, adj, local, placeAgainst, {
+    onePiece: !!opts.onePiece, seed: opts.seed ?? 1, sheetFit,
+    tries: opts.tries ?? (opts.onePiece ? Math.max(8, Math.min(48, Math.round(6000 / faces.length))) : 1),
+  });
+  const { parent, parentEdge, order } = tree;
+
+  // Layout replays the forest. It was grown overlap-free, so every island is
+  // exactly one tree root and no edge needs cutting here.
+  const pos = new Array(faces.length);
+  const islandOf = new Array(faces.length);
+  const islands = [];
+  const cutByOverlap = new Set();
+  const newIsland = f => { islandOf[f] = islands.length; islands.push({ faces: [f], root: f, polys: [local[f]] }); pos[f] = local[f]; };
+  for (const f of order) {
+    if (parent[f] < 0) { newIsland(f); continue; }
+    const p = parent[f];
+    const cand = placeAgainst(pos[p], p, f, parentEdge[f]);
     const isl = islands[islandOf[p]];
-    let bad = isl.polys.some(poly => polysOverlap(cand, poly));
-    if (!bad) {
-      const all = isl.polys.flat().concat(cand);
-      const b = bbox(all);
-      const fits = (b.w + tabAllow <= uW && b.h + tabAllow <= uH) || (b.w + tabAllow <= uH && b.h + tabAllow <= uW);
-      if (!fits) bad = true;
-    }
-    if (bad) { cutByOverlap.add(e.id); newIsland(f); continue; }
     pos[f] = cand; islandOf[f] = islandOf[p]; isl.faces.push(f); isl.polys.push(cand);
   }
 
@@ -354,18 +343,29 @@ export function unfold(mesh, options = {}) {
   const sheets = [];
   let cur = null, x = 0, y = 0, shelfH = 0;
   const g = opts.gap;
+  // One-piece mode never splits for the sheet: everything packs onto a single
+  // page sized to the net, and the sheet is only compared against it.
+  const packW = opts.onePiece ? Math.max(uW, ...islands.map(i => i.w)) : uW;
+  const packH = opts.onePiece ? Infinity : uH;
   for (const i of orderIsl) {
     const isl = islands[i];
-    if (isl.w > uW || isl.h > uH) warnings.push(`Piece ${i + 1} is larger than the sheet.`);
-    if (!cur || x + isl.w > uW + 1e-9) {
+    if (isl.w > uW || isl.h > uH) warnings.push(opts.onePiece
+      ? `The net is ${isl.w.toFixed(0)} × ${isl.h.toFixed(0)} mm, larger than the ${uW.toFixed(0)} × ${uH.toFixed(0)} mm sheet area. Lower the size to fit, or use a bigger sheet.`
+      : `Piece ${i + 1} is larger than the sheet.`);
+    if (!cur || x + isl.w > packW + 1e-9) {
       if (cur) { y += shelfH + g; x = 0; shelfH = 0; }
-      if (!cur || y + isl.h > uH + 1e-9) { cur = { islands: [] }; sheets.push(cur); x = 0; y = 0; shelfH = 0; }
+      if (!cur || y + isl.h > packH + 1e-9) { cur = { islands: [] }; sheets.push(cur); x = 0; y = 0; shelfH = 0; }
     }
     isl.sheet = sheets.length - 1;
     isl.offset = [x, y];
     cur.islands.push(i);
     x += isl.w + g;
     shelfH = Math.max(shelfH, isl.h);
+  }
+  let pageW = uW, pageH = uH;
+  if (opts.onePiece) {
+    pageW = 0; pageH = 0;
+    for (const isl of islands) { pageW = Math.max(pageW, isl.offset[0] + isl.w); pageH = Math.max(pageH, isl.offset[1] + isl.h); }
   }
   const place = (isl, p) => { const r = rot2(p, isl.theta); return [r[0] + isl.shift[0] + isl.offset[0], r[1] + isl.shift[1] + isl.offset[1]]; };
   const placeDir = (isl, d) => rot2(d, isl.theta);
@@ -376,11 +376,11 @@ export function unfold(mesh, options = {}) {
     isl.pTabs = isl.tabs.map(t => t.poly.map(p => place(isl, p)));
   }
   const SHEET_GAP = 20;
-  const placed = faces.map((f, fi) => { const isl = islands[islandOf[fi]]; return pos[fi].map(p => { const q = place(isl, p); return [q[0] + isl.sheet * (uW + SHEET_GAP), q[1]]; }); });
+  const placed = faces.map((f, fi) => { const isl = islands[islandOf[fi]]; return pos[fi].map(p => { const q = place(isl, p); return [q[0] + isl.sheet * (pageW + SHEET_GAP), q[1]]; }); });
 
   // Fold animation setup. Flat net lies in z = 0 with the outside facing +z.
   // The assembled model is shifted to hover over the middle of the net.
-  const netCentre = [(sheets.length * (uW + SHEET_GAP) - SHEET_GAP) / 2, uH / 2];
+  const netCentre = [(sheets.length * (pageW + SHEET_GAP) - SHEET_GAP) / 2, pageH / 2];
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const v of verts3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
   const shift = [netCentre[0] - (lo[0] + hi[0]) / 2, netCentre[1] - (lo[1] + hi[1]) / 2, -lo[2] + 2];
@@ -424,8 +424,110 @@ export function unfold(mesh, options = {}) {
   const stats = {
     faces: faces.length, islands: islands.length, sheets: sheets.length,
     folds: foldEdges.length, cuts: cutEdges.length, tabs: tabs.length, noTab,
+    netW: pageW, netH: pageH, tries: tree.tries,
   };
-  return { opts, mesh, uW, uH, islands, sheets, order, parent, islandOf, flat3, target, rootPose, hinge, islandCentre, foldEdges, cutEdges, stats, warnings, SHEET_GAP };
+  return { opts, mesh, uW: pageW, uH: pageH, sheetW: uW, sheetH: uH, islands, sheets, order, parent, islandOf, flat3, target, rootPose, hinge, islandCentre, foldEdges, cutEdges, stats, warnings, SHEET_GAP, tree };
+}
+
+/* ── Forest search ───────────────────────────────────────────────────────── */
+
+const mulberry32 = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+
+// Tightest bounding-box area of a point set over a sweep of rotations, used
+// to prefer compact nets among one-piece solutions.
+function compactness(pts) {
+  const hull = convexHull(pts);
+  let best = Infinity;
+  for (let d = 0; d < 180; d += 10) {
+    const b = bbox(hull.map(p => rot2(p, d * Math.PI / 180)));
+    best = Math.min(best, b.w * b.h);
+  }
+  return best;
+}
+
+// Grows islands face by face. An attachment that would overlap what is
+// already placed is skipped, and the face waits to be reached through another
+// neighbour. Faces nothing can reach start a new island. Repeated with
+// different roots and randomised edge priorities; the result with the fewest
+// islands wins, ties broken by the most compact net.
+export function growForest(faces, adj, local, placeAgainst, o) {
+  const byArea = faces.map((f, i) => i).sort((a, b) => faces[b].area - faces[a].area);
+  const rng = mulberry32(o.seed ?? 1);
+  const tries = Math.max(1, o.tries ?? 1);
+
+  const growOnce = (firstRoot, jitter) => {
+    const n = faces.length;
+    const parent = new Array(n).fill(-1), parentEdge = new Array(n).fill(null);
+    const placed = new Array(n).fill(false), pos = new Array(n);
+    const order = [];
+    let islands = 0, firstSize = 0;
+    const allPts = [];
+    for (let rootPick = 0; ; rootPick++) {
+      let root = rootPick === 0 ? firstRoot : byArea.find(f => !placed[f]);
+      if (root === undefined) break;
+      islands++;
+      placed[root] = true; pos[root] = local[root]; order.push(root);
+      const polys = [local[root]];
+      const cands = [];
+      const push = f => { for (const { e, to } of adj[f]) if (!placed[to]) cands.push({ e, to, from: f, pri: e.len * (1 + jitter * rng()) }); };
+      push(root);
+      while (cands.length) {
+        let bi = 0;
+        for (let i = 1; i < cands.length; i++) if (cands[i].pri > cands[bi].pri) bi = i;
+        const { e, to, from } = cands.splice(bi, 1)[0];
+        if (placed[to]) continue;
+        const cand = placeAgainst(pos[from], from, to, e);
+        if (o.sheetFit && !o.sheetFit(polys, cand)) continue;
+        if (polys.some(q => polysOverlap(cand, q))) continue;
+        placed[to] = true; pos[to] = cand; parent[to] = from; parentEdge[to] = e; order.push(to); polys.push(cand);
+        push(to);
+      }
+      if (rootPick === 0) { firstSize = polys.length; for (const q of polys) allPts.push(...q); }
+    }
+    return { parent, parentEdge, order, islands, firstSize, compact: compactness(allPts) };
+  };
+
+  let best = null;
+  const roots = byArea.slice(0, Math.min(byArea.length, 8));
+  let t = 0;
+  for (; t < tries; t++) {
+    const root = roots[t % roots.length];
+    const jitter = t === 0 ? 0 : Math.min(2, 0.3 * t);
+    const res = growOnce(root, jitter);
+    const better = !best || res.islands < best.islands || (res.islands === best.islands && res.compact < best.compact - 1e-9);
+    if (better) best = res;
+    if (!o.onePiece) break;
+    // Once a one-piece net exists, spend a few more tries looking for a more compact one.
+    if (best.islands === 1 && t >= 9) break;
+  }
+  best.tries = t + 1;
+  return best;
+}
+
+/* ── One piece, simplifying as needed ────────────────────────────────────── */
+
+// Searches for a single-piece net; when none turns up at this face count,
+// decimates the mesh and tries again, stopping at minFaces. yieldFn lets a
+// page repaint between rounds. Returns the best net found and the mesh it
+// came from.
+export async function solveOnePiece(mesh, options, { minFaces = 20, onProgress, yieldFn } = {}) {
+  const [{ decimate }, { buildMesh }] = await Promise.all([import('./decimate.js'), import('./mesh.js')]);
+  let m = mesh, rounds = 0, r = null;
+  const from = mesh.faces.length;
+  for (;;) {
+    r = unfold(m, { ...options, onePiece: true });
+    onProgress?.({ faces: m.faces.length, islands: r.stats.islands, rounds });
+    if (r.stats.islands === 1 || m.faces.length <= minFaces || m.triCount <= 4) break;
+    const target = Math.max(4, Math.floor(m.triCount * 0.82));
+    let next;
+    try { next = buildMesh(decimate(m, target)); } catch { break; }
+    if (next.triCount >= m.triCount) break;
+    m = next; rounds++;
+    if (rounds > 80) break;
+    if (yieldFn) await yieldFn();
+  }
+  if (r.stats.islands > 1) r.warnings.push(`No one-piece net found down to ${m.faces.length} faces; showing the best ${r.stats.islands}-piece net. Lower the minimum faces to simplify further.`);
+  return { result: r, mesh: m, simplifiedFrom: from, rounds };
 }
 
 /* ── Fold animation ──────────────────────────────────────────────────────── */
@@ -469,6 +571,22 @@ export function toPatterns(r) {
         const [x1, y1] = P(f.a), [x2, y2] = P(f.b);
         const m = outside ? f.mountain : !f.mountain;
         (m ? mountains : valleys).push({ k: 'L', x1, y1, x2, y2 });
+        // Small m/v mark beside each real fold, on the scored face, so one
+        // crease colour is still unambiguous on the sheet.
+        if (opts.mvMarks !== false && !f.tab) {
+          const L = Math.hypot(x2 - x1, y2 - y1);
+          if (L > 4) {
+            const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+            // Left of the directed edge in the source frame is inside the face; the
+            // y-flip for outside scoring reverses handedness.
+            const sgn = outside ? 1 : -1;
+            const nx = sgn * uy, ny = -sgn * ux;
+            const size = Math.max(1.4, Math.min(2.2, L * 0.15));
+            let angle = Math.atan2(uy, ux) * 180 / Math.PI;
+            if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
+            labels.push({ k: 'T', x: (x1 + x2) / 2 + nx * size * 0.75, y: (y1 + y2) / 2 + ny * size * 0.75, text: m ? 'm' : 'v', size, angle });
+          }
+        }
       }
       for (const l of isl.pLabels) {
         const [x, y] = P([l.x, l.y]), [dx, dy] = D([l.dx, l.dy]);

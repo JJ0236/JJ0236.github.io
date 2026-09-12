@@ -168,6 +168,7 @@
     #preview .cut path, #preview .cut circle, #preview .cut line { fill: none; stroke: #1B1F26; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
     #preview .mountain path, #preview .mountain circle, #preview .mountain line, #preview .mountain path { fill: none; stroke: var(--mountain); stroke-width: 1.1; vector-effect: non-scaling-stroke; }
     #preview .valley path, #preview .valley circle, #preview .valley line { fill: none; stroke: var(--valley); stroke-width: 1.1; vector-effect: non-scaling-stroke; }
+    #preview .label text { fill: #3d9a4a; font-family: 'IBM Plex Mono', monospace; }
     #preview .hidden { display: none; }
 
     .viewport-stats {
@@ -327,6 +328,11 @@
         <button class="toggle" id="swap" aria-label="Swap mountain and valley"></button>
       </div>
       <div class="ctrl-row">
+        <span class="ctrl-label">m / v marks beside creases</span>
+        <button class="toggle on" id="marks" aria-label="Mark creases m or v"></button>
+      </div>
+      <div class="ctrl-hint">Creases share one colour on the sheet, so each gets a small green m or v on the green engrave layer.</div>
+      <div class="ctrl-row">
         <span class="ctrl-label">Legend text on sheet</span>
         <button class="toggle" id="legend" aria-label="Include legend"></button>
       </div>
@@ -335,7 +341,7 @@
     <div class="panel">
       <div class="panel-title">Export</div>
       <div id="downloads"></div>
-      <div class="ctrl-hint" style="margin-top:8px">Cut black · mountain red · valley blue. 1 unit = 1 mm, 0.1 mm strokes. Map the colours to layers in your laser software.</div>
+      <div class="ctrl-hint" style="margin-top:8px">Cut red · creases blue · m/v marks green. 1 unit = 1 mm, 0.1 pt strokes. Map the colours to layers in your laser software.</div>
       <div class="readout" id="stats"></div>
     </div>
 

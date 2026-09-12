@@ -5,7 +5,9 @@
 
 import { parseStl, writeAscii, writeBinary } from '../unfold/stl.js';
 import { buildMesh } from '../unfold/mesh.js';
-import { unfold, foldPositions, toPatterns, polysOverlap } from '../unfold/unfold.js';
+import { unfold, foldPositions, toPatterns, polysOverlap, solveOnePiece } from '../unfold/unfold.js';
+import { decimate } from '../unfold/decimate.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { SAMPLES } from '../unfold/samples.js';
 import { assemble, toSvg } from '../crease/export.js';
 
@@ -58,7 +60,8 @@ ok('icosahedron: 20 faces, 30 edges', meshes.icosahedron.faces.length === 20 && 
 ok('gem: 13 faces (table + 6 crown + 6 pavilion)', meshes.gem.faces.length === 13, `${meshes.gem.faces.length}`);
 ok('gem: table is a hexagon', meshes.gem.faces.some(f => f.verts.length === 6));
 ok('gem: crown facets are quads', meshes.gem.faces.filter(f => f.verts.length === 4).length === 6);
-ok('all sample edges convex', Object.values(meshes).every(m => m.edges.every(e => e.dihedral > 0)));
+ok('convex sample edges are all convex', ['cube', 'octahedron', 'icosahedron', 'dodecahedron', 'gem', 'sphere', 'house'].filter(k => meshes[k]).every(k => meshes[k].edges.every(e => e.dihedral > 0)));
+  ok('star has concave edges', !meshes.star || meshes.star.edges.some(e => e.dihedral < 0));
 ok('closed meshes: no boundary warnings', Object.values(meshes).every(m => m.warnings.length === 0));
 
 /* ── Unfold: cube ────────────────────────────────────────────────────────── */
@@ -143,7 +146,7 @@ section('unfold: options');
   ok('tabs off yields no tabs', noTabs.stats.tabs === 0 && noTabs.islands[0].loops[0].length === 14);
   const noLabels = unfold(cubeMesh, { labels: false });
   ok('labels off yields no labels', noLabels.islands.every(i => i.labels.length === 0));
-  const out = toPatterns(cube)[0], inn = toPatterns(unfold(cubeMesh, { scoreFace: 'inside' }))[0];
+  const out = toPatterns(unfold(cubeMesh, { scoreFace: 'outside' }))[0], inn = toPatterns(unfold(cubeMesh, { scoreFace: 'inside' }))[0];
   ok('outside scoring: cube folds are all mountains', out.mountains.length === 12 && out.valleys.length === 0, `${out.mountains.length}/${out.valleys.length}`);
   ok('inside scoring: cube folds are all valleys', inn.valleys.length === 12 && inn.mountains.length === 0);
   const topOut = Math.max(...out.cuts.flatMap(c => c.pts.map(p => p[1]))), topIn = Math.max(...inn.cuts.flatMap(c => c.pts.map(p => p[1])));
@@ -163,7 +166,8 @@ section('export');
   const svg = toSvg(asm.files[0], asm.page, { title: 'gem' });
   ok('page is the sheet size', near(asm.page.w, 210) && near(asm.page.h, 297));
   for (const g of ['cut', 'mountain', 'valley', 'label']) ok(`svg has ${g} group`, svg.includes(`<g id="${g}"`));
-  ok('labels are text elements', (svg.match(/<text/g) || []).length === results.gem.islands.reduce((a, i) => a + i.labels.length, 0));
+  ok('labels are text elements', (svg.match(/<text/g) || []).length === pats[0].labels.length && pats[0].labels.length > results.gem.islands.reduce((a, i) => a + i.labels.length, 0));
+  ok('m/v marks accompany folds', pats[0].labels.filter(l => l.text === 'm' || l.text === 'v').length > 0);
   ok('no NaN', !svg.includes('NaN'));
   const open = (svg.match(/<g\b/g) || []).length, close = (svg.match(/<\/g>/g) || []).length;
   ok('groups balanced', open === close);
@@ -171,6 +175,64 @@ section('export');
   ok('two-sided keeps labels on the front only', two.files[0].layers.label.length > 0 && !(two.files[1].layers.label || []).length);
   const plain = toSvg(assemble({ cuts: [], mountains: [], valleys: [], w: 10, h: 10 }, { strategy: 'same', margin: 1 }).files[0], { w: 12, h: 12 }, {});
   ok('no label group when there are no labels', !plain.includes('id="label"'));
+}
+
+/* ── One piece ───────────────────────────────────────────────────────────── */
+
+section('one piece: search');
+{
+  const noOverlap = r => r.islands.every(isl => { for (let i = 0; i < isl.polys.length; i++) for (let j = i + 1; j < isl.polys.length; j++) if (polysOverlap(isl.polys[i], isl.polys[j])) return false; return true; });
+  for (const id of ['torus', 'star', 'sphere', 'dodecahedron', 'house']) {
+    const m = buildMesh(SAMPLES[id]());
+    const r = unfold(m, { onePiece: true });
+    ok(`${id}: one piece without simplifying`, r.stats.islands === 1, `${r.stats.islands} pieces after ${r.stats.tries} tries`);
+    ok(`${id}: no overlaps in the net`, noOverlap(r));
+    ok(`${id}: page is the net size, not the sheet`, near(r.uW, r.stats.netW) && r.uW < 5000);
+    ok(`${id}: every face placed once`, r.order.length === m.faces.length && new Set(r.order).size === m.faces.length);
+  }
+  const m = buildMesh(SAMPLES.torus());
+  const r1 = unfold(m, { onePiece: true, scale: 1, tabs: false }), r2 = unfold(m, { onePiece: true, scale: 3, tabs: false, tree: r1.tree });
+  ok('tree reuse gives the same net scaled', near(r2.stats.netW, r1.stats.netW * 3, 1e-6) && r2.stats.islands === 1);
+  ok('one piece does not split for a small sheet', unfold(m, { onePiece: true, sheet: { w: 40, h: 40 } }).stats.islands === 1);
+}
+
+section('one piece: decimate');
+{
+  const m = buildMesh(SAMPLES.sphere());
+  const soup = decimate(m, 40);
+  const d = buildMesh(soup);
+  ok('sphere 80 → about 40 triangles', d.triCount <= 40 && d.triCount >= 30, `${d.triCount}`);
+  ok('decimated sphere stays closed', d.warnings.every(w => !/open edge/.test(w)));
+  const bad = decimate(m, 4);
+  ok('decimating to the floor still yields a solid', buildMesh(bad).triCount >= 4);
+  const r0 = 20; let maxDev = 0;
+  for (let i = 0; i < soup.length; i += 3) maxDev = Math.max(maxDev, Math.abs(Math.hypot(soup[i], soup[i + 1], soup[i + 2]) - r0) / r0);
+  ok('decimated vertices stay near the sphere', maxDev < 0.25, `${maxDev}`);
+}
+
+section('one piece: solve');
+{
+  const noisy = (soup0, amp) => { const soup = Array.from(soup0); let s = 7; const rnd = () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; const key = new Map();
+    for (let i = 0; i < soup.length; i += 3) { const k = soup.slice(i, i + 3).map(x => x.toFixed(4)).join(','); if (!key.has(k)) key.set(k, 1 + amp * (rnd() - 0.5)); const f = key.get(k); soup[i] *= f; soup[i + 1] *= f; soup[i + 2] *= f; } return soup; };
+  const m = buildMesh(noisy(SAMPLES.sphere(), 0.4));
+  const plain = unfold(m, {});
+  const t0 = Date.now();
+  const solved = await solveOnePiece(m, {}, { minFaces: 10 });
+  ok('bumpy sphere: plain unfold needs several pieces', plain.stats.islands > 1, `${plain.stats.islands}`);
+  ok('bumpy sphere: solver reaches one piece', solved.result.stats.islands === 1, `${solved.result.stats.islands} pieces at ${solved.mesh.faces.length} faces`);
+  ok('solver reports the original face count', solved.simplifiedFrom === m.faces.length);
+  ok('solver keeps at least the floor', solved.mesh.faces.length >= 10 || solved.result.stats.islands === 1);
+  console.log(`        (${solved.simplifiedFrom} → ${solved.mesh.faces.length} faces in ${solved.rounds} rounds, ${Date.now() - t0} ms)`);
+  const eevee = '/Users/josh/Downloads/eevee_lowpoly_flowalistik.STL';
+  if (existsSync(eevee)) {
+    const buf = readFileSync(eevee);
+    const em = buildMesh(parseStl(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)));
+    const t1 = Date.now();
+    const es = await solveOnePiece(em, {}, { minFaces: 20 });
+    ok('eevee: solver reaches one piece', es.result.stats.islands === 1, `${es.result.stats.islands} pieces at ${es.mesh.faces.length} faces`);
+    ok('eevee: solved net has no overlaps', es.result.islands.every(isl => { for (let i = 0; i < isl.polys.length; i++) for (let j = i + 1; j < isl.polys.length; j++) if (polysOverlap(isl.polys[i], isl.polys[j])) return false; return true; }));
+    console.log(`        (eevee ${es.simplifiedFrom} → ${es.mesh.faces.length} faces in ${es.rounds} rounds, ${Date.now() - t1} ms)`);
+  } else console.log('        (eevee STL not present, skipped)');
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

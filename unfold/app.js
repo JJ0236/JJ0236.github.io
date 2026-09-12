@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseStl } from './stl.js';
 import { buildMesh } from './mesh.js';
-import { unfold, foldPositions, toPatterns } from './unfold.js';
+import { unfold, foldPositions, toPatterns, solveOnePiece } from './unfold.js';
 import { SAMPLES } from './samples.js';
 import { assemble, toSvg, itemToSvg } from '../crease/export.js';
 import { totalLength } from '../crease/patterns.js';
@@ -26,8 +26,9 @@ const state = {
   sample: 'cube', modelName: 'cube',
   size: 40, nativeLongest: 40,
   sheet: { w: 210, h: 297 }, margin: 5,
-  tabs: true, tabH: 6, tabAngle: 60, labels: true,
-  scoreFace: 'outside', strategy: 'same', dash: 3, gap: 1.5, legend: false,
+  tabs: true, tabH: 6, tabAngle: 60, labels: true, marks: true,
+  onePiece: true, minFaces: 20,
+  scoreFace: 'inside', strategy: 'same', dash: 3, gap: 1.5, legend: false,
   view: '3d', fold: 0,
 };
 
@@ -35,12 +36,30 @@ let mesh = null, result = null, patterns = null, assembled = null;
 
 /* ── Model ───────────────────────────────────────────────────────────────── */
 
-const SAMPLE_ICON = {
-  cube: '<svg viewBox="0 0 34 34" fill="none" stroke-width="1.3"><path class="c" d="M17 4l11 6v14l-11 6-11-6V10z"/><path class="m" d="M6 10l11 6 11-6M17 16v14"/></svg>',
-  octahedron: '<svg viewBox="0 0 34 34" fill="none" stroke-width="1.3"><path class="c" d="M17 3l12 14-12 14L5 17z"/><path class="m" d="M5 17h24M17 3l-6 14 6 14 6-14z"/></svg>',
-  icosahedron: '<svg viewBox="0 0 34 34" fill="none" stroke-width="1.3"><path class="c" d="M17 3l12 7v14l-12 7-12-7V10z"/><path class="m" d="M17 3l-7 12 7 12 7-12zM5 10l5 5-5 9M29 10l-5 5 5 9M10 15h14M10 27l7-3 7 3"/></svg>',
-  gem: '<svg viewBox="0 0 34 34" fill="none" stroke-width="1.3"><path class="c" d="M11 6h12l7 8-13 17L4 14z"/><path class="m" d="M4 14h26M11 6l-3 8 9 17 9-17-3-8M11 6l6 8 6-8"/></svg>',
-};
+// Sample icons are drawn from the solids themselves: an orthographic view
+// with front faces bright and back faces dim.
+function meshIcon(soup) {
+  const m = buildMesh(soup);
+  const cx = Math.cos(-1.05), sx = Math.sin(-1.05), cz = Math.cos(0.6), sz = Math.sin(0.6);
+  const proj = ([x, y, z]) => {
+    const x1 = x * cz - y * sz, y1 = x * sz + y * cz;
+    const y2 = y1 * cx - z * sx, z2 = y1 * sx + z * cx;
+    return [x1, -y2, z2];
+  };
+  const pts = m.verts.map(proj);
+  let lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+  for (const [x, y] of pts) { lo[0] = Math.min(lo[0], x); lo[1] = Math.min(lo[1], y); hi[0] = Math.max(hi[0], x); hi[1] = Math.max(hi[1], y); }
+  const span = Math.max(hi[0] - lo[0], hi[1] - lo[1]) || 1;
+  const S = 30, pad = 2;
+  const P = ([x, y]) => `${(pad + (x - lo[0]) / span * S + (S - (hi[0] - lo[0]) / span * S) / 2).toFixed(2)},${(pad + (y - lo[1]) / span * S + (S - (hi[1] - lo[1]) / span * S) / 2).toFixed(2)}`;
+  const front = [], back = [];
+  for (const f of m.faces) {
+    const n = proj(f.normal);
+    const d = 'M' + f.verts.map(i => P(pts[i])).join(' L') + ' Z';
+    (n[2] > 0 ? front : back).push(d);
+  }
+  return `<svg viewBox="0 0 34 34" fill="none" stroke-width="1"><path class="b" d="${back.join(' ')}"/><path class="c" d="${front.join(' ')}"/></svg>`;
+}
 
 function loadPositions(positions, name) {
   $('modelMsg').className = 'msg';
@@ -54,6 +73,7 @@ function loadPositions(positions, name) {
     return;
   }
   state.modelName = name;
+  solveCache.clear();
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (const v of mesh.verts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], v[k]); hi[k] = Math.max(hi[k], v[k]); }
   state.nativeLongest = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
@@ -68,7 +88,7 @@ function buildSamples() {
   for (const id of Object.keys(SAMPLES)) {
     const b = document.createElement('button');
     b.dataset.id = id;
-    b.innerHTML = SAMPLE_ICON[id] + `<span>${id}</span>`;
+    b.innerHTML = meshIcon(SAMPLES[id]()) + `<span>${id}</span>`;
     b.addEventListener('click', () => selectSample(id));
     host.appendChild(b);
   }
@@ -151,6 +171,9 @@ function buildSidebar() {
   num('gap', 'gap', 0.3, 30);
   toggle('tabs', 'tabs');
   toggle('labels', 'labels');
+  toggle('marks', 'marks');
+  toggle('onePiece', 'onePiece');
+  num('minFaces', 'minFaces', 4, 3000);
   $('legend').addEventListener('click', () => { state.legend = !state.legend; $('legend').classList.toggle('on', state.legend); });
   seg('scoreFace', 'scoreFace');
   seg('strategy', 'strategy');
@@ -212,8 +235,8 @@ function updateGeometry() {
   for (const e of result.foldEdges) edgeType.set(e.id, e.dihedral >= 0 ? mc : vc);
   const cutSet = new Set(result.cutEdges.map(e => e.id));
   // Map each face's edge index to the mesh edge so lines get the right colour.
-  const faceEdge = mesh.faces.map(() => []);
-  for (const e of mesh.edges) for (const s of e.sides) faceEdge[s.face][s.index] = e;
+  const faceEdge = result.mesh.faces.map(() => []);
+  for (const e of result.mesh.edges) for (const s of e.sides) faceEdge[s.face][s.index] = e;
   polys.forEach((poly, fi) => {
     for (let i = 1; i + 1 < poly.length; i++) tri.push(...poly[0], ...poly[i], ...poly[i + 1]);
     for (let i = 0; i < poly.length; i++) {
@@ -295,8 +318,9 @@ function renderNet() {
     const m = state.margin;
     const tabs = patterns[si].tabPolys.map(tp => ({ k: 'P', pts: tp.map(([px, py]) => [px + m, py + m]), closed: true }));
     const g = (cls, items) => `<g class="${cls}">${items.map(itemToSvg).join('')}</g>`;
+    const ref = state.onePiece ? `<rect class="sheet-ref" x="0" y="0" width="${state.sheet.w}" height="${state.sheet.h}"/>` : '';
     parts.push(`<g transform="translate(${x} 0)">
-      <rect class="sheet" x="0" y="0" width="${page.w}" height="${page.h}" rx="0.6"/>
+      ${ref}<rect class="sheet" x="0" y="0" width="${page.w}" height="${page.h}" rx="0.6"/>
       ${g('tabs', tabs)}${g('mountain', layers.mountain)}${g('valley', layers.valley)}${g('cut', layers.cut)}${g('label', layers.label)}
       <text class="sheet-no" x="2" y="${page.h - 2}" font-size="4" fill="#9a948a" font-family="IBM Plex Mono, monospace">sheet ${si + 1}</text>
     </g>`);
@@ -366,16 +390,18 @@ function renderReadouts() {
   const cut = patterns.reduce((a, p) => a + totalLength(p.cuts), 0);
   const mnt = patterns.reduce((a, p) => a + totalLength(p.mountains), 0);
   const val = patterns.reduce((a, p) => a + totalLength(p.valleys), 0);
+  const simplified = result.simplifiedFrom && result.simplifiedFrom !== s.faces;
+  const fitsSheet = (s.netW <= result.sheetW && s.netH <= result.sheetH) || (s.netW <= result.sheetH && s.netH <= result.sheetW);
   $('stats').innerHTML = `
-    <div><span class="k">faces</span><span class="v">${s.faces}</span></div>
-    <div><span class="k">pieces</span><span class="v">${s.islands}</span></div>
-    <div><span class="k">sheets</span><span class="v">${s.sheets}</span></div>
+    <div><span class="k">faces</span><span class="v">${simplified ? `${result.simplifiedFrom} → ${s.faces}` : s.faces}</span></div>
+    <div><span class="k">pieces</span><span class="v">${s.islands}${state.onePiece && s.tries ? ` · ${s.tries} tries` : ''}</span></div>
+    ${state.onePiece ? `<div><span class="k">net</span><span class="v ${fitsSheet ? '' : 'warn'}">${s.netW.toFixed(0)} × ${s.netH.toFixed(0)} mm${fitsSheet ? '' : ' · over sheet'}</span></div>` : `<div><span class="k">sheets</span><span class="v">${s.sheets}</span></div>`}
     <div><span class="k">tabs</span><span class="v">${s.tabs}${s.noTab ? ` · ${s.noTab} edges without` : ''}</span></div>
     <div><span class="k">mountain scores</span><span class="v m">${fmt(mnt)}</span></div>
     <div><span class="k">valley scores</span><span class="v vv">${fmt(val)}</span></div>
     <div><span class="k">cut length</span><span class="v">${fmt(cut)}</span></div>`;
   $('warnings').textContent = result.warnings.join('\n');
-  $('viewStats').textContent = `${state.modelName}\n${s.faces} faces · ${s.islands} piece${s.islands === 1 ? '' : 's'} · ${s.sheets} sheet${s.sheets === 1 ? '' : 's'}\ncut ${fmt(cut)} · score ${fmt(mnt + val)}`;
+  $('viewStats').textContent = `${state.modelName}\n${simplified ? `${result.simplifiedFrom} → ` : ''}${s.faces} faces · ${s.islands} piece${s.islands === 1 ? '' : 's'}${state.onePiece ? ` · net ${s.netW.toFixed(0)}×${s.netH.toFixed(0)} mm` : ` · ${s.sheets} sheet${s.sheets === 1 ? '' : 's'}`}\ncut ${fmt(cut)} · score ${fmt(mnt + val)}`;
   $('strategyHint').textContent = HINTS[state.strategy];
   $('faceHint').textContent = FACE_HINTS[state.scoreFace];
   $('dashRows').style.display = state.strategy === 'perf' ? '' : 'none';
@@ -404,13 +430,41 @@ function renderDownloads() {
 
 /* ── Update ──────────────────────────────────────────────────────────────── */
 
-function update(reframe = false) {
+const solveCache = new Map();
+let updateToken = 0;
+const busy = msg => { const el = $('busy'); el.classList.toggle('show', !!msg); el.querySelector('.stage').textContent = msg || ''; };
+
+async function update(reframe = false) {
   if (!mesh) return;
+  const token = ++updateToken;
   const scale = state.size / state.nativeLongest;
-  result = unfold(mesh, {
+  const base = {
     scale, sheet: state.sheet, margin: state.margin,
-    tabs: state.tabs, tabH: state.tabH, tabAngle: state.tabAngle, labels: state.labels, scoreFace: state.scoreFace,
-  });
+    tabs: state.tabs, tabH: state.tabH, tabAngle: state.tabAngle, labels: state.labels, mvMarks: state.marks, scoreFace: state.scoreFace,
+  };
+  if (state.onePiece) {
+    // The search depends only on topology and the face floor, never on scale
+    // or tabs, so one solve serves every later slider change.
+    const key = `${state.modelName}|${mesh.triCount}|${state.minFaces}`;
+    let solved = solveCache.get(key);
+    if (!solved) {
+      busy('Searching for a one-piece net…');
+      const s = await solveOnePiece(mesh, base, {
+        minFaces: state.minFaces,
+        yieldFn: () => new Promise(r => setTimeout(r, 0)),
+        onProgress: p => busy(`Searching for a one-piece net… ${p.faces} faces, ${p.islands} piece${p.islands === 1 ? '' : 's'}${p.rounds ? ` · simplified ${p.rounds}×` : ''}`),
+      });
+      if (token !== updateToken) return;
+      solved = { mesh: s.mesh, tree: s.result.tree, simplifiedFrom: s.simplifiedFrom, notes: s.result.warnings.filter(w => /one-piece/.test(w)) };
+      solveCache.set(key, solved);
+      busy(null);
+    }
+    result = unfold(solved.mesh, { ...base, onePiece: true, tree: solved.tree });
+    result.warnings.push(...solved.notes);
+    result.simplifiedFrom = solved.simplifiedFrom;
+  } else {
+    result = unfold(mesh, base);
+  }
   patterns = toPatterns(result);
   assembled = patterns.map(p => assemble(p, { strategy: state.strategy, dash: state.dash, gap: state.gap, margin: state.margin }));
   updateGeometry();

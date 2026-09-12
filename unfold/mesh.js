@@ -67,11 +67,16 @@ export function buildMesh(positions) {
 
   const faces = [];
   const warnings = [];
+  // Sliver faces with no real area cannot be laid out or folded; drop them and
+  // let their edges become cuts.
+  const minArea = 1e-7 * diag * diag;
+  let slivers = 0;
   for (const group of groups.values()) {
     const loop = groupLoop(group, tris);
-    if (loop) faces.push(makeFace(loop, verts));
-    else for (const i of group) faces.push(makeFace(tris[i], verts));
+    const made = loop ? [makeFace(loop, verts)] : group.map(i => makeFace(tris[i], verts));
+    for (const f of made) { if (f.area > minArea) faces.push(f); else slivers++; }
   }
+  if (slivers) warnings.push(`${slivers} zero-area sliver face${slivers > 1 ? 's' : ''} dropped.`);
   if (faces.length > MAX_FACES) throw new Error(`${faces.length} faces after merging. The limit is ${MAX_FACES}; decimate the model first.`);
   if (faces.length > FIDDLY_FACES) warnings.push(`${faces.length} faces: the net will be fiddly to assemble.`);
 

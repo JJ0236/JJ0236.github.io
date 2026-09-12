@@ -1,4 +1,4 @@
-// unfold/samples.js — four low-poly solids generated in code, as triangle
+// unfold/samples.js — low-poly solids generated in code, as triangle
 // soups the same shape parseStl() returns. Faces are wound outward.
 
 function fromFaces(verts, faces) {
@@ -54,4 +54,75 @@ export function gem(s = 40) {
   return fromFaces(v, faces);
 }
 
-export const SAMPLES = { cube, octahedron, icosahedron, gem };
+// Dodecahedron faces are found rather than typed: each icosahedron vertex
+// direction is a face normal, and the five dodecahedron vertices nearest that
+// plane form the pentagon.
+export function dodecahedron(s = 40) {
+  const p = (1 + Math.sqrt(5)) / 2, q = 1 / p;
+  const v = [];
+  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) v.push([x, y, z]);
+  for (const a of [-1, 1]) for (const b of [-1, 1]) { v.push([0, a * q, b * p]); v.push([a * q, b * p, 0]); v.push([b * p, 0, a * q]); }
+  const k = s / (2 * Math.sqrt(3));
+  const verts = v.map(t => t.map(x => x * k));
+  const normals = [];
+  for (const a of [-1, 1]) for (const b of [-1, 1]) { normals.push([a, 0, b * p]); normals.push([0, a * p, b]); normals.push([a * p, b, 0]); }
+  const faces = normals.map(n => {
+    const l = Math.hypot(...n), nn = n.map(x => x / l);
+    const scored = verts.map((t, i) => ({ i, d: t[0] * nn[0] + t[1] * nn[1] + t[2] * nn[2] })).sort((a, b) => b.d - a.d).slice(0, 5);
+    const c = [0, 0, 0]; for (const { i } of scored) for (let k = 0; k < 3; k++) c[k] += verts[i][k] / 5;
+    const u0 = verts[scored[0].i].map((x, k) => x - c[k]);
+    const w = [nn[1] * u0[2] - nn[2] * u0[1], nn[2] * u0[0] - nn[0] * u0[2], nn[0] * u0[1] - nn[1] * u0[0]];
+    return scored.map(({ i }) => { const d = verts[i].map((x, k) => x - c[k]); return { i, a: Math.atan2(d[0] * w[0] + d[1] * w[1] + d[2] * w[2], d[0] * u0[0] + d[1] * u0[1] + d[2] * u0[2]) }; })
+      .sort((a, b) => a.a - b.a).map(x => x.i);
+  });
+  return fromFaces(verts, faces);
+}
+
+// Icosahedron subdivided once and pushed onto the sphere: 80 triangles.
+export function sphere(s = 40) {
+  const soup = Array.from(icosahedron(s / 2));
+  let r = 0; for (let i = 0; i < soup.length; i += 3) r += Math.hypot(soup[i], soup[i + 1], soup[i + 2]) / (soup.length / 3);
+  const proj = p => { const l = Math.hypot(...p); return p.map(x => x / l * r); };
+  const mid = (a, b) => proj([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]);
+  const out = [];
+  for (let t = 0; t < soup.length; t += 9) {
+    const a = soup.slice(t, t + 3), b = soup.slice(t + 3, t + 6), c = soup.slice(t + 6, t + 9);
+    const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
+    for (const tri of [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]) out.push(...tri.flat());
+  }
+  return Float64Array.from(out);
+}
+
+// Octahedron with a low pyramid on every face: 24 triangles, not convex.
+export function star(s = 40) {
+  const base = octahedron(s / 2);
+  const out = [];
+  for (let t = 0; t < base.length; t += 9) {
+    const a = base.slice(t, t + 3), b = base.slice(t + 3, t + 6), c = base.slice(t + 6, t + 9);
+    const m = [0, 1, 2].map(k => (a[k] + b[k] + c[k]) / 3 * 1.9);
+    out.push(...a, ...b, ...m, ...b, ...c, ...m, ...c, ...a, ...m);
+  }
+  return Float64Array.from(out);
+}
+
+// Box with a gable roof: seven faces, two of them pentagons.
+export function house(s = 40) {
+  const w = s / 2, d = s * 0.35, h = s * 0.3, ridge = s * 0.55;
+  const v = [[-w, -d, 0], [w, -d, 0], [w, d, 0], [-w, d, 0], [-w, -d, h], [w, -d, h], [w, d, h], [-w, d, h], [-w, 0, ridge], [w, 0, ridge]];
+  return fromFaces(v, [[0, 1, 2, 3], [0, 1, 5, 4], [2, 3, 7, 6], [1, 2, 6, 9, 5], [3, 0, 4, 8, 7], [4, 5, 9, 8], [6, 7, 8, 9]]);
+}
+
+// Triangulated torus, 10 around by 6 through: 120 triangles, the classic
+// hard case for a one-piece net.
+export function torus(s = 40) {
+  const R = s * 0.36, r = s * 0.14, nu = 10, nv = 6;
+  const P = (i, j) => { const u = i / nu * 2 * Math.PI, v = j / nv * 2 * Math.PI; return [(R + r * Math.cos(v)) * Math.cos(u), (R + r * Math.cos(v)) * Math.sin(u), r * Math.sin(v)]; };
+  const out = [];
+  for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+    const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1);
+    out.push(...a, ...b, ...c, ...a, ...c, ...d);
+  }
+  return Float64Array.from(out);
+}
+
+export const SAMPLES = { cube, octahedron, icosahedron, dodecahedron, gem, sphere, star, house, torus };

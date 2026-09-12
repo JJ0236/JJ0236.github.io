@@ -6,7 +6,11 @@
 
 import { segLength } from './patterns.js';
 
-export const COLORS = { cut: '#000000', mountain: '#ff0000', valley: '#0000ff', label: '#008800' };
+// Laser convention: red cuts, blue scores (mountain and valley share a colour
+// and are told apart by small m/v marks on the label layer), green engraving.
+// Strokes are 0.1 pt, which is 0.0353 mm at 1 unit = 1 mm.
+export const COLORS = { cut: '#ff0000', mountain: '#0000ff', valley: '#0000ff', label: '#008800' };
+export const STROKE = 0.0353;
 
 /* ── Item transforms ─────────────────────────────────────────────────────── */
 
@@ -198,9 +202,10 @@ export function toSvg(file, page, meta = {}) {
     `     width="${f(page.w)}mm" height="${f(page.h)}mm" viewBox="0 0 ${f(page.w)} ${f(page.h)}">`,
     `  <!-- crease | ${meta.title || 'origami crease pattern'} | ${file.name} | ${f(page.w)}x${f(page.h)} mm | joshhicks.info/crease -->`,
     `  <style>`,
-    `    .cut      { fill: none; stroke: ${COLORS.cut}; stroke-width: 0.1; }`,
-    `    .mountain { fill: none; stroke: ${COLORS.mountain}; stroke-width: 0.1; }`,
-    `    .valley   { fill: none; stroke: ${COLORS.valley}; stroke-width: 0.1; }`,
+    `    /* stroke-width ${STROKE} mm = 0.1 pt */`,
+    `    .cut      { fill: none; stroke: ${COLORS.cut}; stroke-width: ${STROKE}; }`,
+    `    .mountain { fill: none; stroke: ${COLORS.mountain}; stroke-width: ${STROKE}; }`,
+    `    .valley   { fill: none; stroke: ${COLORS.valley}; stroke-width: ${STROKE}; }`,
     `    .legend   { font-family: sans-serif; font-size: 3px; fill: #333333; }`,
     `    .label    { font-family: sans-serif; fill: ${COLORS.label}; stroke: none; text-anchor: middle; dominant-baseline: middle; }`,
     `  </style>`,
@@ -215,7 +220,7 @@ export function toSvg(file, page, meta = {}) {
   }
   if (meta.legend) {
     lines.push(`  <g id="legend" class="legend">`);
-    lines.push(`    <text x="${f(page.w - 2)}" y="${f(page.h - 1.5)}" text-anchor="end">${meta.title || ''} · red mountain · blue valley${file.note ? ' · ' + file.note : ''}</text>`);
+    lines.push(`    <text x="${f(page.w - 2)}" y="${f(page.h - 1.5)}" text-anchor="end">${meta.title || ''} · red cut · blue crease · m/v marks green${file.note ? ' · ' + file.note : ''}</text>`);
     lines.push(`  </g>`);
   }
   lines.push(`</svg>`);

@@ -86,3 +86,23 @@ with pan and zoom, tabs shaded, labels visible.
 - Fold at t = 1 reproduces every original 3D vertex within 1e-6 after the
   island root pose is applied.
 - Export parses as XML with `cut`, `mountain`, `valley` and `label` groups.
+
+## Revision, 2026-09-12 (afternoon)
+
+Tested on a 221-face model the fixed spanning tree produced 26 pieces. Replaced
+with:
+
+- **Forest search.** Islands grow face by face; an attachment that would
+  overlap is skipped and the face waits for another neighbour. Randomised edge
+  priorities and roots, up to ~48 tries, fewest pieces wins, ties to the most
+  compact net.
+- **One piece by default.** When no overlap-free net exists at the current
+  detail, quadric edge-collapse decimation (`unfold/decimate.js`) removes
+  ~18 % of triangles per round and the search repeats, down to a user-set
+  minimum face count (default 20). The sheet never splits a net; the page is
+  sized to the net and the sheet is drawn only as a reference.
+- **Colours.** Red cut, blue folds (mountain and valley share the colour),
+  green labels, 0.1 pt strokes. Small green m/v marks sit beside every fold on
+  the scored face, which now defaults to inside.
+- **Samples.** Dodecahedron, sphere, star, house and torus added; icons are
+  drawn from the solids.
