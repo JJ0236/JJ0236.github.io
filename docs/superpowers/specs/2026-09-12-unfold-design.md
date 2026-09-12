@@ -1,0 +1,88 @@
+# unfold — STL to papercraft net
+
+**Date:** 2026-09-12
+**Path:** `/unfold/`
+
+## Purpose
+
+Load a low-poly STL, get a laser-ready net: cut outline with glue tabs,
+scored fold lines split into mountain and valley layers, matching edge
+numbers engraved so the pieces go back together. A fold slider animates the
+flat net closing into the model.
+
+This is papercraft, not origami. It reuses `crease/export.js` for layers,
+chaining, perforation and two-sided output.
+
+## Pipeline (all pure, no DOM, testable under node)
+
+`unfold/stl.js` — binary and ASCII STL → flat triangle array.
+
+`unfold/mesh.js` — weld vertices on a 1e-4 grid relative to the bounding
+box; build edge map; **merge coplanar adjacent triangles** (normals within
+1°) into polygon faces, since a cube must unfold as six squares, not twelve
+triangles. Groups whose boundary is not a single loop fall back to their
+triangles. Faces store their outward normal and vertex loop, counter-clockwise
+seen from outside. Edges shared by exactly two faces are foldable; any other
+edge is a boundary. Refuse models above 3000 faces with a plain message and
+warn above 600 that the net will be fiddly.
+
+`unfold/unfold.js` —
+
+1. **Spanning tree** over the face-adjacency graph by maximum edge length
+   (fold along long edges, cut short ones). Root is the largest face.
+2. **Layout.** Each face gets a right-handed in-plane basis, so its 2D
+   coordinates are its 3D vertices projected. Children are placed by the 2D
+   rigid transform that maps their shared edge onto the parent's copy of it;
+   with consistent orientation the child lands on the far side automatically.
+3. **Islands.** Before placing a child, test it against every polygon already
+   in the island (segment intersection plus point-in-polygon on slightly
+   shrunk polygons). If it overlaps, or would push the island's bounding box
+   past the sheet's usable area, the tree edge becomes a cut and the child
+   starts a new island. BFS continues inside the child's subtree.
+4. **Tabs.** Every cut edge between two faces gets one trapezoid tab on one
+   side only: height `tabH`, ends angled `tabAngle`, top shortened accordingly
+   and never inverted. Try the first side; if the tab overlaps anything in
+   that island, try the other; then halve the height twice; then give up and
+   mark the edge *no tab*. A tab's hinge is the same type as the mesh edge.
+5. **Assignment.** Dihedral sign gives the type: convex edge is mountain when
+   the outside face is scored. **Score face: outside / inside** mirrors the
+   whole layout and swaps the layers.
+6. **Labels.** Cut edges are numbered; the number sits just inside each face
+   near the edge midpoint and on the tab. Text is a fourth layer, `label`,
+   green `#008800`, intended for engraving. Font size is clamped between 2
+   and 6 mm.
+7. **Packing.** Each island is rotated to its minimum-area bounding box
+   (36 trial angles), then shelf-packed onto sheets of the chosen preset
+   minus margin. One SVG per sheet.
+
+`crease/export.js` gains a `T` item `{ x, y, text, size, angle }` and emits a
+`label` group only when a file has labels. Nothing else changes.
+
+## Page
+
+Same layout and styles as `/crease/`. Sidebar: Model (drop STL, four sample
+solids generated in code: cube, octahedron, icosahedron, a low-poly gem),
+Size (longest dimension in mm, default from the file), Sheet (same presets),
+Tabs (on/off, height, angle), Labels toggle, Score face, Valley strategy,
+Export (one button per sheet), stats (faces, islands, sheets, edges without
+tabs, cut and score length).
+
+Viewport toggle **3D | Net**. 3D is Three.js with orbit controls and a
+**Fold** slider: every face's transform is its parent's transform times a
+rotation about the shared edge by `t · dihedral`; each island's root
+interpolates from its flat position on the net to its place in the assembled
+model, so at 100 % the model is whole. Net view is the sheets side by side
+with pan and zoom, tabs shaded, labels visible.
+
+## Verification (`scripts/verify-unfold.mjs`)
+
+- ASCII and binary STL parse to the same triangles.
+- Cube: 12 triangles merge to 6 faces; 5 fold edges, 7 cut edges; a single
+  island; every 2D edge length equals its 3D length.
+- No two faces in an island overlap, for cube, octahedron, icosahedron and gem.
+- Tabs overlap nothing; every cut edge with a tab has its number exactly
+  twice plus once on the tab.
+- Packed islands lie inside the sheet minus margin.
+- Fold at t = 1 reproduces every original 3D vertex within 1e-6 after the
+  island root pose is applied.
+- Export parses as XML with `cut`, `mountain`, `valley` and `label` groups.
