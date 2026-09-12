@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Crease — Origami Pattern Generator — joshhicks.info</title>
-  <meta name="description" content="Generate parametric origami crease patterns — Miura-ori, Yoshimura, waterbomb, curved circles — sized to your sheet and exported as a laser-ready SVG with separate cut, mountain and valley layers. Runs entirely in your browser." />
+  <title>Unfold — STL to Paper Net — joshhicks.info</title>
+  <meta name="description" content="Turn a low-poly STL into a papercraft net: cut outline with glue tabs, mountain and valley fold lines on separate laser layers, numbered edges, and a fold slider that shows the net closing into the model. Runs entirely in your browser." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -90,6 +90,19 @@
     .patterns svg .m { stroke: var(--mountain); }
     .patterns svg .v { stroke: var(--valley); }
     .patterns svg .c { stroke: #93A0B8; }
+    .drop {
+      border: 1px dashed var(--border); border-radius: 6px;
+      padding: 12px 8px; margin-bottom: 8px; text-align: center; cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; color: var(--muted);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .drop:hover, .drop.over { border-color: var(--ink-light); color: var(--text); }
+    input[type=file] { display: none; }
+    .no-webgl { position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; padding: 2rem; text-align: center; color: var(--muted); }
+    .no-webgl.show { display: flex; }
+    .no-webgl h2 { font-size: 0.95rem; color: var(--text); font-weight: 500; }
+    .no-webgl p { font-size: 0.78rem; max-width: 34rem; line-height: 1.6; }
     .blurb { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); line-height: 1.55; }
 
     .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
@@ -166,6 +179,20 @@
     #preview .sheet { fill: var(--paper); stroke: none; }
     #preview .page { fill: none; stroke: rgba(0,0,0,0.18); stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
     #preview .cut path, #preview .cut circle, #preview .cut line { fill: none; stroke: #1B1F26; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+    #preview .tabs path { fill: rgba(38,52,78,0.10); stroke: none; }
+    #preview .label text { fill: #2E7D32; font-family: sans-serif; text-anchor: middle; dominant-baseline: middle; }
+    #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #three-canvas.hidden, #preview.hidden { display: none; }
+    .fold-bar { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; background: rgba(16,19,24,0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; }
+    .fold-bar label { font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; color: var(--muted); }
+    .fold-bar input[type=range] { width: 200px; }
+    .fold-bar .val { min-width: 34px; }
+    .fold-bar button { padding: 4px 10px; font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+    .fold-bar button:hover { color: var(--text); border-color: var(--ink-mid); }
+    .fold-bar.hidden { display: none; }
+    .msg { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--warn); line-height: 1.6; margin-top: 6px; white-space: pre-line; }
+    .msg:empty { display: none; }
+    .msg.err { color: var(--bad); }
     #preview .mountain path, #preview .mountain circle, #preview .mountain line, #preview .mountain path { fill: none; stroke: var(--mountain); stroke-width: 1.1; vector-effect: non-scaling-stroke; }
     #preview .valley path, #preview .valley circle, #preview .valley line { fill: none; stroke: var(--valley); stroke-width: 1.1; vector-effect: non-scaling-stroke; }
     #preview .hidden { display: none; }
@@ -191,57 +218,10 @@
     .view-tools button.active[data-layer="mountain"] { color: var(--mountain); }
     .view-tools button.active[data-layer="valley"] { color: var(--valley); }
 
-    .mode { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: rgba(16,19,24,0.85); backdrop-filter: blur(6px); }
-    .mode button { border: none !important; border-radius: 0 !important; background: transparent !important; backdrop-filter: none; }
-    .mode button + button { border-left: 1px solid var(--border) !important; }
-    .mode button.active { background: var(--ink-dark) !important; }
-
-    #fold-wrap { position: absolute; inset: 0; display: none; }
-    #fold-wrap.show { display: block; }
-    .fold-bar {
-      position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
-      display: flex; align-items: center; gap: 12px; z-index: 6;
-      background: rgba(16,19,24,0.85); backdrop-filter: blur(6px);
-      border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px;
-      width: min(520px, calc(100% - 32px));
-    }
-    .fold-bar input[type=range] { flex: 1; }
-    .fold-bar .val { min-width: 42px; text-align: right; }
-    .fold-bar button {
-      padding: 5px 12px; font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem;
-      border: 1px solid var(--ink-mid); border-radius: 6px; background: var(--ink-dark);
-      color: var(--ink-light); cursor: pointer;
-    }
-    .fold-bar button:hover { background: var(--ink-mid); color: #fff; }
-    .steps {
-      position: absolute; top: 56px; right: 14px; z-index: 6; width: 262px; max-height: calc(100% - 140px);
-      overflow-y: auto; background: rgba(16,19,24,0.86); backdrop-filter: blur(6px);
-      border: 1px solid var(--border); border-radius: 8px; padding: 10px 10px 6px;
-      scrollbar-width: thin;
-    }
-    .steps .panel-title { margin-bottom: 6px; }
-    .step { padding: 7px 8px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; }
-    .step:hover { background: rgba(255,255,255,0.03); }
-    .step.active { border-color: var(--ink-mid); background: rgba(62,84,120,0.18); }
-    .step-n { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--ink-light); margin-right: 6px; }
-    .step-t { font-size: 0.76rem; color: var(--text); font-weight: 500; }
-    .step-d { font-size: 0.7rem; color: var(--muted); line-height: 1.5; margin-top: 3px; }
-    .step-d b { color: var(--mountain); font-weight: 500; }
-    .step-d i { color: var(--valley); font-style: normal; }
-    .fold-msg {
-      position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
-      padding: 2rem; text-align: center; color: var(--muted); font-size: 0.8rem; line-height: 1.6; pointer-events: none;
-    }
-    .fold-msg.show { display: flex; }
-    .fold-msg span { max-width: 26rem; }
-
     @media (max-width: 860px) {
       .body-wrap { flex-direction: column; }
       .sidebar { width: 100%; max-height: 46%; border-right: none; border-bottom: 1px solid var(--border); }
-      .viewport-hint { display: none; }
-      .steps { position: static; width: auto; max-height: none; margin: 0; border-radius: 0; border-left: none; border-right: none; }
-      #fold-wrap.show { display: flex; flex-direction: column; }
-      #fold-wrap .three-host { position: relative; flex: 1; min-height: 200px; }
+      .viewport-hint { display: none; } .fold-bar input[type=range] { width: 120px; }
     }
   </style>
 
@@ -263,7 +243,7 @@
     </svg>
     Projects
   </a>
-  <span class="tool-header-title">CREASE — ORIGAMI PATTERNS</span>
+  <span class="tool-header-title">UNFOLD — STL TO PAPER NET</span>
   <span class="tool-header-site">joshhicks.info</span>
 </header>
 
@@ -271,14 +251,21 @@
   <aside class="sidebar">
 
     <div class="panel">
-      <div class="panel-title">Pattern</div>
-      <div class="patterns" id="patterns"></div>
-      <div class="blurb" id="blurb"></div>
+      <div class="panel-title">Model</div>
+      <div class="patterns" id="samples"></div>
+      <div class="drop" id="drop">Drop an STL, or click to choose</div>
+      <input type="file" id="file" accept=".stl,model/stl,application/sla" />
+      <div class="blurb" id="modelInfo"></div>
+      <div class="msg" id="modelMsg"></div>
     </div>
 
     <div class="panel">
-      <div class="panel-title">Parameters</div>
-      <div id="params"></div>
+      <div class="panel-title">Size</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Longest dimension<span class="unit">mm</span></span>
+        <input class="ctrl-input" type="number" id="size" min="5" max="2000" step="1" />
+      </div>
+      <div class="ctrl-hint">The file's own units are read as millimetres to start. Change this to rescale the whole net.</div>
     </div>
 
     <div class="panel">
@@ -298,14 +285,37 @@
         <span class="ctrl-label">Margin<span class="unit">mm</span></span>
         <input class="ctrl-input" type="number" id="margin" min="0" max="50" step="0.5" value="5" />
       </div>
-      <button class="btn btn-sub" id="fit">Fit pattern to sheet</button>
-      <div class="ctrl-hint" style="margin-top:8px">Scales the cell size so the pattern fills the sheet. Counts stay as set.</div>
-      <div class="readout" id="sizeReadout"></div>
-      <div class="verdict" id="sizeVerdict"></div>
+      <div class="ctrl-hint">Pieces that would not fit the sheet are split into more pieces. Every sheet becomes its own SVG.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Tabs &amp; labels</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Glue tabs</span>
+        <button class="toggle on" id="tabs" aria-label="Glue tabs"></button>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Tab height / angle<span class="unit">mm · °</span></span>
+        <div class="pair" style="width:160px">
+          <input class="ctrl-input" type="number" id="tabH" min="1" max="40" step="0.5" value="6" />
+          <input class="ctrl-input" type="number" id="tabAngle" min="30" max="90" step="5" value="60" />
+        </div>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Edge numbers</span>
+        <button class="toggle on" id="labels" aria-label="Edge numbers"></button>
+      </div>
+      <div class="ctrl-hint">Matching numbers glue together. Numbers go on a green engrave layer.</div>
     </div>
 
     <div class="panel">
       <div class="panel-title">Laser</div>
+      <div class="ctrl-row"><span class="ctrl-label">Score face</span></div>
+      <div class="seg" id="scoreFace">
+        <button data-v="outside" class="active">Outside</button>
+        <button data-v="inside">Inside</button>
+      </div>
+      <div class="ctrl-hint" id="faceHint"></div>
       <div class="ctrl-row"><span class="ctrl-label">Valley strategy</span></div>
       <div class="seg" id="strategy">
         <button data-v="same" class="active">Same side</button>
@@ -323,10 +333,6 @@
         </div>
       </div>
       <div class="ctrl-row">
-        <span class="ctrl-label">Swap mountain / valley</span>
-        <button class="toggle" id="swap" aria-label="Swap mountain and valley"></button>
-      </div>
-      <div class="ctrl-row">
         <span class="ctrl-label">Legend text on sheet</span>
         <button class="toggle" id="legend" aria-label="Include legend"></button>
       </div>
@@ -335,43 +341,36 @@
     <div class="panel">
       <div class="panel-title">Export</div>
       <div id="downloads"></div>
-      <div class="ctrl-hint" style="margin-top:8px">Cut black · mountain red · valley blue. 1 unit = 1 mm, 0.1 mm strokes. Map the colours to layers in your laser software.</div>
+      <div class="ctrl-hint" style="margin-top:8px">Cut black · mountain red · valley blue · numbers green. 1 unit = 1 mm, 0.1 mm strokes.</div>
       <div class="readout" id="stats"></div>
+      <div class="msg" id="warnings"></div>
     </div>
 
     <div class="panel">
       <div class="attribution">
-        Miura-ori after Koryo Miura. Yoshimura after Yoshimaru Yoshimura. Waterbomb tessellation and the concentric-circle curved crease are traditional. Mountain / valley assignments are for the face you score first; swap if you score the back.
+        Faces fold along a maximum-length spanning tree; overlapping or oversize pieces are cut apart. Mountain and valley are for the face you score. Models never leave the browser.
       </div>
     </div>
 
   </aside>
 
   <div class="viewport-wrap">
-    <svg id="preview" xmlns="http://www.w3.org/2000/svg"></svg>
-    <div id="fold-wrap">
-      <div class="three-host" id="three-host" style="position:absolute;inset:0;"></div>
-      <div class="fold-msg" id="foldMsg"><span></span></div>
-      <div class="steps" id="steps"></div>
-      <div class="fold-bar">
-        <button id="foldPlay">Play</button>
-        <input type="range" id="foldRange" min="0" max="100" step="0.5" value="0" />
-        <span class="val" id="foldVal">0%</span>
-        <button id="foldReset" title="Reset camera">View</button>
-      </div>
-    </div>
+    <canvas id="three-canvas"></canvas>
+    <svg id="preview" class="hidden" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="no-webgl" id="noWebgl"><h2>No WebGL here</h2><p>The 3D fold view needs WebGL. The Net view and the exports still work.</p></div>
     <div class="view-tools">
-      <div class="mode" id="mode">
-        <button data-mode="pattern" class="active">Pattern</button>
-        <button data-mode="fold">Fold</button>
-      </div>
+      <button id="view3d" class="active">3D</button>
+      <button id="viewNet">Net</button>
       <button id="fitView">Fit</button>
-      <button data-layer="mountain" class="active">Mountain</button>
-      <button data-layer="valley" class="active">Valley</button>
-      <button data-layer="cut" class="active">Cut</button>
+    </div>
+    <div class="fold-bar" id="foldBar">
+      <label for="fold">Fold</label>
+      <input type="range" id="fold" min="0" max="100" step="1" value="0" />
+      <span class="val" id="foldVal">0%</span>
+      <button id="play">Play</button>
     </div>
     <div class="viewport-stats" id="viewStats"></div>
-    <div class="viewport-hint" id="viewHint">Scroll to zoom · drag to pan</div>
+    <div class="viewport-hint" id="hint">Drag to orbit · scroll to zoom</div>
   </div>
 </div>
 

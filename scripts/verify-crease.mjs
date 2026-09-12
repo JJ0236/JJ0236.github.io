@@ -5,6 +5,7 @@
 
 import { PATTERNS, build, defaults, vertexMap, kawasakiDefect, segLength, totalLength, clipSegment } from '../crease/patterns.js';
 import { assemble, chain, dashItems, mirrorX, toSvg, translate } from '../crease/export.js';
+import { patternSegments, planarGraph, buildFoldModel, FoldSim, dihedral, miuraKinematics, FOLD_LIMITS } from '../crease/fold.js';
 
 let failures = 0, checks = 0;
 const ok = (name, cond, detail = '') => {
@@ -190,6 +191,66 @@ section('export: svg');
   ok('every shape element is self-closed', self === tags);
   const plain = toSvg(assemble(pat, { strategy: 'same', margin: 4 }).files[0], asm.page, {});
   ok('no legend by default', !plain.includes('id="legend"'));
+}
+
+/* ── Fold: faces ─────────────────────────────────────────────────────────── */
+
+section('fold: faces');
+{
+  const outlineArea = pat => {
+    const p = pat.cuts[0].pts; let s = 0;
+    for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length]; s += a[0] * b[1] - b[0] * a[1]; }
+    return Math.abs(s / 2);
+  };
+  const faceArea = (verts, f) => { let s = 0; for (let i = 0; i < f.length; i++) { const a = verts[f[i]], b = verts[f[(i + 1) % f.length]]; s += a[0] * b[1] - b[0] * a[1]; } return s / 2; };
+  const cases = [['miura', { cols: 5, rows: 6, w: 20, h: 15, angle: 30 }, 30], ['yoshimura', { cols: 4, rows: 3, w: 30, h: 20 }, 27], ['waterbomb', { cols: 3, rows: 4, w: 30, h: 24 }, null]];
+  for (const [id, p, expectFaces] of cases) {
+    const pat = build(id, p);
+    const m = buildFoldModel(pat);
+    ok(`${id}: model builds`, m.ok);
+    if (expectFaces) ok(`${id}: face count`, m.faces.length === expectFaces, `${m.faces.length}`);
+    ok(`${id}: faces tile the outline`, near(m.faces.reduce((s, f) => s + Math.abs(faceArea(m.verts, f)), 0), outlineArea(pat), 1e-6));
+    ok(`${id}: every face oriented the same way`, m.faces.every(f => faceArea(m.verts, f) < 0));
+    ok(`${id}: every triangle has area`, m.tris.every(t => Math.abs(faceArea(m.verts, t)) > 1e-6));
+    const creaseCount = pat.mountains.length + pat.valleys.length;
+    const creaseHinges = m.hinges.filter(h => h.type !== 'F').length;
+    ok(`${id}: every crease segment is a hinge`, creaseHinges >= creaseCount, `${creaseHinges} vs ${creaseCount}`);
+  }
+  ok('miura faces are parallelograms', buildFoldModel(build('miura', {})).faces.every(f => f.length === 4));
+  ok('yoshimura faces are triangles', buildFoldModel(build('yoshimura', {})).faces.every(f => f.length === 3));
+  ok('circles are refused with a reason', !buildFoldModel(build('circles', {})).ok && /curved/i.test(buildFoldModel(build('circles', {})).reason));
+  const seg = planarGraph(patternSegments(build('yoshimura', { cols: 2, rows: 2, w: 20, h: 20 })));
+  ok('T-junctions split the single row line into three', seg.edges.filter(e => e.type === 'M').length === 3, `${seg.edges.filter(e => e.type === 'M').length}`);
+}
+
+/* ── Fold: simulation ────────────────────────────────────────────────────── */
+
+section('fold: sim');
+{
+  const P = new Float64Array([0, 0, 0, 1, 0, 0, 0.5, 1, -1, 0.5, -1, -1]);
+  ok('apexes folded away from +z read as a positive (mountain) dihedral', dihedral(P, { a: 0, b: 1, c: 2, d: 3 }) > 0);
+  const hinge = { verts: [[0, 0], [10, 0], [5, 10], [5, -10]], faces: [[0, 1, 2], [1, 0, 3]], tris: [[0, 1, 2], [1, 0, 3]], springs: [[0, 1], [1, 2], [2, 0], [0, 3], [3, 1]], hinges: [{ a: 0, b: 1, c: 2, d: 3, type: 'V' }], edges: [] };
+  const hs = new FoldSim(hinge, { maxAngle: 90 });
+  hs.setFold(100); hs.step(10000);
+  ok('single valley hinge reaches -90°', near(dihedral(hs.P, hs.hinges[0]) * 180 / Math.PI, -90, 1), `${dihedral(hs.P, hs.hinges[0]) * 180 / Math.PI}`);
+  const hm = new FoldSim({ ...hinge, hinges: [{ a: 0, b: 1, c: 2, d: 3, type: 'M' }] }, { maxAngle: 90 });
+  hm.setFold(100); hm.step(10000);
+  ok('single mountain hinge reaches +90°', near(dihedral(hm.P, hm.hinges[0]) * 180 / Math.PI, 90, 1));
+
+  const pat = build('miura', { cols: 8, rows: 10, w: 20, h: 20, angle: 30 });
+  const sim = new FoldSim(buildFoldModel(pat), { maxAngle: FOLD_LIMITS.miura, goal: miuraKinematics(30) });
+  sim.setFold(60);
+  let steps = 0; while (!sim.settled() && steps < 9000) { sim.step(50); steps += 50; }
+  sim.step(800);
+  ok('miura at 60%: every crease within 1° of target', sim.creaseError() < 1, `${sim.creaseError()}°`);
+  ok('miura at 60%: no edge strained past 0.5%', sim.maxStrain() < 0.005, `${sim.maxStrain()}`);
+  let z = 0; for (let i = 2; i < sim.P.length; i += 3) z = Math.max(z, Math.abs(sim.P[i]));
+  ok('miura at 60% actually leaves the plane', z > 0.02, `${z}`);
+  for (const id of ['yoshimura', 'waterbomb']) {
+    const s2 = new FoldSim(buildFoldModel(build(id, {})), { maxAngle: FOLD_LIMITS[id] });
+    s2.setFold(100); let n = 0; while (!s2.settled() && n < 9000) { s2.step(50); n += 50; } s2.step(500);
+    ok(`${id} at 100% stays bounded`, s2.maxStrain() < 0.35 && Number.isFinite(s2.creaseError()), `strain ${s2.maxStrain()}`);
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

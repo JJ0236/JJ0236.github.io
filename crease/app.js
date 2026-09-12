@@ -28,6 +28,29 @@ const state = {
 };
 
 let pattern = null, asm = null;
+let mode = 'pattern';
+let foldView = null, foldLoading = null;
+let activeStep = -1;
+
+/* ── Fold steps ──────────────────────────────────────────────────────────── */
+
+const SCORE = { t: 'Score on the laser', d: 'Cut layer at cutting power. Both score layers at a light setting that marks the surface without cutting through; test on scrap. Scored face is the front.' };
+const PRE_M = { t: 'Pre-fold mountains', d: 'Fold every <b>red</b> line toward you, one at a time, and unfold. Scored paper turns crisply along the line.', hl: 'mountain' };
+const PRE_V = { t: 'Pre-fold valleys', d: 'Flip the sheet and fold every <i>blue</i> line toward you (from the front they are valleys). Unfold and flip back.', hl: 'valley' };
+const STEPS = {
+  miura: [SCORE, PRE_M, PRE_V,
+    { t: 'Collapse', d: 'Hold two opposite corners and push them together. The zigzag rows fold first and the verticals follow on their own. It closes in one motion; the slider shows the exact rigid path.', fold: 100, play: true }],
+  yoshimura: [SCORE, PRE_M, PRE_V,
+    { t: 'Pinch the diamonds', d: 'Row by row, pinch each row line as a mountain while pushing the diamond points inward. The sheet curls as you go.', fold: 55 },
+    { t: 'Roll and join', d: 'Bring the left and right edges together so the half-diamonds meet, and tape or glue the overlap. The tube compresses and springs back along its length.', fold: 100, play: true }],
+  waterbomb: [SCORE, PRE_M, PRE_V,
+    { t: 'Accordion the rows', d: 'Fold every horizontal line so the sheet becomes a tight accordion: unit boundaries are mountains, midlines valleys.', fold: 25, hl: 'valley' },
+    { t: 'Pop the units', d: 'With the accordion closed, pinch each X so its centre pushes toward you. Work along one row, then the next. The stagger makes the sheet curl.', fold: 100, play: true },
+    { t: 'Close the ball', d: 'Bring the short edges together and tuck the half units into each other; a dab of glue holds it. Squeeze to see it stretch like a lattice.' }],
+  circles: [SCORE,
+    { t: 'Ease every ring', d: 'Starting from the inner cut, fold each ring a little: <b>red</b> rings toward you, <i>blue</i> rings away. Go around gently rather than creasing any one ring flat.', hl: 'mountain' },
+    { t: 'Let it twist', d: 'Keep tightening the rings evenly. The annulus has no flat state, so it twists into a saddle on its own. Pushing two opposite edges together sets the final shape.' }],
+};
 
 /* ── Pattern picker ──────────────────────────────────────────────────────── */
 
@@ -60,6 +83,8 @@ function selectPattern(id) {
   for (const b of $('patterns').children) b.classList.toggle('active', b.dataset.id === id);
   $('blurb').textContent = PATTERNS[id].blurb;
   buildParams();
+  activeStep = -1;
+  renderSteps();
   update(true);
 }
 
@@ -304,6 +329,85 @@ function renderDownloads() {
   });
 }
 
+/* ── Fold view ───────────────────────────────────────────────────────────── */
+
+function renderSteps() {
+  const host = $('steps');
+  const steps = STEPS[state.pattern];
+  host.innerHTML = '<div class="panel-title">How to fold</div>' + steps.map((st, i) =>
+    `<div class="step${i === activeStep ? ' active' : ''}" data-i="${i}"><span class="step-n">${i + 1}</span><span class="step-t">${st.t}</span><div class="step-d">${st.d}</div></div>`).join('');
+  for (const el of host.querySelectorAll('.step')) el.addEventListener('click', () => runStep(+el.dataset.i));
+}
+
+function runStep(i) {
+  activeStep = i;
+  renderSteps();
+  const st = STEPS[state.pattern][i];
+  if (!foldView) return;
+  foldView.setHighlight(st.hl || null);
+  foldView.pause();
+  if (st.fold !== undefined) {
+    if (st.play) { setFoldUI(0); foldView.play(); }
+    else setFoldUI(st.fold);
+  }
+}
+
+function setFoldUI(pct) {
+  $('foldRange').value = pct;
+  $('foldVal').textContent = `${Math.round(pct)}%`;
+  foldView?.setFold(pct);
+}
+
+async function ensureFoldView() {
+  if (foldView) return foldView;
+  if (!foldLoading) {
+    foldLoading = import('./foldview.js').then(({ FoldView }) => {
+      foldView = new FoldView($('three-host'), onFoldStatus);
+      foldView.onFold = pct => { $('foldRange').value = pct; $('foldVal').textContent = `${Math.round(pct)}%`; };
+      return foldView;
+    });
+  }
+  return foldLoading;
+}
+
+function onFoldStatus(st) {
+  const msg = $('foldMsg');
+  if (!st.ok) {
+    msg.classList.add('show');
+    msg.querySelector('span').textContent = `${st.reason} Follow the steps on the right; this pattern has no flat-foldable simulation.`;
+    $('viewStats').textContent = `${PATTERNS[state.pattern].name}\nno simulation for curved creases`;
+  } else {
+    msg.classList.remove('show');
+    $('viewStats').textContent = `${PATTERNS[state.pattern].name}\n${st.faces} facets · ${st.creases} hinges\nfull fold = ${st.maxAngle}° per crease`;
+  }
+}
+
+async function refreshFold() {
+  const fv = await ensureFoldView();
+  fv.setModel(state.pattern, pattern, state.params);
+  fv.show();
+  fv.setHighlight(activeStep >= 0 ? STEPS[state.pattern][activeStep].hl || null : null);
+}
+
+function setMode(m) {
+  mode = m;
+  for (const b of $('mode').children) b.classList.toggle('active', b.dataset.mode === m);
+  const fold = m === 'fold';
+  $('fold-wrap').classList.toggle('show', fold);
+  $('preview').style.display = fold ? 'none' : '';
+  $('viewHint').textContent = fold ? 'Drag to orbit · scroll to zoom · pick a step' : 'Scroll to zoom · drag to pan';
+  for (const b of document.querySelectorAll('.view-tools [data-layer], #fitView')) b.style.display = fold ? 'none' : '';
+  if (fold) refreshFold();
+  else { foldView?.hide(); renderReadouts(); }
+}
+
+function bindFold() {
+  for (const b of $('mode').children) b.addEventListener('click', () => setMode(b.dataset.mode));
+  $('foldRange').addEventListener('input', () => { foldView?.pause(); setFoldUI(parseFloat($('foldRange').value)); });
+  $('foldPlay').addEventListener('click', () => { if (!foldView) return; if (foldView.playing) foldView.pause(); else foldView.play(); });
+  $('foldReset').addEventListener('click', () => foldView?.resetCamera());
+}
+
 /* ── Update loop ─────────────────────────────────────────────────────────── */
 
 function update(refit = false) {
@@ -313,10 +417,19 @@ function update(refit = false) {
   renderReadouts();
   renderDownloads();
   if (refit) fitView();
+  if (mode === 'fold') refreshFold();
 }
 
 buildPicker();
 buildSheet();
 buildLaser();
 bindView();
-selectPattern('miura');
+bindFold();
+
+// Deep links: /crease/?pattern=waterbomb&mode=fold&fold=60
+const q = new URLSearchParams(location.search);
+selectPattern(PATTERNS[q.get('pattern')] ? q.get('pattern') : 'miura');
+if (q.get('mode') === 'fold') {
+  setMode('fold');
+  if (q.has('fold')) ensureFoldView().then(() => setFoldUI(parseFloat(q.get('fold')) || 0));
+}

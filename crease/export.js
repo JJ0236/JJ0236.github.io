@@ -6,7 +6,7 @@
 
 import { segLength } from './patterns.js';
 
-export const COLORS = { cut: '#000000', mountain: '#ff0000', valley: '#0000ff' };
+export const COLORS = { cut: '#000000', mountain: '#ff0000', valley: '#0000ff', label: '#008800' };
 
 /* ── Item transforms ─────────────────────────────────────────────────────── */
 
@@ -16,6 +16,7 @@ export function translate(items, dx, dy) {
       case 'L': return { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
       case 'C': case 'A': return { ...s, cx: s.cx + dx, cy: s.cy + dy };
       case 'P': return { ...s, pts: s.pts.map(([x, y]) => [x + dx, y + dy]) };
+      case 'T': return { ...s, x: s.x + dx, y: s.y + dy };
     }
     return s;
   });
@@ -30,6 +31,7 @@ export function mirrorX(items, W) {
       case 'C': return { ...s, cx: W - s.cx };
       case 'A': return { ...s, cx: W - s.cx, a0: Math.PI - s.a1, a1: Math.PI - s.a0 };
       case 'P': return { ...s, pts: s.pts.map(([x, y]) => [W - x, y]) };
+      case 'T': return { ...s, x: W - s.x, angle: -(s.angle || 0) };
     }
     return s;
   });
@@ -126,6 +128,7 @@ export function assemble(pattern, opts) {
   let mountain = translate(opts.swap ? pattern.valleys : pattern.mountains, m, m);
   let valley   = translate(opts.swap ? pattern.mountains : pattern.valleys, m, m);
   const cut    = translate(pattern.cuts, m, m);
+  const label  = translate(pattern.labels || [], m, m);
 
   if (opts.strategy === 'perf') valley = dashItems(valley, opts.dash ?? 3, opts.gap ?? 1.5);
 
@@ -134,7 +137,7 @@ export function assemble(pattern, opts) {
     return {
       page,
       files: [
-        { name: 'front', layers: { cut: cut.concat(reg), mountain: chain(mountain), valley: [] },
+        { name: 'front', layers: { cut: cut.concat(reg), mountain: chain(mountain), valley: [], label },
           note: 'Front face: cut outline and mountain scores.' },
         { name: 'back', layers: { cut: mirrorX(cut.concat(reg), page.w), mountain: [], valley: chain(mirrorX(valley, page.w)) },
           note: 'Back face, mirrored left-right. Flip the sheet about its vertical axis and line up the crosses.' },
@@ -144,7 +147,7 @@ export function assemble(pattern, opts) {
 
   return {
     page,
-    files: [{ name: 'front', layers: { cut, mountain: chain(mountain), valley: opts.strategy === 'perf' ? valley : chain(valley) } }],
+    files: [{ name: 'front', layers: { cut, mountain: chain(mountain), valley: opts.strategy === 'perf' ? valley : chain(valley), label } }],
   };
 }
 
@@ -180,6 +183,10 @@ export function itemToSvg(s) {
       const d = s.pts.map((p, i) => (i ? 'L' : 'M') + f(p[0]) + ',' + f(p[1])).join(' ') + (s.closed ? ' Z' : '');
       return `<path d="${d}"/>`;
     }
+    case 'T': {
+      const rot = s.angle ? ` transform="rotate(${f(s.angle)} ${f(s.x)} ${f(s.y)})"` : '';
+      return `<text x="${f(s.x)}" y="${f(s.y)}" font-size="${f(s.size)}"${rot}>${String(s.text).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))}</text>`;
+    }
   }
   return '';
 }
@@ -195,9 +202,12 @@ export function toSvg(file, page, meta = {}) {
     `    .mountain { fill: none; stroke: ${COLORS.mountain}; stroke-width: 0.1; }`,
     `    .valley   { fill: none; stroke: ${COLORS.valley}; stroke-width: 0.1; }`,
     `    .legend   { font-family: sans-serif; font-size: 3px; fill: #333333; }`,
+    `    .label    { font-family: sans-serif; fill: ${COLORS.label}; stroke: none; text-anchor: middle; dominant-baseline: middle; }`,
     `  </style>`,
   ];
-  for (const layer of ['mountain', 'valley', 'cut']) {
+  const layers = ['mountain', 'valley', 'cut'];
+  if (file.layers.label && file.layers.label.length) layers.push('label');
+  for (const layer of layers) {
     const items = file.layers[layer] || [];
     lines.push(`  <g id="${layer}" inkscape:groupmode="layer" inkscape:label="${layer}" class="${layer}">`);
     for (const s of items) lines.push('    ' + itemToSvg(s));
