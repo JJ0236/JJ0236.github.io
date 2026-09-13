@@ -556,6 +556,9 @@ function renderDims() {
   if (result) $('dimsNet').textContent = `net ${(result.stats.netW / 25.4).toFixed(1)} × ${(result.stats.netH / 25.4).toFixed(1)} in`;
 }
 
+// Debug hook for headless checks: load a model from an ArrayBuffer.
+window.__unfold = { load: (buf, name) => loadPositions(parseStl(buf), name), state, fold: pct => { state.fold = pct / 100; $('fold').value = pct; updateGeometry(); } };
+
 buildSamples();
 buildSidebar();
 initThree();

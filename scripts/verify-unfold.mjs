@@ -253,6 +253,27 @@ section('one piece: solve');
   } else console.log('        (eevee STL not present, skipped)');
 }
 
+section('fold accuracy on long chains');
+{
+  const foldErr = (soup, opts = {}) => {
+    const m = buildMesh(soup);
+    const u = unfold(m, { onePiece: true, ...opts });
+    const P = foldPositions(u, 1);
+    let worst = 0;
+    u.mesh.faces.forEach((f, fi) => f.verts.forEach((vi, j) => { const p = P[fi][j], q = u.target[vi]; worst = Math.max(worst, Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])); }));
+    return { worst, faces: m.faces.length, pieces: u.stats.islands, diag: m.diag };
+  };
+  const fine = (() => { const R = 30, r = 12, nu = 24, nv = 12; const P = (i, j) => { const u = i / nu * 2 * Math.PI, v = j / nv * 2 * Math.PI; return [(R + r * Math.cos(v)) * Math.cos(u), (R + r * Math.cos(v)) * Math.sin(u), r * Math.sin(v)]; }; const out = []; for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) { const a = P(i, j), b = P(i + 1, j), c = P(i + 1, j + 1), d = P(i, j + 1); out.push(...a, ...b, ...c, ...a, ...c, ...d); } return out; })();
+  const ft = foldErr(fine);
+  ok(`fine torus (${ft.faces} faces): folded model closes to within a micron`, ft.worst < 1e-3, `${ft.worst} mm`);
+  for (const file of ['/Users/josh/Downloads/fox.stl', '/Users/josh/Downloads/eevee_lowpoly_flowalistik.STL']) {
+    if (!existsSync(file)) continue;
+    const buf = readFileSync(file);
+    const fe = foldErr(parseStl(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)));
+    ok(`${file.split('/').pop()} (${fe.faces} faces): folded model closes to within 0.05 mm`, fe.worst < 0.05, `${fe.worst} mm`);
+  }
+}
+
 section('labels');
 {
   const m = buildMesh(SAMPLES.cube());

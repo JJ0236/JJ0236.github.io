@@ -155,3 +155,15 @@ overlapping face at a time, vertex kept on the original edge, judged by
 re-laying out the warm-started tree (milliseconds) and reverted when it does
 not lower the count. Mean vertex drift on the test model was 0.02–0.07 % of
 the bounding diagonal when it was still needed.
+
+## Revision, 2026-09-12 (late): folded model closes up
+
+A 321-face model showed a hole when folded. Hinge angles came from acos of
+face-normal dot products and were chained root to leaf; the error compounded
+to 11 mm at the end of a 37-deep chain. Now every face gets an exact rigid
+pose from its flat copy, each hinge angle is measured against the parent's
+*chained* pose (closed loop, so a slightly bent merged face costs only its own
+error), and at 100 % the view uses the exact poses outright. In-plane frames
+come from the farthest vertex pair rather than the first edge, which can be
+tiny on split pieces. Coplanar merging is tightened to 0.5°. Verification
+asserts the fine torus closes to a micron and the local test models to 0.05 mm.

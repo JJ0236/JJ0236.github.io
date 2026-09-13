@@ -69,6 +69,7 @@ const T = {
   compose: (A, B) => ({ q: Q.mul(A.q, B.q), t: add3(Q.rot(A.q, B.t), A.t) }),
   // Rotation by `a` about the axis through point P with direction k.
   hinge(P, k, a) { const q = Q.axisAngle(norm3(k), a); return { q, t: sub3(P, Q.rot(q, P)) }; },
+  inverse(A) { const q = [-A.q[0], -A.q[1], -A.q[2], A.q[3]]; return { q, t: mul3(Q.rot(q, A.t), -1) }; },
 };
 
 /* ── 2D geometry ─────────────────────────────────────────────────────────── */
@@ -148,11 +149,18 @@ const rot2 = (p, th) => [p[0] * Math.cos(th) - p[1] * Math.sin(th), p[0] * Math.
 // neighbour across their shared edge.
 export function prepareLayout(mesh, verts3 = mesh.verts) {
   const { faces, edges } = mesh;
+  const opts_scale = () => (mesh.verts === verts3 ? 1 : len3(verts3[0]) / (len3(mesh.verts[0]) || 1));
+  // In-plane basis from the vertex farthest from the centroid, projected onto
+  // the face plane. Using the first edge is fragile: split pieces keep
+  // collinear vertices, and a tiny first edge makes the frame noisy.
   const local = faces.map(f => {
-    const p0 = verts3[f.verts[0]];
-    const u = norm3(sub3(verts3[f.verts[1]], p0));
+    const c = mul3(f.centroid, opts_scale(verts3, f));
+    let far = null, best = -1;
+    for (const i of f.verts) { const l = len3(sub3(verts3[i], c)); if (l > best) { best = l; far = verts3[i]; } }
+    let u = sub3(far, c);
+    u = norm3(sub3(u, mul3(f.normal, dot3(u, f.normal))));
     const w = cross3(f.normal, u);
-    return f.verts.map(i => { const d = sub3(verts3[i], p0); return [dot3(d, u), dot3(d, w)]; });
+    return f.verts.map(i => { const d = sub3(verts3[i], c); return [dot3(d, u), dot3(d, w)]; });
   });
   const adj = faces.map(() => []);
   for (const e of edges) {
@@ -398,33 +406,47 @@ export function unfold(mesh, options = {}) {
   const target = verts3.map(v => add3(v, shift));
   const flat3 = placed.map(poly => poly.map(([x, y]) => [x, y, 0]));
 
-  const rootPose = new Array(faces.length), hinge = new Array(faces.length), fullPose = new Array(faces.length);
+  const rootPose = new Array(faces.length), hinge = new Array(faces.length), fullPose = new Array(faces.length), chainPose = new Array(faces.length);
   const rigidFrom = (fi) => {
     const P = flat3[fi], V = faces[fi].verts.map(i => target[i]);
-    const e1 = norm3(sub3(P[1], P[0])), e3 = [0, 0, 1], e2 = cross3(e3, e1);
-    const E1 = norm3(sub3(V[1], V[0])), E3 = faces[fi].normal, E2 = cross3(E3, E1);
+    // Frame from the two vertices farthest apart, projected onto the face
+    // plane: robust against short or collinear edges.
+    let ia = 0, ib = 1, far = -1;
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) { const l = len3(sub3(P[i], P[j])); if (l > far) { far = l; ia = i; ib = j; } }
+    const e1 = norm3(sub3(P[ib], P[ia])), e3 = [0, 0, 1], e2 = cross3(e3, e1);
+    const E3 = faces[fi].normal;
+    let E1 = sub3(V[ib], V[ia]); E1 = norm3(sub3(E1, mul3(E3, dot3(E1, E3))));
+    const E2 = cross3(E3, E1);
     // R = [E1 E2 E3] · [e1 e2 e3]^T ; columns of R are R·x̂, R·ŷ, R·ẑ.
     const col = k => add3(add3(mul3(E1, e1[k]), mul3(E2, e2[k])), mul3(E3, e3[k]));
     const q = Q.fromColumns(col(0), col(1), col(2));
-    return { q, t: sub3(V[0], Q.rot(q, P[0])) };
+    return { q, t: sub3(V[ia], Q.rot(q, P[ia])) };
   };
   for (const f of order) {
     if (parent[f] < 0 || cutByOverlap.has(parentEdge[f].id)) {
-      rootPose[f] = rigidFrom(f); fullPose[f] = rootPose[f]; hinge[f] = null; continue;
+      rootPose[f] = rigidFrom(f); fullPose[f] = rootPose[f]; chainPose[f] = rootPose[f]; hinge[f] = null; continue;
     }
     const p = parent[f], e = parentEdge[f];
     const ip = edgeIndexIn(p, e);
     const A = flat3[p][ip], B = flat3[p][(ip + 1) % flat3[p].length];
-    const k = sub3(B, A);
-    let best = null;
-    for (const sign of [1, -1]) {
-      const ang = sign * Math.abs(e.dihedral);
-      const pose = T.compose(fullPose[p], T.hinge(A, k, ang));
-      const err = faces[f].verts.reduce((acc, vi, j) => acc + len3(sub3(T.apply(pose, flat3[f][j]), target[vi])), 0);
-      if (!best || err < best.err) best = { err, ang, pose };
-    }
-    hinge[f] = { A, k, angle: best.ang };
-    fullPose[f] = best.pose;
+    const k = sub3(B, A), kh = norm3(k);
+    // Exact hinge angle from the exact poses of parent and child, so a chain
+    // hundreds of faces deep closes up at 100 % instead of drifting. The
+    // relative motion is a rotation about the shared edge; read its angle off
+    // the child vertex farthest from that axis.
+    // Closed loop: measure the hinge against the parent's *chained* pose, so a
+    // slightly bent merged face costs only its own error instead of tilting
+    // everything below it.
+    const exact = rigidFrom(f);
+    const rel = T.compose(T.inverse(chainPose[p]), exact);
+    let C = null, far = -1;
+    for (const q of flat3[f]) { const d = sub3(q, A); const perp = sub3(d, mul3(kh, dot3(d, kh))); const l = len3(perp); if (l > far) { far = l; C = q; } }
+    const perpOf = q => { const d = sub3(q, A); return sub3(d, mul3(kh, dot3(d, kh))); };
+    const v0 = perpOf(C), v1 = perpOf(T.apply(rel, C));
+    const angle = Math.atan2(dot3(cross3(v0, v1), kh), dot3(v0, v1));
+    hinge[f] = { A, k, angle };
+    fullPose[f] = exact;
+    chainPose[f] = T.compose(chainPose[p], T.hinge(A, k, angle));
   }
   // Island root animates about its own flat centroid.
   const islandCentre = islands.map(isl => {
@@ -437,7 +459,7 @@ export function unfold(mesh, options = {}) {
     folds: foldEdges.length, cuts: cutEdges.length, tabs: tabs.length, noTab,
     netW: pageW, netH: pageH, tries: tree.tries, info: tree.info || '',
   };
-  return { opts, mesh, uW: pageW, uH: pageH, sheetW: uW, sheetH: uH, islands, sheets, order, parent, islandOf, flat3, target, rootPose, hinge, islandCentre, foldEdges, cutEdges, stats, warnings, SHEET_GAP, tree };
+  return { opts, mesh, uW: pageW, uH: pageH, sheetW: uW, sheetH: uH, islands, sheets, order, parent, parentEdge, islandOf, flat3, target, rootPose, fullPose, hinge, islandCentre, foldEdges, cutEdges, stats, warnings, SHEET_GAP, tree };
 }
 
 /* ── Forest search ───────────────────────────────────────────────────────── */
@@ -519,6 +541,8 @@ export function growForest(faces, adj, local, placeAgainst, o) {
 
 // Positions of every face's vertices at fold fraction t in [0, 1].
 export function foldPositions(r, t) {
+  // Fully folded: every face sits exactly where the model has it.
+  if (t >= 0.9995 && r.fullPose) return r.flat3.map((poly, f) => poly.map(p => T.apply(r.fullPose[f], p)));
   const pose = new Array(r.flat3.length);
   for (const f of r.order) {
     const p = r.parent[f];

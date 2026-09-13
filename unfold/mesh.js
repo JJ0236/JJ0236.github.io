@@ -63,7 +63,7 @@ export function buildMesh(positions) {
   // Union-find over coplanar neighbours.
   const parent = tris.map((_, i) => i);
   const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
-  const COPLANAR = Math.cos(Math.PI / 180);
+  const COPLANAR = Math.cos(0.5 * Math.PI / 180);   // merge only what is flat to half a degree
   for (const list of triEdge.values()) {
     if (list.length !== 2) continue;
     const [i, j] = list;
