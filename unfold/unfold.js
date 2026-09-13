@@ -74,6 +74,7 @@ const T = {
 /* ── 2D geometry ─────────────────────────────────────────────────────────── */
 
 const EPS = 1e-3;   // mm; touching is not overlapping
+export const FLAT = 0.5 * Math.PI / 180;   // folds flatter than this are seams, not creases
 
 function segCross(a, b, c, d) {
   const r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]];
@@ -330,7 +331,7 @@ export function unfold(mesh, options = {}) {
   }
   for (const e of foldEdges) {
     const s = e.sides[0], f = s.face, n = pos[f].length;
-    islands[islandOf[f]].folds.push({ a: pos[f][s.index], b: pos[f][(s.index + 1) % n], mountain: e.dihedral >= 0, edge: e });
+    islands[islandOf[f]].folds.push({ a: pos[f][s.index], b: pos[f][(s.index + 1) % n], mountain: e.dihedral >= 0, flat: Math.abs(e.dihedral) < FLAT, edge: e });
   }
   for (const t of tabs) islands[t.island].folds.push({ a: t.poly[0], b: t.poly[3], mountain: t.edge.dihedral >= 0, tab: true });
 
@@ -552,6 +553,7 @@ export function toPatterns(r) {
       const isl = r.islands[ii];
       for (const loop of isl.pLoops) cuts.push({ k: 'P', pts: loop.map(P), closed: true });
       for (const f of isl.pFolds) {
+        if (f.flat) continue;                        // seam inside a flat region: no crease
         const [x1, y1] = P(f.a), [x2, y2] = P(f.b);
         const m = outside ? f.mountain : !f.mountain;
         (m ? mountains : valleys).push({ k: 'L', x1, y1, x2, y2 });

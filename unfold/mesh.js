@@ -77,11 +77,22 @@ export function buildMesh(positions) {
   // let their edges become cuts.
   const minArea = 1e-7 * diag * diag;
   let slivers = 0;
+  let concaveSplit = 0;
   for (const group of groups.values()) {
     const loop = groupLoop(group, tris);
-    const made = loop ? [makeFace(loop, verts)] : group.map(i => makeFace(tris[i], verts));
+    let made;
+    if (loop && isConvexLoop(loop, verts)) made = [makeFace(loop, verts)];
+    else {
+      // A concave merged face cannot unfold: a neighbour folded across one of
+      // its edges lands inside the concavity. Merge its triangles only as far
+      // as they stay convex; the seams between the pieces are flat, not creases.
+      const pieces = convexPieces(group, tris, verts);
+      if (loop) concaveSplit++;
+      made = pieces.map(l => makeFace(l, verts, true));
+    }
     for (const f of made) { if (f.area > minArea) faces.push(f); else slivers++; }
   }
+  if (concaveSplit) warnings.push(`${concaveSplit} concave flat region${concaveSplit > 1 ? 's' : ''} split into convex pieces (flat seams are not scored).`);
   if (slivers) warnings.push(`${slivers} zero-area sliver face${slivers > 1 ? 's' : ''} dropped.`);
   if (faces.length > MAX_FACES) throw new Error(`${faces.length} faces after merging. The limit is ${MAX_FACES}; decimate the model first.`);
   if (faces.length > FIDDLY_FACES) warnings.push(`${faces.length} faces: the net will be fiddly to assemble.`);
@@ -143,10 +154,11 @@ function groupLoop(group, tris) {
   return loop.length === count ? loop : null;
 }
 
-function makeFace(loop, verts) {
-  // Drop collinear vertices so one straight side is one edge.
+function makeFace(loop, verts, keepCollinear = false) {
+  // Drop collinear vertices so one straight side is one edge, except on
+  // pieces split out of a flat region, whose seams must keep matching edges.
   const pts = loop.slice();
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < (keepCollinear ? 0 : 2); pass++) {
     for (let i = pts.length - 1; i >= 0 && pts.length > 3; i--) {
       const p = verts[pts[(i + pts.length - 1) % pts.length]], c = verts[pts[i]], n = verts[pts[(i + 1) % pts.length]];
       const u = sub(c, p), v = sub(n, c);
@@ -202,4 +214,55 @@ export function signedVolume(tris, verts) {
     v += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])) / 6;
   }
   return v;
+}
+
+// Convexity of a planar loop: every turn has the same sign (collinear turns allowed).
+function isConvexLoop(loop, verts) {
+  const n = loop.length;
+  if (n < 4) return true;
+  const nrm = [0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const p = verts[loop[i]], q = verts[loop[(i + 1) % n]];
+    nrm[0] += (p[1] - q[1]) * (p[2] + q[2]); nrm[1] += (p[2] - q[2]) * (p[0] + q[0]); nrm[2] += (p[0] - q[0]) * (p[1] + q[1]);
+  }
+  const scale = len(nrm);
+  for (let i = 0; i < n; i++) {
+    const a = verts[loop[i]], b = verts[loop[(i + 1) % n]], c = verts[loop[(i + 2) % n]];
+    const t = dot(cross(sub(b, a), sub(c, b)), nrm);
+    if (t < -1e-6 * scale * len(sub(b, a)) * len(sub(c, b))) return false;
+  }
+  return true;
+}
+
+// Greedy convex merging of a coplanar triangle group: union neighbouring
+// pieces along their shared edge whenever the result is a single convex loop.
+function convexPieces(group, tris, verts) {
+  let pieces = group.map(i => tris[i].slice());
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < pieces.length; i++) for (let j = i + 1; j < pieces.length; j++) {
+      const u = unionLoops(pieces[i], pieces[j]);
+      if (u && isConvexLoop(u, verts)) { pieces[i] = u; pieces.splice(j, 1); merged = true; break outer; }
+    }
+  }
+  return pieces;
+}
+
+// Union of two loops sharing exactly one edge (traversed in opposite
+// directions); null otherwise.
+function unionLoops(A, B) {
+  for (let i = 0; i < A.length; i++) {
+    const a = A[i], b = A[(i + 1) % A.length];
+    for (let j = 0; j < B.length; j++) {
+      if (B[j] === b && B[(j + 1) % B.length] === a) {
+        const out = [];
+        for (let k = 1; k <= A.length; k++) out.push(A[(i + k) % A.length]);      // b ... a (inclusive)
+        for (let k = 2; k < B.length; k++) out.push(B[(j + k) % B.length]);       // after a ... before b
+        if (new Set(out).size !== out.length) return null;
+        return out;
+      }
+    }
+  }
+  return null;
 }

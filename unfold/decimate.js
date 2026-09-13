@@ -27,13 +27,13 @@ const qError = (Q, [x, y, z]) =>
 
 // Optimal collapse point: solve the 3x3 normal equations; fall back to the
 // best of the endpoints and midpoint when the quadric is degenerate.
-function optimalPoint(Q, pa, pb) {
+function optimalPoint(Q, pa, pb, segmentOnly = false) {
   const m = [[Q[0], Q[1], Q[2]], [Q[1], Q[4], Q[5]], [Q[2], Q[5], Q[7]]];
   const rhs = [-Q[3], -Q[6], -Q[8]];
   const det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
   const scale = Math.abs(m[0][0]) + Math.abs(m[1][1]) + Math.abs(m[2][2]);
   const cands = [pa, pb, [(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, (pa[2] + pb[2]) / 2]];
-  if (Math.abs(det) > 1e-9 * scale * scale * scale) {
+  if (!segmentOnly && Math.abs(det) > 1e-9 * scale * scale * scale) {
     const inv = (i, j) => {
       const r = [0, 1, 2].filter(k => k !== j), c = [0, 1, 2].filter(k => k !== i);
       const minor = m[r[0]][c[0]] * m[r[1]][c[1]] - m[r[0]][c[1]] * m[r[1]][c[0]];
@@ -60,6 +60,10 @@ class MinHeap {
 // simplification is spent where the net is failing (after Bhargava et al.).
 export function decimate(mesh, targetTris, opts = {}) {
   const boost = opts.boost || null, boostFactor = opts.boostFactor ?? 0.02;
+  const segmentOnly = opts.placement === 'segment';
+  // only: restrict collapses to this one edge (vertex index pair); the
+  // function then returns null if that edge cannot be collapsed.
+  const only = opts.only || null;
   const V = mesh.verts.map(v => v.slice());
   const T = mesh.tris.map(t => t.slice());
   const alive = new Array(T.length).fill(true);
@@ -76,7 +80,8 @@ export function decimate(mesh, targetTris, opts = {}) {
   const pushEdge = (a, b) => {
     if (a === b) return;
     if (a > b) [a, b] = [b, a];
-    const best = optimalPoint(qAdd(Q[a], Q[b]), V[a], V[b]);
+    if (only && !((a === only[0] && b === only[1]) || (a === only[1] && b === only[0]))) return;
+    const best = optimalPoint(qAdd(Q[a], Q[b]), V[a], V[b], segmentOnly);
     const cost = boost && (boost.has(a) || boost.has(b)) ? best.e * boostFactor : best.e;
     heap.push({ a, b, va: version[a], vb: version[b], cost, p: best.p });
   };
@@ -121,7 +126,13 @@ export function decimate(mesh, targetTris, opts = {}) {
     for (const v of neighbours(a)) pushEdge(a, v);
   }
 
+  if (only && liveCount === T.length) return null;
   const out = [];
   T.forEach((t, i) => { if (alive[i]) for (const v of t) out.push(V[v][0], V[v][1], V[v][2]); });
   return out;
+}
+
+// Collapse exactly one edge, keeping the vertex on the original segment.
+export function collapseEdge(mesh, a, b) {
+  return decimate(mesh, mesh.tris.length - 1, { only: [a, b], placement: 'segment' });
 }

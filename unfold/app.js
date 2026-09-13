@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseStl } from './stl.js';
 import { buildMesh } from './mesh.js';
-import { unfold, foldPositions, toPatterns } from './unfold.js';
+import { unfold, foldPositions, toPatterns, FLAT } from './unfold.js';
 import { SAMPLES } from './samples.js';
 import { assemble, toSvg, itemToSvg } from '../crease/export.js';
 import { totalLength } from '../crease/patterns.js';
@@ -236,7 +236,8 @@ function updateGeometry() {
   const tri = [], fold = [], foldCol = [], cut = [];
   const mc = new THREE.Color(COL.mountain), vc = new THREE.Color(COL.valley);
   const edgeType = new Map();
-  for (const e of result.foldEdges) edgeType.set(e.id, e.dihedral >= 0 ? mc : vc);
+  for (const e of result.foldEdges) if (Math.abs(e.dihedral) >= FLAT) edgeType.set(e.id, e.dihedral >= 0 ? mc : vc);
+  const flatSet = new Set(result.foldEdges.filter(e => Math.abs(e.dihedral) < FLAT).map(e => e.id));
   const cutSet = new Set(result.cutEdges.map(e => e.id));
   // Map each face's edge index to the mesh edge so lines get the right colour.
   const faceEdge = result.mesh.faces.map(() => []);
@@ -250,7 +251,8 @@ function updateGeometry() {
         if (e.sides[0].face !== fi) continue;      // draw each fold once
         fold.push(...a, ...b);
         const c = edgeType.get(e.id); foldCol.push(c.r, c.g, c.b, c.r, c.g, c.b);
-      } else if (!e || cutSet.has(e.id) || true) cut.push(...a, ...b);
+      } else if (e && flatSet.has(e.id)) continue;      // flat seam: draw nothing
+      else cut.push(...a, ...b);
     }
   });
   const set = (obj, arr, col) => {

@@ -13,7 +13,7 @@
 
 import { prepareLayout, polysOverlap } from './unfold.js';
 import { buildMesh } from './mesh.js';
-import { decimate } from './decimate.js';
+import { decimate, collapseEdge } from './decimate.js';
 
 const mulberry32 = seed => () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -52,6 +52,8 @@ export class Net {
     this.cellsOf = new Array(F).fill(null);
     this.ov = Array.from({ length: F }, () => new Set());
     this.total = 0;
+    this.area = 0;                 // summed bbox-intersection area of overlapping pairs
+    this.bb = new Array(F).fill(null);
     this.stamp = new Int32Array(F);
     this.stampId = 0;
   }
@@ -64,7 +66,13 @@ export class Net {
     for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) keys.push(x * 73856093 ^ y * 19349663);
     return keys;
   }
+  pairArea(f, g) {
+    const a = this.bb[f], b = this.bb[g];
+    const w = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0), h = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
   insert(f) {
+    this.bb[f] = bboxOf(this.pos[f]);
     const keys = this.cellKeys(this.pos[f]);
     this.cellsOf[f] = keys;
     for (const k of keys) { let s = this.grid.get(k); if (!s) { s = new Set(); this.grid.set(k, s); } s.add(f); }
@@ -84,8 +92,10 @@ export class Net {
     }
     return out;
   }
-  clearOv(f) { for (const g of this.ov[f]) { this.ov[g].delete(f); this.total--; } this.ov[f].clear(); }
-  setOv(f) { for (const g of this.overlapsOf(f)) { if (!this.ov[f].has(g)) { this.ov[f].add(g); this.ov[g].add(f); this.total++; } } }
+  clearOv(f) { for (const g of this.ov[f]) { this.ov[g].delete(f); this.total--; this.area -= this.pairArea(f, g); } this.ov[f].clear(); }
+  setOv(f) { for (const g of this.overlapsOf(f)) { if (!this.ov[f].has(g)) { this.ov[f].add(g); this.ov[g].add(f); this.total++; this.area += this.pairArea(f, g); } } }
+  // Search objective: pairs first, then how badly they overlap.
+  score() { return this.total * 1e9 + this.area; }
 
   /* tree */
   subtree(f) {
@@ -116,7 +126,7 @@ export class Net {
   layoutAll() {
     this.grid.clear(); this.cellsOf.fill(null);
     for (const s of this.ov) s.clear();
-    this.total = 0;
+    this.total = 0; this.area = 0;
     for (let f = 0; f < this.F; f++) if (this.parent[f] < 0) this.relayout(f);
   }
 
@@ -135,17 +145,27 @@ export class Net {
 
   // Initial tree: grow face by face along long edges; when no overlap-free
   // attachment remains, take the least overlapping one anyway.
-  grow(jitter = 0.3) {
+  // Edge identity that survives a rebuild: endpoint coordinates.
+  edgeKey(e) {
+    const k = v => v.map(x => x.toFixed(4)).join(',');
+    const ka = k(this.mesh.verts[e.a]), kb = k(this.mesh.verts[e.b]);
+    return ka < kb ? ka + '|' + kb : kb + '|' + ka;
+  }
+  foldKeys() { const out = new Set(); for (let f = 0; f < this.F; f++) if (this.parentEdge[f]) out.add(this.edgeKey(this.parentEdge[f])); return out; }
+
+  // preferred: fold-edge keys from a previous tree; those attachments win
+  // priority so the new tree is a warm start of the old one.
+  grow(jitter = 0.3, preferred = null) {
     const F = this.F, rng = this.rng;
     const placed = new Uint8Array(F);
     this.parent.fill(-1); this.parentEdge.fill(null);
-    this.grid.clear(); this.cellsOf.fill(null); for (const s of this.ov) s.clear(); this.total = 0;
+    this.grid.clear(); this.cellsOf.fill(null); for (const s of this.ov) s.clear(); this.total = 0; this.area = 0;
     const byArea = [...Array(F).keys()].sort((a, b) => this.mesh.faces[b].area - this.mesh.faces[a].area);
     for (const root of byArea) {
       if (placed[root]) continue;
       placed[root] = 1; this.pos[root] = this.local[root]; this.insert(root); this.setOv(root);
       let cands = [];
-      const push = f => { for (const { e, to } of this.adj[f]) if (!placed[to]) cands.push({ e, to, from: f, pri: e.len * (1 + jitter * rng()) }); };
+      const push = f => { for (const { e, to } of this.adj[f]) if (!placed[to]) cands.push({ e, to, from: f, pri: e.len * (1 + jitter * rng()) + (preferred && preferred.has(this.edgeKey(e)) ? 1e6 : 0) }); };
       push(root);
       while (cands.length) {
         cands.sort((a, b) => b.pri - a.pri);
@@ -171,7 +191,7 @@ export class Net {
 
   overlappingFaces() { const out = []; for (let f = 0; f < this.F; f++) if (this.ov[f].size) out.push(f); return out; }
 
-  snapshot() { return { parent: Array.from(this.parent), parentEdge: this.parentEdge.slice(), total: this.total }; }
+  snapshot() { return { parent: Array.from(this.parent), parentEdge: this.parentEdge.slice(), total: this.total, score: this.score() }; }
   restore(s) { this.parent.set(s.parent); this.parentEdge = s.parentEdge.slice(); this.layoutAll(); }
 
   // Export for unfold(): parents-before-children order and plain edge copies.
@@ -222,14 +242,9 @@ export function tabuSearch(net, { deadline, onProgress, maxIter = 1e9 } = {}) {
   const compSize = new Int32Array(net.components);
   for (let f = 0; f < F; f++) compSize[net.comp[f]]++;
 
-  while (net.total > 0 && iter < maxIter) {
-    if (now() > deadline) break;
-    iter++;
-    const ovs = net.overlappingFaces();
-    if (!ovs.length) break;
-    let f = ovs[Math.floor(rng() * ovs.length)];
-    // Re-root into f's largest branch so f drags the smallest possible
-    // subtree with it: a move then disturbs the net as little as it can.
+  // One candidate move for face f: re-root into its largest branch, then the
+  // best reattachment among its neighbours outside its subtree.
+  const bestMoveFor = f => {
     subtreeSizes();
     let bestDir = -1, bestSide = -1;
     for (const { to } of net.adj[f]) {
@@ -237,45 +252,69 @@ export function tabuSearch(net, { deadline, onProgress, maxIter = 1e9 } = {}) {
       else if (net.parent[f] === to) { const side = compSize[net.comp[f]] - sub[f]; if (side > bestSide) { bestSide = side; bestDir = to; } }
     }
     if (bestDir >= 0 && net.parent[f] !== bestDir) net.reroot(bestDir);
-    let moved = false;
-    for (let climb = 0; climb < 3 && !moved && f >= 0 && net.parent[f] >= 0; climb++) {
-      // Own subtree as a set: relayout reuses the stamp array, so it cannot
-      // double as the membership test here.
-      const subSet = new Set(net.subtree(f));
-      const oldParent = net.parent[f], oldEdge = net.parentEdge[f];
-      let bestMove = null;
-      for (const { e, to } of net.adj[f]) {
-        if (to === oldParent || subSet.has(to)) continue;
-        const key = `${f}>${to}`;
-        net.parent[f] = to; net.parentEdge[f] = e;
-        net.relayout(f);
-        const total = net.total;
-        const allowed = !isTabu(key) || total < best.total;
-        if (allowed && (!bestMove || total < bestMove.total)) bestMove = { to, e, total };
-        net.parent[f] = oldParent; net.parentEdge[f] = oldEdge;
-        net.relayout(f);
-      }
-      if (bestMove) {
-        net.parent[f] = bestMove.to; net.parentEdge[f] = bestMove.e;
-        net.relayout(f);
-        tabu.push(`${f}>${oldParent}`);
-        while (tabu.length > m) tabu.shift();
-        moved = true;
-      } else f = net.parent[f];
+    if (net.parent[f] < 0) return null;
+    const subSet = new Set(net.subtree(f));
+    const oldParent = net.parent[f], oldEdge = net.parentEdge[f];
+    let bm = null;
+    for (const { e, to } of net.adj[f]) {
+      if (to === oldParent || subSet.has(to)) continue;
+      net.parent[f] = to; net.parentEdge[f] = e;
+      net.relayout(f);
+      const sc = net.score();
+      const allowed = !isTabu(`${f}>${to}`) || sc < best.score;
+      if (allowed && (!bm || sc < bm.score)) bm = { f, to, e, score: sc, oldParent };
+      net.parent[f] = oldParent; net.parentEdge[f] = oldEdge;
+      net.relayout(f);
     }
-    if (net.total < best.total) { best = net.snapshot(); sinceBest = 0; lastImprove = now(); }
+    return bm;
+  };
+  const apply = mv => {
+    // The tree may have been re-rooted since evaluation; re-derive the parent.
+    if (net.parent[mv.f] < 0) net.reroot(mv.oldParent);
+    const oldParent = net.parent[mv.f];
+    net.parent[mv.f] = mv.to; net.parentEdge[mv.f] = mv.e;
+    net.relayout(mv.f);
+    tabu.push(`${mv.f}>${oldParent}`);
+    while (tabu.length > m) tabu.shift();
+  };
+
+  while (net.total > 0 && iter < maxIter) {
+    if (now() > deadline) break;
+    iter++;
+    const ovs = net.overlappingFaces();
+    if (!ovs.length) break;
+    // Evaluate a handful of overlapping faces and take the best move overall.
+    const sample = Math.min(ovs.length, 4);
+    let mv = null;
+    for (let k = 0; k < sample; k++) {
+      let f = ovs[Math.floor(rng() * ovs.length)];
+      let cand = null;
+      for (let climb = 0; climb < 3 && !cand && f >= 0; climb++) { cand = bestMoveFor(f); if (!cand) f = net.parent[f]; }
+      if (cand && (!mv || cand.score < mv.score)) mv = cand;
+    }
+    if (mv) apply(mv);
+    if (net.score() < best.score) { best = net.snapshot(); sinceBest = 0; lastImprove = now(); }
     else if (++sinceBest > 4 * m) { tabu.length = 0; sinceBest = 0; }
-    // Stalled: regrow from scratch with a different edge ordering and keep
-    // whichever start the search improves further. The global best survives.
+    // Stalled: kick the best tree with a few random reattachments rather than
+    // starting over, so the structure found so far survives.
     if (now() - lastImprove > stallMs && now() < deadline) {
       restarts++;
-      net.grow(0.5 + rng());
+      net.restore(best);
+      const kicks = 2 + Math.floor(rng() * 5);
+      for (let k = 0; k < kicks; k++) {
+        const f = Math.floor(rng() * F);
+        if (net.parent[f] < 0) continue;
+        const subSet = new Set(net.subtree(f));
+        const opts = net.adj[f].filter(({ to }) => to !== net.parent[f] && !subSet.has(to));
+        if (!opts.length) continue;
+        const pick = opts[Math.floor(rng() * opts.length)];
+        net.parent[f] = pick.to; net.parentEdge[f] = pick.e; net.relayout(f);
+      }
       tabu.length = 0; sinceBest = 0; lastImprove = now();
-      if (net.total < best.total) best = net.snapshot();
     }
     report();
   }
-  if (net.total > best.total) net.restore(best);
+  if (net.score() > best.score) net.restore(best);
   return { overlaps: net.total, iter, restarts };
 }
 
@@ -292,24 +331,63 @@ export async function solveOnePiece(positions, { minFaces = 20, timeLimit = 1500
   net.grow(0.3);
   const progress = (extra = {}) => onProgress?.({ faces: mesh.faces.length, rounds, elapsed: now() - t0, ...extra });
   progress({ overlaps: net.total, best: net.total });
-  let res = tabuSearch(net, { deadline: t0 + timeLimit, onProgress: p => progress(p) });
-  // Search ran out of time with overlaps left: simplify where the net fails
-  // (edges of the stubborn faces collapse first) and search again briefly,
-  // round by round, down to the face floor.
-  const roundTime = Math.min(1500, Math.max(600, timeLimit / 12));
-  while (res.overlaps > 0 && mesh.faces.length > minFaces && mesh.triCount > 4) {
-    const boost = new Set();
-    for (const f of net.overlappingFaces()) for (const v of mesh.faces[f].verts) boost.add(v);
-    const target = Math.max(4, Math.floor(mesh.triCount * 0.88));
-    let next;
-    try { next = buildMesh(decimate(mesh, target, { boost })); } catch { break; }
-    if (next.triCount >= mesh.triCount) break;
-    mesh = next; rounds++;
-    net = new Net(mesh, seed + rounds);
-    net.grow(0.3);
-    progress({ overlaps: net.total, best: net.total });
+  // Half the budget on the full-detail search; the rest goes to repairs.
+  let res = tabuSearch(net, { deadline: t0 + timeLimit * 0.5, onProgress: p => progress(p) });
+  // Search ran out of time with overlaps left. Collapse one edge of an
+  // overlapping face at a time (vertex kept on the original edge), warm-start
+  // the tree from the previous one, search briefly, and keep the collapse only
+  // if overlaps dropped. Shape changes only where the net actually fails.
+  const roundTime = Math.min(900, Math.max(400, timeLimit / 20));
+  const hardStop = t0 + timeLimit * 4;
+  const tried = new Set();
+  let stale = 0;
+  while (res.overlaps > 0 && mesh.faces.length > minFaces && mesh.triCount > 4 && now() < hardStop) {
+    const stubborn = net.overlappingFaces();
+    const hit = new Map();          // vertex -> stubborn faces touching it
+    for (const f of stubborn) for (const v of mesh.faces[f].verts) hit.set(v, (hit.get(v) || 0) + 1);
+    const key = v => mesh.verts[v].map(x => x.toFixed(4)).join(',');
+    const cands = [];
+    const seen = new Set();
+    for (const f of stubborn) {
+      const vs = mesh.faces[f].verts;
+      for (let i = 0; i < vs.length; i++) {
+        const a = vs[i], b = vs[(i + 1) % vs.length];
+        const ka = key(a), kb = key(b), ek = ka < kb ? ka + '|' + kb : kb + '|' + ka;
+        if (seen.has(ek) || tried.has(ek)) continue;
+        seen.add(ek);
+        const len = Math.hypot(...mesh.verts[a].map((x, k) => x - mesh.verts[b][k]));
+        cands.push({ a, b, ek, score: (hit.get(a) || 0) + (hit.get(b) || 0), len });
+      }
+    }
+    cands.sort((p, q) => q.score - p.score || p.len - q.len);
+    // Judge each candidate by re-laying out the warm-started tree, which is
+    // milliseconds; only a collapse that lowers the count earns a search.
+    const warm = net.foldKeys();
+    let picked = null;
+    for (const c of cands) {
+      if (now() > hardStop) break;
+      tried.add(c.ek);
+      const soup = collapseEdge(mesh, c.a, c.b);
+      if (!soup) continue;
+      let next; try { next = buildMesh(soup); } catch { continue; }
+      if (next.triCount >= mesh.triCount) continue;
+      const n2 = new Net(next, seed + rounds + 1);
+      n2.grow(0.3, warm);
+      if (n2.total < res.overlaps) { picked = { mesh: next, net: n2 }; break; }
+    }
+    if (!picked) {
+      // No single collapse helps directly: one gentle general pass to shake
+      // things loose, then keep going.
+      const boost = new Set(); for (const f of stubborn) for (const v of mesh.faces[f].verts) boost.add(v);
+      let next; try { next = buildMesh(decimate(mesh, Math.max(4, Math.floor(mesh.triCount * 0.97)), { boost, placement: 'segment' })); } catch { break; }
+      if (next.triCount >= mesh.triCount || ++stale > 6) break;
+      const n2 = new Net(next, seed + rounds + 1); n2.grow(0.3, warm);
+      picked = { mesh: next, net: n2 };
+      tried.clear();
+    }
+    mesh = picked.mesh; net = picked.net; rounds++;
     res = tabuSearch(net, { deadline: now() + roundTime, onProgress: p => progress(p) });
-    if (rounds > 60) break;
+    progress({ overlaps: net.total, best: net.total });
   }
   const info = `${res.overlaps ? `${res.overlaps} overlaps left` : 'no overlaps'} · ${res.iter} moves · ${((now() - t0) / 1000).toFixed(1)} s`;
   return { mesh, tree: net.tree(info), overlaps: res.overlaps, simplifiedFrom: from, rounds, ms: now() - t0, state: { net, mesh, from, rounds } };

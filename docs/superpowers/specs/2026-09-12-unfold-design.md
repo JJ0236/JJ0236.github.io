@@ -132,3 +132,26 @@ Random-restart growth still needed seven rounds of blind simplification on a
   On-screen previews use the laser colours (red cut, one blue for creases).
 - 3D view shows built W × D × H in inches with mm; editing any one scales the
   model uniformly and flows straight into the export.
+
+## Revision, 2026-09-12 (night): pure search, no simplification needed
+
+Two changes let the 217-face test model unfold in one piece at full detail in
+about two seconds of search, with no geometry change:
+
+- **Concave merged faces were the blocker.** Coplanar merging could produce a
+  concave polygon; a neighbour folded across one of its edges lands inside
+  the concavity, an overlap no tree can fix. The mesh builder now merges
+  coplanar triangles only while the result stays convex, so a concave flat
+  region becomes several convex pieces. Their seams have a 0° dihedral and are
+  neither scored nor drawn.
+- **Stronger tabu search.** Objective is overlapping pairs first, then the
+  summed bounding-box intersection area, so plateaus have a slope. Each step
+  evaluates moves for four overlapping faces and applies the best. On a stall
+  the best tree is kicked with 2–6 random reattachments instead of being
+  regrown from scratch.
+
+Simplification remains as a last resort but is now surgical: one edge of an
+overlapping face at a time, vertex kept on the original edge, judged by
+re-laying out the warm-started tree (milliseconds) and reverted when it does
+not lower the count. Mean vertex drift on the test model was 0.02–0.07 % of
+the bounding diagonal when it was still needed.
