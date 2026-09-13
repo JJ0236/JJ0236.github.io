@@ -167,3 +167,15 @@ error), and at 100 % the view uses the exact poses outright. In-plane frames
 come from the farthest vertex pair rather than the first edge, which can be
 tiny on split pieces. Coplanar merging is tightened to 0.5°. Verification
 asserts the fine torus closes to a micron and the local test models to 0.05 mm.
+
+## Revision, 2026-09-13: nothing on the sheet overlaps
+
+Faces and tabs never overlapped (the search guarantees it), but numbers did:
+81 collisions on a 323-face model. Labels are now sized to the room they
+have (edge length, ray-cast depth into the face, tab height), placed only
+inside their own face or tab, and dropped rather than allowed to collide;
+m/v marks are placed the same way in the layout step and yield to numbers.
+Edges too small to number on both sides are counted in a warning.
+`auditResult` and `auditPattern` count overlaps of every kind; the page shows
+the result in the export stats and the verify script asserts zero on every
+sample and local test model.

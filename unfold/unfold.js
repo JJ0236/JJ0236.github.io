@@ -103,6 +103,29 @@ function pointInPoly(p, poly) {
   return inside;
 }
 
+// Room inside the polygon from the midpoint of edge i, along the inward
+// normal, until the ray meets another edge.
+function inwardDepth(poly, i) {
+  const n = poly.length;
+  const A = poly[i], B = poly[(i + 1) % n];
+  const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy) || 1;
+  const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+  let nx = -dy / L, ny = dx / L;
+  if (!pointInPoly([M[0] + nx * 1e-3, M[1] + ny * 1e-3], poly)) { nx = -nx; ny = -ny; }
+  let best = Infinity;
+  for (let j = 0; j < n; j++) {
+    if (j === i) continue;
+    const P = poly[j], Q = poly[(j + 1) % n];
+    const ex = Q[0] - P[0], ey = Q[1] - P[1];
+    const den = nx * ey - ny * ex;
+    if (Math.abs(den) < 1e-12) continue;
+    const s = ((P[0] - M[0]) * ey - (P[1] - M[1]) * ex) / den;
+    const t = ((P[0] - M[0]) * ny - (P[1] - M[1]) * nx) / den;
+    if (s > 1e-9 && t >= -1e-9 && t <= 1 + 1e-9) best = Math.min(best, s);
+  }
+  return best === Infinity ? 0 : best;
+}
+
 function strictlyInside(p, poly) {
   for (let i = 0; i < poly.length; i++) if (pointSegDist(p, poly[i], poly[(i + 1) % poly.length]) <= EPS) return false;
   return pointInPoly(p, poly);
@@ -257,32 +280,55 @@ export function unfold(mesh, options = {}) {
   }
 
   // Labels: cut edges numbered. With a tab, the number goes on the tab and on
-  // the face edge it glues to; without one, on both faces. 2 mm throughout.
+  // the face edge it glues to; without one, on both faces. Every label is
+  // sized to the room it has (edge length, depth into the face, tab height)
+  // and dropped rather than allowed to collide with anything.
   const labels = [];
   const labelFor = new Map();
+  let unlabeled = 0;
+  const MAX = 2, MIN = 0.9;
+  const boxR = (size, text) => Math.max(size, 0.62 * size * String(text).length) / 2;
+  const clash = (x, y, r) => labels.some(l => Math.hypot(l.x - x, l.y - y) < r + boxR(l.size, l.text) + 0.2);
+  const tryPush = lbl => { if (clash(lbl.x, lbl.y, boxR(lbl.size, lbl.text))) return false; labels.push(lbl); return true; };
+  // Label beside edge index i of face f, inside the face. Returns false when
+  // there is no room.
+  const faceLabel = (f, i, text, maxSize) => {
+    const poly = pos[f], n = poly.length;
+    const A = poly[i], B = poly[(i + 1) % n];
+    const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+    if (L < 1e-9) return false;
+    const ux = dx / L, uy = dy / L;
+    const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+    const depth = inwardDepth(poly, i);
+    const chars = String(text).length;
+    const size = Math.min(maxSize, depth / 1.6, (0.85 * L) / (0.62 * chars));
+    if (size < MIN) return false;
+    let lx = -uy, ly = ux;
+    if (!pointInPoly([M[0] + lx * 1e-3, M[1] + ly * 1e-3], poly)) { lx = -lx; ly = -ly; }
+    const off = size * 0.75;
+    return tryPush({ island: islandOf[f], x: M[0] + lx * off, y: M[1] + ly * off, dx: ux, dy: uy, text, size });
+  };
   if (opts.labels) {
     cutEdges.forEach((e, k) => {
       const text = String(k + 1);
       labelFor.set(e.id, text);
-      const size = 2;
       const tab = tabs.find(t => t.edge === e);
-      for (const side of e.sides) {
-        if (tab && side.face === tab.face && side.index === tab.index) continue;
-        const f = side.face, n = pos[f].length;
-        const A = pos[f][side.index], B = pos[f][(side.index + 1) % n];
-        const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
-        const lx = -dy / L, ly = dx / L;             // left = inside the face
-        const off = size * 0.8;
-        labels.push({ island: islandOf[f], x: (A[0] + B[0]) / 2 + lx * off, y: (A[1] + B[1]) / 2 + ly * off, dx: dx / L, dy: dy / L, text, size });
-      }
+      let placed = 0;
       if (tab) {
         const c = centroid2(tab.poly);
         const A = tab.poly[0], B = tab.poly[3];
         const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
-        labels.push({ island: tab.island, x: c[0], y: c[1], dx: dx / L, dy: dy / L, text, size: Math.min(size, tab.h * 0.6) });
+        const size = Math.min(MAX, tab.h * 0.55, (0.8 * L) / (0.62 * text.length));
+        if (size >= MIN && tryPush({ island: tab.island, x: c[0], y: c[1], dx: dx / L, dy: dy / L, text, size })) placed++;
       }
+      for (const side of e.sides) {
+        if (tab && side.face === tab.face && side.index === tab.index) continue;
+        if (faceLabel(side.face, side.index, text, MAX)) placed++;
+      }
+      if (placed < 2) unlabeled++;
     });
   }
+  if (unlabeled) warnings.push(`${unlabeled} edge${unlabeled > 1 ? 's' : ''} too small to number on both sides; match ${unlabeled > 1 ? 'them' : 'it'} by shape.`);
 
   // Island outlines, with tabs spliced in where a boundary edge carries one.
   for (const [ii, isl] of islands.entries()) {
@@ -337,9 +383,34 @@ export function unfold(mesh, options = {}) {
     isl.labels = labels.filter(l => l.island === ii);
     isl.folds = [];
   }
+  for (const isl of islands) isl.marks = [];
   for (const e of foldEdges) {
     const s = e.sides[0], f = s.face, n = pos[f].length;
-    islands[islandOf[f]].folds.push({ a: pos[f][s.index], b: pos[f][(s.index + 1) % n], mountain: e.dihedral >= 0, flat: Math.abs(e.dihedral) < FLAT, edge: e });
+    const isl = islands[islandOf[f]];
+    const flat = Math.abs(e.dihedral) < FLAT;
+    isl.folds.push({ a: pos[f][s.index], b: pos[f][(s.index + 1) % n], mountain: e.dihedral >= 0, flat, edge: e });
+    // m/v mark beside the fold, on whichever face has more room, sized to fit
+    // and dropped if it would touch a number or another mark.
+    if (opts.mvMarks !== false && !flat) {
+      let best = null;
+      for (const side of e.sides) {
+        const depth = inwardDepth(pos[side.face], side.index);
+        if (!best || depth > best.depth) best = { side, depth };
+      }
+      const poly = pos[best.side.face], m = poly.length, i = best.side.index;
+      const A = poly[i], B = poly[(i + 1) % m];
+      const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+      const size = Math.min(1.4, L * 0.22, best.depth / 1.6);
+      if (size >= 0.8) {
+        const ux = dx / L, uy = dy / L;
+        const M = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
+        let lx = -uy, ly = ux;
+        if (!pointInPoly([M[0] + lx * 1e-3, M[1] + ly * 1e-3], poly)) { lx = -lx; ly = -ly; }
+        const x = M[0] + lx * size * 0.7, y = M[1] + ly * size * 0.7, r = size / 2;
+        const hit = l => Math.hypot(l.x - x, l.y - y) < r + Math.max(l.size, 0.62 * l.size * String(l.text).length) / 2 + 0.15;
+        if (!labels.some(hit) && !isl.marks.some(hit)) isl.marks.push({ x, y, dx: ux, dy: uy, size, text: 'm', mountain: e.dihedral >= 0 });
+      }
+    }
   }
   for (const t of tabs) islands[t.island].folds.push({ a: t.poly[0], b: t.poly[3], mountain: t.edge.dihedral >= 0, tab: true });
 
@@ -392,6 +463,7 @@ export function unfold(mesh, options = {}) {
     isl.pLoops = isl.loops.map(l => l.map(p => place(isl, p)));
     isl.pFolds = isl.folds.map(f => ({ ...f, a: place(isl, f.a), b: place(isl, f.b) }));
     isl.pLabels = isl.labels.map(l => { const [x, y] = place(isl, [l.x, l.y]); const [dx, dy] = placeDir(isl, [l.dx, l.dy]); return { ...l, x, y, dx, dy }; });
+    isl.pMarks = isl.marks.map(l => { const [x, y] = place(isl, [l.x, l.y]); const [dx, dy] = placeDir(isl, [l.dx, l.dy]); return { ...l, x, y, dx, dy }; });
     isl.pTabs = isl.tabs.map(t => t.poly.map(p => place(isl, p)));
   }
   const SHEET_GAP = 20;
@@ -581,22 +653,13 @@ export function toPatterns(r) {
         const [x1, y1] = P(f.a), [x2, y2] = P(f.b);
         const m = outside ? f.mountain : !f.mountain;
         (m ? mountains : valleys).push({ k: 'L', x1, y1, x2, y2 });
-        // Small m/v mark beside each real fold, on the scored face, so one
-        // crease colour is still unambiguous on the sheet.
-        if (opts.mvMarks !== false && !f.tab) {
-          const L = Math.hypot(x2 - x1, y2 - y1);
-          if (L > 4) {
-            const ux = (x2 - x1) / L, uy = (y2 - y1) / L;
-            // Left of the directed edge in the source frame is inside the face; the
-            // y-flip for outside scoring reverses handedness.
-            const sgn = outside ? 1 : -1;
-            const nx = sgn * uy, ny = -sgn * ux;
-            const size = 1.4;
-            let angle = Math.atan2(uy, ux) * 180 / Math.PI;
-            if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
-            labels.push({ k: 'T', x: (x1 + x2) / 2 + nx * size * 0.7, y: (y1 + y2) / 2 + ny * size * 0.7, text: m ? 'm' : 'v', size, angle });
-          }
-        }
+      }
+      for (const l of isl.pMarks) {
+        const [x, y] = P([l.x, l.y]), [dx, dy] = D([l.dx, l.dy]);
+        let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        if (angle > 90) angle -= 180; else if (angle <= -90) angle += 180;
+        const m = outside ? l.mountain : !l.mountain;
+        labels.push({ k: 'T', x, y, text: m ? 'm' : 'v', size: l.size, angle });
       }
       for (const l of isl.pLabels) {
         const [x, y] = P([l.x, l.y]), [dx, dy] = D([l.dx, l.dy]);
@@ -608,4 +671,34 @@ export function toPatterns(r) {
     }
     return { cuts, mountains, valleys, labels, tabPolys, w: uW, h: uH };
   });
+}
+
+/* ── Audit: nothing on the sheet may overlap ─────────────────────────────── */
+
+// Counts overlaps of every kind on a pattern (post-layout, per sheet): faces
+// against faces and tabs, tabs against tabs, and labels against each other,
+// treating each label as a disc big enough to hold its text.
+export function auditPattern(pat) {
+  // Outline loops are not compared with each other: an island with holes has
+  // inner loops that legitimately sit inside its outer loop. Faces and tabs
+  // are covered by auditResult.
+  const tabs = pat.tabPolys || [];
+  let tabTab = 0, labelLabel = 0;
+  for (let i = 0; i < tabs.length; i++) for (let j = i + 1; j < tabs.length; j++) if (polysOverlap(tabs[i], tabs[j])) tabTab++;
+  const r = l => Math.max(l.size, 0.62 * l.size * String(l.text).length) / 2;
+  const L = pat.labels || [];
+  for (let i = 0; i < L.length; i++) for (let j = i + 1; j < L.length; j++) if (Math.hypot(L[i].x - L[j].x, L[i].y - L[j].y) < r(L[i]) + r(L[j])) labelLabel++;
+  return { tabTab, labelLabel, total: tabTab + labelLabel };
+}
+
+// Face-level audit on the unfold result: faces vs faces and tabs within each island.
+export function auditResult(res) {
+  let faceFace = 0, tabFace = 0, tabTab = 0;
+  for (const isl of res.islands) {
+    const P = isl.polys, T = isl.tabs.map(t => t.poly);
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) if (polysOverlap(P[i], P[j])) faceFace++;
+    for (const t of T) for (const f of P) if (polysOverlap(t, f)) tabFace++;
+    for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) if (polysOverlap(T[i], T[j])) tabTab++;
+  }
+  return { faceFace, tabFace, tabTab, total: faceFace + tabFace + tabTab };
 }

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parseStl } from './stl.js';
 import { buildMesh } from './mesh.js';
-import { unfold, foldPositions, toPatterns, FLAT } from './unfold.js';
+import { unfold, foldPositions, toPatterns, FLAT, auditResult, auditPattern } from './unfold.js';
 import { SAMPLES } from './samples.js';
 import { assemble, toSvg, itemToSvg } from '../crease/export.js';
 import { totalLength } from '../crease/patterns.js';
@@ -397,12 +397,14 @@ function renderReadouts() {
   const mnt = patterns.reduce((a, p) => a + totalLength(p.mountains), 0);
   const val = patterns.reduce((a, p) => a + totalLength(p.valleys), 0);
   const simplified = result.simplifiedFrom && result.simplifiedFrom !== s.faces;
+  const overlaps = auditResult(result).total + patterns.reduce((n, p) => n + auditPattern(p).total, 0);
   const fitsSheet = (s.netW <= result.sheetW && s.netH <= result.sheetH) || (s.netW <= result.sheetH && s.netH <= result.sheetW);
   $('stats').innerHTML = `
     <div><span class="k">faces</span><span class="v">${simplified ? `${result.simplifiedFrom} → ${s.faces}` : s.faces}</span></div>
     <div><span class="k">pieces</span><span class="v">${s.islands}${state.onePiece && s.tries ? ` · ${s.tries} tries` : ''}</span></div>
     ${state.onePiece ? `<div><span class="k">net</span><span class="v ${fitsSheet ? '' : 'warn'}">${s.netW.toFixed(0)} × ${s.netH.toFixed(0)} mm${fitsSheet ? '' : ' · over sheet'}</span></div>` : `<div><span class="k">sheets</span><span class="v">${s.sheets}</span></div>`}
     <div><span class="k">tabs</span><span class="v">${s.tabs}${s.noTab ? ` · ${s.noTab} edges without` : ''}</span></div>
+    <div><span class="k">overlaps</span><span class="v ${overlaps ? 'warn' : ''}">${overlaps ? `${overlaps} — do not cut` : 'none (faces, tabs, labels)'}</span></div>
     <div><span class="k">mountain scores</span><span class="v m">${fmt(mnt)}</span></div>
     <div><span class="k">valley scores</span><span class="v vv">${fmt(val)}</span></div>
     <div><span class="k">cut length</span><span class="v">${fmt(cut)}</span></div>`;
