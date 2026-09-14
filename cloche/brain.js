@@ -21,6 +21,11 @@ export const PARAMS = {
 // driven cells have no refractory period, so a neuron stimulated at 100 Hz
 // fires at about 100 Hz, exactly as in the paper.
 export const W_IN_MV = PARAMS.wSyn * 250;
+// Spike-frequency adaptation (not in Shiu et al.): each spike adds `jump` mV
+// of a slow hyperpolarising current that decays with `tau`. Without it the
+// ≥5-synapse graph has recurrent loops that ring at 200 Hz forever after a
+// strong stimulus; real neurons adapt. jump = 0 disables it.
+export const ADAPT = { jump: 0.4, tau: 150 };
 
 const RING = Math.round(PARAMS.delay / DT);   // 18 slots
 const RATE_BIN_MS = 20, RATE_BINS = 50;   // a one-second window
@@ -35,6 +40,7 @@ export function createBrain(data, { seed = 1 } = {}) {
   const { n, offsets, targets, weights } = data;
   const v = new Float32Array(n).fill(PARAMS.vRest);
   const g = new Float32Array(n);
+  const ad = new Float32Array(n);                 // adaptation current, mV
   const refUntil = new Float32Array(n);
   const driveHz = new Float32Array(n);          // Poisson drive per neuron
   const isDriven = new Uint8Array(n);
@@ -47,6 +53,8 @@ export function createBrain(data, { seed = 1 } = {}) {
   let bin = 0, binStart = 0;
   const rnd = xorshift(seed);
   const decayS = Math.exp(-DT / PARAMS.tauS);
+  const decayA = Math.exp(-DT / ADAPT.tau);
+  const aJump = ADAPT.jump;
   const kM = DT / PARAMS.tauM;
   let time = 0, steps = 0;
   let out = new Uint32Array(4096), outN = 0;
@@ -101,20 +109,21 @@ export function createBrain(data, { seed = 1 } = {}) {
         const i = active[k];
         if (isDriven[i]) { active[w++] = i; continue; }
         let gi = g[i] * decayS;
+        let ai = ad[i] * decayA;
         let vi = v[i];
         if (time >= refUntil[i]) {
-          vi += kM * (vRest - vi + gi);
+          vi += kM * (vRest - vi + gi - ai);
           if (vi >= vTh) {
-            vi = vReset; gi = 0;
+            vi = vReset; gi = 0; ai += aJump;
             refUntil[i] = time + refr;
             push(dueRing, i);
             if (outN === out.length) { const a = new Uint32Array(out.length * 2); a.set(out); out = a; }
             out[outN++] = i;
             counts[i * RATE_BINS + bin]++;
           }
-          g[i] = gi; v[i] = vi;
-          if (gi < EPS && gi > -EPS && vi - vRest < EPS && vi - vRest > -EPS) inActive[i] = 0; else active[w++] = i;
-        } else { g[i] = gi; active[w++] = i; }
+          g[i] = gi; v[i] = vi; ad[i] = ai;
+          if (gi < EPS && gi > -EPS && ai < EPS && vi - vRest < EPS && vi - vRest > -EPS) inActive[i] = 0; else active[w++] = i;
+        } else { g[i] = gi; ad[i] = ai; active[w++] = i; }
       }
       activeN = w;
       slot = (slot + 1) % RING;
@@ -146,13 +155,13 @@ export function createBrain(data, { seed = 1 } = {}) {
     return c / indices.length / (nb * RATE_BIN_MS) * 1000;
   }
   function reset() {
-    v.fill(PARAMS.vRest); g.fill(0); refUntil.fill(0); driveHz.fill(0); inActive.fill(0); isDriven.fill(0); drivenN = 0;
+    v.fill(PARAMS.vRest); g.fill(0); ad.fill(0); refUntil.fill(0); driveHz.fill(0); inActive.fill(0); isDriven.fill(0); drivenN = 0;
     activeN = 0; for (const r of ring) r.n = 0; slot = 0; counts.fill(0); bin = 0; binStart = 0; time = 0; steps = 0;
   }
 
   return {
     step, stimulate, clearAll, rate, reset,
     get time() { return time; }, get steps() { return steps; }, get activeCount() { return activeN; },
-    v, g,
+    v, g, ad,
   };
 }

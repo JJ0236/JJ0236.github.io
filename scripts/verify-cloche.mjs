@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { decodeBrain, CLASS_NAMES } from '../cloche/data.js';
-import { createBrain, DT, W_IN_MV } from '../cloche/brain.js';
+import { createBrain, DT, W_IN_MV, ADAPT } from '../cloche/brain.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(here, '..', 'cloche', 'data');
@@ -54,7 +54,7 @@ ok('sugar GRNs are excitatory', groups.sugar.every(i => excOut(i) > 0));
 
 // ---- B. dynamics -----------------------------------------------------------
 const SUGAR_HZ = 200;   // the notebook default in Shiu et al.; 100 Hz gives ~10 Hz MN9 at the ≥5 cutoff
-console.log(`dynamics (dt ${DT} ms, W_IN ${W_IN_MV} mV, sugar drive ${SUGAR_HZ} Hz)`);
+console.log(`dynamics (dt ${DT} ms, W_IN ${W_IN_MV} mV, adaptation ${ADAPT.jump} mV / ${ADAPT.tau} ms, sugar drive ${SUGAR_HZ} Hz)`);
 const ms = m => Math.round(m / DT);
 const run = (brain, m) => { let c = 0; for (let t = 0; t < m; t += 5) c += brain.step(ms(5)).length; return c; };
 const W = 980;   // rate window, ms (just under the one-second ring)
@@ -107,8 +107,12 @@ ok('JO → grooming descending neurons', brain.rate(groups.groom, W) > 30, `groo
 soft('JO → labelled aDN', brain.rate(groups.aDN, W) > 5, `aDN ${brain.rate(groups.aDN, W).toFixed(1)} Hz`);
 
 brain.reset();
-run(brain, 200);
-ok('settles back to silence', brain.activeCount === 0 && run(brain, 100) === 0, `active ${brain.activeCount}`);
+brain.stimulate(groups.sugar, SUGAR_HZ);
+run(brain, 2000);
+brain.clearAll();
+run(brain, 1000);
+const tail = run(brain, 500);
+ok('quiet within a second of sugar ending', tail === 0 && brain.activeCount === 0, `${tail} spikes in the next 500 ms, active ${brain.activeCount}`);
 
 const a = createBrain(data, { seed: 3 }); a.stimulate(groups.sugar, SUGAR_HZ);
 const b = createBrain(data, { seed: 3 }); b.stimulate(groups.sugar, SUGAR_HZ);

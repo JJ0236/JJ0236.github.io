@@ -289,3 +289,47 @@ Runs on the committed `brain.bin` and `groups.json` under node, no DOM:
 - **Tone.** The public's favourite thing to do with these sims is torment
   the fly. Shadow and poke are in; nothing crueller. Say the word if the
   line should sit elsewhere.
+
+## Revision, 2026-09-14 (build)
+
+Built and verified the same day. What changed against the design above:
+
+- **Water is cut.** Codex v783 has one `sugar/water` sensory class and no
+  separate water label set, so the water GRNs could not be picked out
+  cleanly. Sugar and bitter carry the feeding demo.
+- **No brain surface mesh.** `navis` does not build on this machine's Python
+  3.14 (h5py wheel). The 139,255-point cloud carries the brain's shape well
+  enough on its own; the glTF surface stays a later option.
+- **Sugar drive is 200 Hz**, the default in Shiu's notebook. At the
+  ≥5-synapse cutoff, 100 Hz gives MN9 only ~10 Hz; 200 Hz gives ~40 Hz.
+- **Poisson input is Shiu's own** (w_syn × 250 = 68.75 mV per event, no
+  refractory period on driven cells), not the calibrated `W_in` the design
+  proposed. Driven GRNs then fire at roughly the requested rate.
+- **Spike-frequency adaptation added**, 0.4 mV per spike decaying over
+  150 ms. Without it the thresholded graph has a ~300-neuron loop of central,
+  descending and motor cells that rings at 200 Hz forever after sugar ends.
+  With it MN9 sits at 40.8 Hz under sugar (Shiu's reference level), bitter
+  still silences it, the giant fibre still fires at 7 ms, and the network is
+  silent within half a second of a stimulus ending. The page discloses this.
+- **Grooming readout** is the six descending neurons that answer Johnston's
+  organ drive most strongly in the model (the DNpe014, DNp73 and DNb06
+  pairs, 69 Hz under 140 Hz JO drive). The two community "putative aDN"
+  labels never fire and are kept only as a group.
+- **One sugar GRN dropped**: root 720575940623172843 is labelled sugar but
+  predicted glutamatergic, so the sugar group is the 22 labelled cells with
+  excitatory output (19 of Shiu's 21 among them).
+- **Data on disk:** `brain.bin` 15.0 MB raw, 10.0 MB gzipped;
+  `groups.json` 23 KB. Build takes 10 s.
+- **Speed:** at rest the brain costs nothing. Under sugar drive the active
+  set is ~2,400 neurons and node runs 2.7× real time; under the full
+  no-adaptation loop it was 16,000 and 0.75×. The page shows measured speed
+  and never skips biological steps.
+- **Rendering:** Three.js draws the transmissive dome from a buffer of
+  opaque objects only, so droplets, wings and the poke ripple are opaque
+  materials on purpose; transparent ones vanish behind the glass.
+- **Body:** the fly is drawn at 2.8× life size so the specimen reads; a
+  real fly would be a 3 mm speck on a 40 mm base.
+- Headless end-to-end run (Chrome over CDP): sugar drop → walk → MN9 35–60 Hz
+  → droplet shrinks; bitter on the drop → MN9 0 → drop rejected, fly walks
+  off; shadow → giant fibre → jump; poke → grooming DNs 65 Hz → grooming.
+  No console errors. Phone layout at 400 px checked.
