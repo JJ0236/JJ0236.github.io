@@ -24,8 +24,8 @@ export async function loadBvh() {
 }
 export const MAX_SLOPE = Math.cos(THREE.MathUtils.degToRad(58));   // steeper than this is a wall
 
-export const COUNTER = { x0: -125, x1: 125, z0: -68, z1: 72 };
-export const WALK = { x0: -118, x1: 118, z0: -62, z1: 66 };
+export const COUNTER = { x0: -180, x1: 180, z0: -98, z1: 102 };
+export const WALK = { x0: -172, x1: 172, z0: -90, z1: 95 };
 export const DROP_R = 3.4;
 const DROP_COLOURS = { sugar: '#E8B85A', bitter: '#7E8E48', mixed: '#B09A44' };
 const SCENT_COLOURS = { fruit: '#C97A4A', vinegar: '#8E9F5A' };
@@ -44,11 +44,16 @@ const tiles = () => canvasTex(256, 256, (g) => {
   g.fillStyle = '#C9CFD3'; g.fillRect(0, 0, 256, 256);
   for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) { g.fillStyle = (x + y) % 2 ? '#F4F6F4' : '#EEF2EF'; g.fillRect(x * 128 + 3, y * 128 + 3, 122, 122); }
 }, [6, 2]);
-const skyTex = () => canvasTex(512, 512, (g) => {
-  const grad = g.createLinearGradient(0, 0, 0, 512); grad.addColorStop(0, '#6FA8E0'); grad.addColorStop(0.55, '#BFDDF5'); grad.addColorStop(0.62, '#9FC28A'); grad.addColorStop(1, '#5F8A4E');
-  g.fillStyle = grad; g.fillRect(0, 0, 512, 512);
-  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(70,120,60,${0.2 + Math.random() * 0.3})`; g.beginPath(); g.ellipse(Math.random() * 512, 330 + Math.random() * 120, 30 + Math.random() * 60, 20 + Math.random() * 40, 0, 0, 6.28); g.fill(); }
-  for (let i = 0; i < 6; i++) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.beginPath(); g.ellipse(Math.random() * 512, 60 + Math.random() * 120, 50 + Math.random() * 60, 18 + Math.random() * 14, 0, 0, 6.28); g.fill(); }
+const skyTex = () => canvasTex(1024, 512, (g) => {
+  const grad = g.createLinearGradient(0, 0, 0, 512); grad.addColorStop(0, '#5B9BDD'); grad.addColorStop(0.5, '#BEDCF4'); grad.addColorStop(0.58, '#A6C98F'); grad.addColorStop(0.75, '#6E9A55'); grad.addColorStop(1, '#4E7A3E');
+  g.fillStyle = grad; g.fillRect(0, 0, 1024, 512);
+  // a lawn, a hedge line, and tree canopies against the sky
+  g.fillStyle = '#7FB05C'; g.fillRect(0, 330, 1024, 182);
+  for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(60,110,45,${0.15 + Math.random() * 0.2})`; g.fillRect(0, 335 + i * 4.4, 1024, 2); }
+  for (let x = -20; x < 1050; x += 26) { const r = 26 + Math.random() * 10; g.fillStyle = `rgb(${52 + Math.random() * 20},${100 + Math.random() * 25},${45 + Math.random() * 15})`; g.beginPath(); g.ellipse(x, 322, r, r * 0.8, 0, 0, 6.28); g.fill(); }
+  for (let t = 0; t < 7; t++) { const cx = 60 + t * 150 + Math.random() * 60, cy = 200 + Math.random() * 40, R = 70 + Math.random() * 50; g.fillStyle = '#5B4630'; g.fillRect(cx - 6, cy, 12, 130); for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, d = Math.random() * R * 0.6; g.fillStyle = `rgba(${45 + Math.random() * 40},${105 + Math.random() * 45},${40 + Math.random() * 25},0.9)`; g.beginPath(); g.ellipse(cx + Math.cos(a) * d, cy + Math.sin(a) * d * 0.7, R * 0.45, R * 0.35, 0, 0, 6.28); g.fill(); } }
+  // soft clouds
+  for (let i = 0; i < 9; i++) { const x = Math.random() * 1024, y = 40 + Math.random() * 150; for (let k = 0; k < 6; k++) { g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.ellipse(x + (Math.random() - 0.5) * 120, y + (Math.random() - 0.5) * 30, 40 + Math.random() * 50, 16 + Math.random() * 16, 0, 0, 6.28); g.fill(); } }
 });
 const bananaTex = () => canvasTex(256, 64, (g) => {
   g.fillStyle = '#F2D34A'; g.fillRect(0, 0, 256, 64);
@@ -73,20 +78,20 @@ export function createWorld(canvas) {
   scene.environmentIntensity = 0.45;
 
   const camera = new THREE.PerspectiveCamera(38, 1, 1, 2000);
-  camera.position.set(40, 120, 205);
+  camera.position.set(30, 125, 265);
   const controls = new OrbitControls(camera, canvas);
   controls.target.set(0, 12, -5);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
-  controls.minDistance = 40; controls.maxDistance = 420;
+  controls.minDistance = 30; controls.maxDistance = 560;
   controls.maxPolarAngle = 1.5; controls.minPolarAngle = 0.15;
   controls.enablePan = true; controls.panSpeed = 0.6;
   controls.update();
 
   // ---- light: sun through the window (behind, high), soft daylight fill, warm front key
   const sun = new THREE.DirectionalLight('#FFF2DC', 2.2);
-  sun.position.set(-60, 190, -140);
+  sun.position.set(-70, 200, -170);
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -170; sun.shadow.camera.right = 170; sun.shadow.camera.top = 170; sun.shadow.camera.bottom = -170;
+  sun.shadow.camera.left = -230; sun.shadow.camera.right = 230; sun.shadow.camera.top = 230; sun.shadow.camera.bottom = -230;
   sun.shadow.camera.near = 20; sun.shadow.camera.far = 600; sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03;
   scene.add(sun);
   const key = new THREE.DirectionalLight('#FFF7EC', 0.9); key.position.set(120, 140, 160); scene.add(key);
@@ -107,8 +112,8 @@ export function createWorld(canvas) {
   for (const [x, y, w, h] of [[-W / 2, y0 + H / 2, 8, H + 8], [W / 2, y0 + H / 2, 8, H + 8], [0, y0, W + 8, 10], [0, y0 + H, W + 8, 8], [0, y0 + H / 2, 6, H], [0, y0 + H * 0.55, W, 5]]) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 12), frameMat); m.position.set(x, y, 0); m.castShadow = true; m.receiveShadow = true; win.add(m);
   }
-  const view = new THREE.Mesh(new THREE.PlaneGeometry(W * 3, H * 3), new THREE.MeshBasicMaterial({ map: skyTex() }));
-  view.position.set(0, y0 + H / 2 + 30, -260); win.add(view);
+  const view = new THREE.Mesh(new THREE.PlaneGeometry(1400, 700), new THREE.MeshBasicMaterial({ map: skyTex() }));
+  view.position.set(0, y0 + H / 2 + 60, COUNTER.z0 - 300); scene.add(view);
   const glass = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshPhysicalMaterial({ color: '#FFFFFF', transmission: 0.95, roughness: 0.03, thickness: 0.5, ior: 1.5, envMapIntensity: 0.4 }));
   glass.position.set(0, y0 + H / 2, -6); win.add(glass);
   scene.add(win);
@@ -118,7 +123,7 @@ export function createWorld(canvas) {
   const mesh = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
 
   // banana: a bent tube along a curve, lying on the counter
-  const bananaPts = [new THREE.Vector3(-105, 9, 10), new THREE.Vector3(-70, 12, 2), new THREE.Vector3(-35, 12, 6), new THREE.Vector3(-4, 9, 18)];
+  const bananaPts = [new THREE.Vector3(-150, 9, 15), new THREE.Vector3(-115, 12, 7), new THREE.Vector3(-80, 12, 11), new THREE.Vector3(-49, 9, 23)];
   const bananaCurve = new THREE.CatmullRomCurve3(bananaPts);
   const bananaGeo = new THREE.TubeGeometry(bananaCurve, 48, 11, 7, false);
   const bananaMat = new THREE.MeshStandardMaterial({ map: bananaTex(), roughness: 0.45 });
@@ -129,7 +134,7 @@ export function createWorld(canvas) {
   objects.push({
     name: 'banana', kind: 'fruit', mesh: banana,
     height(x, z) { let best = 0; for (let t = 0; t <= 1; t += 0.02) { const p = bananaCurve.getPoint(t); const d = Math.hypot(p.x - x, p.z - z); if (d < 11) { const y = p.y + Math.sqrt(121 - d * d) - 9; if (y > best) best = y; } } return best; },
-    scents: [{ kind: 'fruit', x: bananaTip.x, z: bananaTip.z, strength: 1, sigma: 22 }, { kind: 'fruit', x: -60, z: 5, strength: 0.5, sigma: 24 }],
+    scents: [{ kind: 'fruit', x: bananaTip.x, z: bananaTip.z, strength: 1, sigma: 22 }, { kind: 'fruit', x: -105, z: 10, strength: 0.5, sigma: 24 }],
     food: [{ x: bananaTip.x + 2, z: bananaTip.z, r: 12, sugar: 1 }],
     eggSite: { x: bananaTip.x - 12, z: bananaTip.z - 2, r: 14 },
     obstacle: null,
@@ -137,52 +142,60 @@ export function createWorld(canvas) {
 
   // plate with two apple slices
   const plate = mesh(new THREE.CylinderGeometry(34, 30, 4, 48), new THREE.MeshStandardMaterial({ color: '#F6F7F4', roughness: 0.25 }));
-  plate.position.set(58, 2, 28);
+  plate.position.set(60, 2, 40);
   const rim = mesh(new THREE.TorusGeometry(33, 1.6, 10, 64), new THREE.MeshStandardMaterial({ color: '#5F8BC4', roughness: 0.3 }));
-  rim.rotation.x = Math.PI / 2; rim.position.set(58, 4.2, 28);
+  rim.rotation.x = Math.PI / 2; rim.position.set(60, 4.2, 40);
   const sliceShape = new THREE.Shape(); sliceShape.absarc(0, 0, 22, -0.75, 0.75, false); sliceShape.lineTo(0, 0);
   const sliceGeo = new THREE.ExtrudeGeometry(sliceShape, { depth: 10, bevelEnabled: true, bevelThickness: 1.2, bevelSize: 1.2, bevelSegments: 3 });
   const fleshMat = new THREE.MeshStandardMaterial({ color: '#F3E3B8', roughness: 0.5 });
   const slices = [];
-  for (const [x, z, rot] of [[50, 22, 0.6], [68, 36, 2.9]]) {
+  for (const [x, z, rot] of [[52, 34, 0.6], [70, 48, 2.9]]) {
     const s = mesh(sliceGeo, fleshMat); s.rotation.x = -Math.PI / 2; s.rotation.z = rot; s.position.set(x, 4, z); slices.push({ x, z, rot });
     const skin = mesh(new THREE.TorusGeometry(22, 1.4, 8, 40, 1.5), new THREE.MeshStandardMaterial({ color: '#C8352E', roughness: 0.4 }));
     skin.rotation.x = -Math.PI / 2; skin.rotation.z = rot - 0.75; skin.position.set(x, 9, z);
   }
   objects.push({
     name: 'apple', kind: 'fruit', mesh: plate,
-    height(x, z) { const d = Math.hypot(x - 58, z - 28); if (d > 34) return 0; let y = 4; for (const s of slices) { const dx = x - s.x, dz = z - s.z; const r = Math.hypot(dx, dz); const a = Math.atan2(-dz, dx) - s.rot; const an = Math.atan2(Math.sin(a), Math.cos(a)); if (r < 21 && Math.abs(an) < 0.72) y = 15; } return y; },
-    scents: [{ kind: 'fruit', x: 58, z: 28, strength: 0.6, sigma: 22 }],
+    height(x, z) { const d = Math.hypot(x - 60, z - 40); if (d > 34) return 0; let y = 4; for (const s of slices) { const dx = x - s.x, dz = z - s.z; const r = Math.hypot(dx, dz); const a = Math.atan2(-dz, dx) - s.rot; const an = Math.atan2(Math.sin(a), Math.cos(a)); if (r < 21 && Math.abs(an) < 0.72) y = 15; } return y; },
+    scents: [{ kind: 'fruit', x: 60, z: 40, strength: 0.6, sigma: 22 }],
     food: slices.map(s => ({ x: s.x + Math.cos(s.rot) * 9, z: s.z - Math.sin(s.rot) * 9, r: 13, sugar: 0.8 })),
-    eggSite: { x: 58, z: 28, r: 22 },
+    eggSite: { x: 60, z: 40, r: 22 },
     obstacle: null,
   });
 
   // jam jar with a drip at its base
   const jarPts = []; for (let i = 0; i <= 12; i++) { const t = i / 12; jarPts.push(new THREE.Vector2(20 + Math.sin(t * Math.PI) * 2.5 - (t > 0.85 ? (t - 0.85) * 30 : 0), t * 62)); }
   const jarGlass = new THREE.MeshPhysicalMaterial({ color: '#F4F8FA', transmission: 0.85, roughness: 0.08, thickness: 1.2, ior: 1.5, envMapIntensity: 0.5, transparent: true, opacity: 0.85 });
-  const jar = mesh(new THREE.LatheGeometry(jarPts, 40), jarGlass); jar.position.set(96, 0, -32);
-  const jam = mesh(new THREE.CylinderGeometry(17.5, 17.5, 34, 32), new THREE.MeshStandardMaterial({ color: '#6B1C38', roughness: 0.3 })); jam.position.set(96, 17, -32);
-  const lid = mesh(new THREE.CylinderGeometry(22, 22, 5, 40), new THREE.MeshStandardMaterial({ color: '#B8B0A2', metalness: 0.6, roughness: 0.35 })); lid.position.set(64, 2.5, -4); lid.rotation.z = 0.1;
+  const jar = mesh(new THREE.LatheGeometry(jarPts, 40), jarGlass); jar.position.set(140, 0, -60);
+  const jam = mesh(new THREE.CylinderGeometry(17.5, 17.5, 34, 32), new THREE.MeshStandardMaterial({ color: '#6B1C38', roughness: 0.3 })); jam.position.set(140, 17, -60);
+  const lid = mesh(new THREE.CylinderGeometry(22, 22, 5, 40), new THREE.MeshStandardMaterial({ color: '#B8B0A2', metalness: 0.6, roughness: 0.35 })); lid.position.set(108, 2.5, -30); lid.rotation.z = 0.1;
   const drip = mesh(new THREE.SphereGeometry(6, 20, 12), new THREE.MeshStandardMaterial({ color: '#8E2A4A', emissive: '#4A0F24', emissiveIntensity: 0.3, roughness: 0.15, clearcoat: 1 }));
-  drip.scale.set(1.4, 0.35, 1.1); drip.position.set(72, 1.5, -32);
+  drip.scale.set(1.4, 0.35, 1.1); drip.position.set(116, 1.5, -60);
   objects.push({
     name: 'jar', kind: 'jar', mesh: jar, height: () => 0,
-    scents: [{ kind: 'fruit', x: 72, z: -32, strength: 0.5, sigma: 16 }, { kind: 'vinegar', x: 72, z: -32, strength: 0.7, sigma: 16 }],
-    food: [{ x: 72, z: -32, r: 9, sugar: 1 }], eggSite: null,
-    obstacle: { x: 96, z: -32, r: 24 },
+    scents: [{ kind: 'fruit', x: 116, z: -60, strength: 0.5, sigma: 16 }, { kind: 'vinegar', x: 116, z: -60, strength: 0.7, sigma: 16 }],
+    food: [{ x: 116, z: -60, r: 9, sugar: 1 }], eggSite: null,
+    obstacle: { x: 140, z: -60, r: 24 },
   });
 
   // spilled juice
   const puddle = mesh(new THREE.CircleGeometry(15, 40), new THREE.MeshStandardMaterial({ color: '#D9922E', emissive: '#6E4310', emissiveIntensity: 0.25, roughness: 0.1 }));
-  puddle.rotation.x = -Math.PI / 2; puddle.position.set(-30, 0.15, 48); puddle.scale.set(1.3, 0.8, 1);
-  objects.push({ name: 'spill', kind: 'spill', mesh: puddle, height: () => 0, scents: [{ kind: 'vinegar', x: -30, z: 48, strength: 1, sigma: 18 }], food: [{ x: -30, z: 48, r: 16, sugar: 0.7 }], eggSite: null, obstacle: null });
+  puddle.rotation.x = -Math.PI / 2; puddle.position.set(-40, 0.15, 72); puddle.scale.set(1.3, 0.8, 1);
+  objects.push({ name: 'spill', kind: 'spill', mesh: puddle, height: () => 0, scents: [{ kind: 'vinegar', x: -40, z: 72, strength: 1, sigma: 18 }], food: [{ x: -40, z: 72, r: 16, sugar: 0.7 }], eggSite: null, obstacle: null });
 
   // folded cloth
-  const cloth = mesh(new THREE.BoxGeometry(44, 9, 34), new THREE.MeshStandardMaterial({ map: clothTex(), roughness: 0.9 })); cloth.position.set(-96, 4.5, -44);
-  objects.push({ name: 'cloth', kind: 'cloth', mesh: cloth, height: () => 0, scents: [], food: [], eggSite: null, obstacle: { x: -96, z: -44, r: 28 } });
+  const cloth = mesh(new THREE.BoxGeometry(44, 9, 34), new THREE.MeshStandardMaterial({ map: clothTex(), roughness: 0.9 })); cloth.position.set(-150, 4.5, -70);
+  objects.push({ name: 'cloth', kind: 'cloth', mesh: cloth, height: () => 0, scents: [], food: [], eggSite: null, obstacle: { x: -150, z: -70, r: 28 } });
   // fruit bowl (only drawn by the Blender set)
-  objects.push({ name: 'bowl', kind: 'bowl', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: 100, z: 45, strength: 0.35, sigma: 22 }], food: [], eggSite: null, obstacle: { x: 100, z: 45, r: 31 } });
+  objects.push({ name: 'bowl', kind: 'bowl', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: 150, z: 55, strength: 0.35, sigma: 22 }], food: [], eggSite: null, obstacle: { x: 150, z: 55, r: 31 } });
+  // the new props (drawn by the Blender set; walls come from their geometry, circles are a cheap pre-check)
+  objects.push({ name: 'mug', kind: 'mug', mesh: null, height: () => 0, scents: [], food: [], eggSite: null, obstacle: { x: -100, z: -55, r: 26 } });
+  objects.push({ name: 'coffee ring', kind: 'coffee', mesh: null, height: () => 0, scents: [], food: [{ x: -80, z: -36, r: 20, sugar: 0.5, bitter: true }], eggSite: null, obstacle: null });
+  objects.push({ name: 'sugar bowl', kind: 'sugar', mesh: null, height: () => 0, scents: [], food: [{ x: 38, z: -52, r: 17, sugar: 1 }], eggSite: null, obstacle: { x: 20, z: -70, r: 25 } });
+  objects.push({ name: 'orange', kind: 'fruit', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: -10, z: 8, strength: 0.9, sigma: 26 }], food: [{ x: -10, z: 8, r: 20, sugar: 0.9, top: 18.6 }], eggSite: { x: -10, z: 8, r: 20 }, obstacle: null });
+  objects.push({ name: 'grapes', kind: 'fruit', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: 100, z: 5, strength: 0.6, sigma: 24 }], food: [{ x: 100, z: 5, r: 24, sugar: 0.7 }], eggSite: { x: 100, z: 5, r: 24 }, obstacle: null });
+  objects.push({ name: 'pot', kind: 'pot', mesh: null, height: () => 0, scents: [], food: [], eggSite: { x: -160, z: 45, r: 22 }, obstacle: null });
+  objects.push({ name: 'crumbs', kind: 'crumbs', mesh: null, height: () => 0, scents: [], food: [{ x: -60, z: -22, r: 24, sugar: 0.4 }], eggSite: null, obstacle: null });
   const procedural = [counter, front, wall, win, banana, bananaStem, plate, rim, jar, jam, lid, drip, puddle, cloth, ...slicesMeshes(), ...scene.children.filter(c => c.geometry && c.geometry.type === 'TorusGeometry' && c !== rim)];
   let setScene = null, pickMeshes = null, walkMeshes = null;
   function applySet(gltfScene) {
@@ -195,9 +208,9 @@ export function createWorld(canvas) {
       if (o.material?.map) o.material.map.anisotropy = 8;
       if (o.name === 'window_glass') { o.material.transparent = true; o.material.opacity = 0.18; o.material.transmission = 0; o.material.depthWrite = false; }
       if (o.name === 'jar') { o.material.transparent = true; o.material.opacity = 0.35; o.material.transmission = 0.6; o.material.thickness = 1.5; o.material.roughness = 0.05; o.material.depthWrite = false; }
-      if (/^(counter|banana|plate|slice_1|slice_2|cloth|sill)$/.test(o.name)) pickMeshes.push(o);
+      if (/^(counter|banana|plate|slice_1|slice_2|cloth|sill|orange_half|orange_face|soil|sugar_spill|coffee_ring|spill)$/.test(o.name)) pickMeshes.push(o);
       // everything a fly can stand on: not the wall, window, apron or glass
-      if (!/^(wall|window_glass|apron|frame_|mullion|transom)/.test(o.name)) { walkMeshes.push(o); if (o.geometry.computeBoundsTree && !o.geometry.boundsTree) o.geometry.computeBoundsTree(); }
+      if (!/^(wall|window_glass|apron|frame_|mullion|transom|curtain|curtain_rod)/.test(o.name)) { walkMeshes.push(o); if (o.geometry.computeBoundsTree && !o.geometry.boundsTree) o.geometry.computeBoundsTree(); }
     });
     gltfScene.updateMatrixWorld(true);
   }
@@ -242,7 +255,7 @@ export function createWorld(canvas) {
   const foodOverrides = [];   // bitter drops on food, timed
   function foodAt(x, z) {
     for (const d of droplets) if (Math.hypot(d.x - x, d.z - z) < d.radius + 1.5) return { sugar: 1, bitter: d.bitter, droplet: d };
-    for (const o of objects) for (const f of o.food) if (Math.hypot(f.x - x, f.z - z) < f.r) return { sugar: f.sugar, bitter: foodOverrides.some(b => b.x === f.x && b.z === f.z && b.until > performance.now()), site: f };
+    for (const o of objects) for (const f of o.food) if (Math.hypot(f.x - x, f.z - z) < f.r) return { sugar: f.sugar, bitter: !!f.bitter || foodOverrides.some(b => b.x === f.x && b.z === f.z && b.until > performance.now()), site: f };
     return null;
   }
   function eggSiteAt(x, z) { for (const o of objects) if (o.eggSite && Math.hypot(o.eggSite.x - x, o.eggSite.z - z) < o.eggSite.r) return o.eggSite; return null; }
@@ -312,9 +325,12 @@ export function createWorld(canvas) {
   }
   function slicesMeshes() { return scene.children.filter(c => c.geometry === sliceGeo); }
 
+  let gustT = 0;
+  function gust() { gustT = 1; }
   function resize() { const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
   function render(dt) {
     controls.update();
+    if (gustT > 0) { gustT = Math.max(0, gustT - dt / 2600); const c = setScene?.getObjectByName('curtain'); if (c) { c.rotation.x = 0.35 * gustT * Math.sin(gustT * 14) * (1 - gustT * 0.5); c.position.z = 6 * gustT * Math.max(0, Math.sin(gustT * 7)); } }
     if (sweep) { sweep.t += dt; const u = Math.min(1, sweep.t / sweep.dur); const s = -160 + 320 * u; const dir = sun.position.clone().normalize(); occluder.position.copy(dir.multiplyScalar(90)).add(new THREE.Vector3(sweep.x + sweep.dx * s, 0, sweep.z + sweep.dz * s)); if (u >= 1) { sweep = null; occluder.visible = false; } }
     for (let i = ripples.length - 1; i >= 0; i--) { const r = ripples[i]; r.t += dt; const u = r.t / 500; r.m.scale.setScalar((1 + u * 6) * 2.6); r.m.material.color.setScalar(1 - u).multiply(new THREE.Color('#4A86E8')); if (u >= 1) { scene.remove(r.m); ripples.splice(i, 1); } }
     for (const d of droplets) { d.mesh.position.set(d.x, d.y + d.radius * 0.3, d.z); d.mesh.scale.set(d.radius, d.radius * 0.42, d.radius); }
@@ -327,5 +343,5 @@ export function createWorld(canvas) {
     renderer.render(scene, camera);
   }
   resize();
-  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, surfaceAt, walkable, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, render, resize, WALK };
+  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, surfaceAt, walkable, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, gust, render, resize, WALK };
 }

@@ -17,7 +17,7 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
   const flies = [];
   let nextId = 1, selected = null;
   const foods = [];   // droplets + food sites, as the body's controller sees them
-  for (const o of world.objects) for (const f of o.food) foods.push({ x: f.x, z: f.z, radius: f.r, site: f, bitter: false, gone: false, rejected: false, rejectedUntil: 0, shrink() {} });
+  for (const o of world.objects) for (const f of o.food) foods.push({ x: f.x, z: f.z, radius: f.r, site: f, bitter: !!f.bitter, gone: false, rejected: false, rejectedUntil: 0, shrink() {} });
   function refreshFoods() {
     const now = performance.now();
     for (const f of foods) { if (f.site) { const info = world.foodAt(f.x, f.z); f.bitter = !!(info && info.bitter); if (f.rejected && now > f.rejectedUntil) f.rejected = false; } }
@@ -98,7 +98,7 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
     return {
       droplets: world.droplets, foods: refreshFoods(),
       smellAt: world.smellAt, smellGradient: world.smellGradient, memory: fly.memory,
-      heightAt: world.heightAt, surfaceAt: world.surfaceAt, walkable: world.walkable, pushOut: world.pushOut,
+      heightAt: world.heightAt, surfaceAt: world.surfaceAt, walkable: world.walkable, pushOut: world.pushOut, objects: world.objects,
       onReachDroplet(d) { stim(fly, 'sugar', 200); if (d.bitter) stim(fly, 'bitter', 200); teach(fly, d); fly.feedingOn = d; },
       onLeaveDroplet() { stim(fly, 'sugar', 0); stim(fly, 'bitter', 0); stim(fly, 'reward_DAN', 0); stim(fly, 'punish_DAN', 0); fly.feedingOn = null; },
     };
@@ -227,7 +227,14 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
   }
   function forget(fly) { fly.post({ type: 'forget' }); fly.changed = 0; }
   function shadowAll(dx, dz) { for (const f of flies) pulse(f, ['LC4', 'LPLC2'], 150, 70); }
+  function gust(strength = 1) {
+    for (const f of flies) {
+      pulse(f, ['JO'], 90 * strength, 600);
+      if (!f.body.flying && !f.body.mounting && !f.body.hold) { const k = 3 * strength; f.body.nudge((Math.random() - 0.5) * k, k * 1.6); }
+      f.gustAt = performance.now();
+    }
+  }
   function poke(fly) { pulse(fly, ['JO'], 140, 300); }
 
-  return { flies, spawn, remove, select, get selected() { return selected; }, update, stim, pulse, memoryFor, stateFor, forget, shadowAll, poke, budget };
+  return { flies, spawn, remove, select, get selected() { return selected; }, update, stim, pulse, memoryFor, stateFor, forget, shadowAll, gust, poke, budget };
 }

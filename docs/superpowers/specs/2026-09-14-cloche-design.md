@@ -630,3 +630,20 @@ rounded abdomen with thin dark bands (black tip on the male), clear wings
 longer than the body held flat over the back, and long thin legs sprawled
 wide with knees up, joint spheres at hip and knee. The tarsus had been
 rotated about the wrong origin and floated free of the tibia; fixed.
+
+### More room, more to do, 2026-09-15
+
+The counter grew to 360 × 200 mm under a 330 mm window with the tiled wall
+cut around the opening and a sky-and-garden backdrop behind it (lawn,
+hedge, trees, clouds, drawn on a canvas). New props, all from the Blender
+script: a coffee mug with a **bitter** coffee ring at its foot (caffeine is
+bitter to a fly: its bitter neurons fire and it rejects the ring), a sugar
+bowl with a spill of sugar (sweet, no smell), a cut orange (smell, sugar,
+egg site), a bunch of grapes (smell, sugar, egg site), a lemon in the
+bowl, a potted herb with soil (egg site), crumbs (weak sugar), a curtain
+that sways in a gust. Flies get a curiosity drive: every 25–65 s of idling
+they pick a prop and walk over to look at it (staged; the status line says
+so). A **Gust** chip blows a breeze through the window: every fly's
+Johnston's-organ wind neurons are driven for 600 ms and it is shoved a few
+millimetres; the real wiring answers with a brain-wide burst and grooming.
+Verified in Josh's own Chrome through the extension.

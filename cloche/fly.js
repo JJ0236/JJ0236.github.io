@@ -167,7 +167,7 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
   // ---- state ----
   const rates = { MN9: 0, MN6: 0, GF: 0, groom: 0, DNa01: 0, DNa02: 0, DN_L: 0, DN_R: 0, DNa02_L: 0, DNa02_R: 0 };
   const sm = { MN9: 0, MN6: 0, groom: 0, DN: 0, DN_L: 0, DN_R: 0, turn: 0 };
-  let wanderNoise = 0, noiseT = 0;
+  let wanderNoise = 0, noiseT = 0, curiosityT = 12 + Math.random() * 20;
   let mode = 'idle', hunger = 0.6;
   let heading = Math.random() * Math.PI * 2, x = 6, z = -4;
   let phase = 0, walking = 0;
@@ -308,8 +308,20 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
         }
       } else {
         // exploring: the descending population sets the pace and the turn;
-        // a learned smell pulls the heading up or down its gradient
+        // a learned smell pulls the heading up or down its gradient; now and
+        // then curiosity picks a prop on the counter and the fly goes to see it
         mode = 'idle';
+        curiosityT -= dt;
+        if (curiosityT <= 0 && w.objects && w.objects.length) {
+          curiosityT = 25 + Math.random() * 40;
+          const cands = w.objects.filter(o => o.food.length || o.eggSite || o.scents.length);
+          const o = cands[(Math.random() * cands.length) | 0];
+          const spot = o.food[0] || o.eggSite || o.scents[0];
+          if (spot && Math.hypot(spot.x - x, spot.z - z) > 15) {
+            const a = Math.random() * 6.28, r = (spot.r || 12) + 4 + Math.random() * 6;
+            pursuit = { x: spot.x + Math.cos(a) * r, z: spot.z + Math.sin(a) * r, stopAt: 3, speed: 6.5, mode: 'going to look at the ' + o.name, arrive() { idleTimer = 2 + Math.random() * 3; idleWalking = false; } };
+          }
+        }
         const drive = (sm.DN_L + sm.DN_R) / 2;                // Hz, mean over the descending neurons
         const brainPace = Math.min(1, drive / 4);
         noiseT -= dt; if (noiseT <= 0) { noiseT = 0.6 + Math.random() * 1.4; wanderNoise = (Math.random() - 0.5) * 1.6; }

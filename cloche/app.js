@@ -16,6 +16,7 @@ const PATHWAYS = {
   bitter: 'bitter GRNs inhibit the sugar pathway; MN9 goes quiet',
   loom: 'LC4 + LPLC2 looming detectors → giant fibre → jump',
   poke: 'Johnston\'s organ → antennal interneurons → descending neurons → grooming',
+  gust: 'a breeze from the window: Johnston\'s organ wind neurons → descending neurons → grooming',
   fruit: 'fruit receptors → antennal lobe → projection neurons → Kenyon cells',
   vinegar: 'vinegar receptors → antennal lobe → projection neurons → Kenyon cells',
   reward: 'smell + sugar: PAM dopamine weakens this smell\'s Kenyon-cell synapses onto avoidance neurons',
@@ -161,6 +162,7 @@ async function main() {
     if (b.dataset.mode) { mode = b.dataset.mode; chips.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('active', x === b)); $('hint').textContent = HINTS[mode]; $('hint').classList.remove('fade'); }
     else if (b.dataset.act === 'shadow') shadow(1, 0.3);
     else if (b.dataset.act === 'poke') poke();
+    else if (b.dataset.act === 'gust') { pop.gust(1); world.gust?.(); say('gust', 2000); }
   });
   $('addF').addEventListener('click', () => { if (pop.flies.length < maxFlies) { const p = freeSpot(); pop.spawn('female', p.x, p.z); updateAddButtons(); } });
   $('addM').addEventListener('click', () => { if (pop.flies.length < maxFlies && datasets.male) { const p = freeSpot(); pop.spawn('male', p.x, p.z); updateAddButtons(); } });
@@ -224,6 +226,7 @@ async function main() {
     else { $('rP1').textContent = '–'; $('rSong').textContent = '–'; $('rLC10').textContent = '–'; hz('JO_A', $('rHear')); hz('vpoDN', $('rAccept'), 4); hz('oviDN', $('rOvi'), 5); }
     const modes = { idle: 'exploring', seeking: 'walking to food', feeding: 'tasting', grooming: 'grooming', jumping: 'jumping', flying: 'flying', mating: 'mating', pursuing: 'walking', courting: 'courting' };
     $('rMode').textContent = modes[f.body.mode] || f.body.mode;
+    $('rMode').title = f.body.mode;
     $('rHunger').textContent = `${(f.body.hunger * 100).toFixed(0)} %`;
     $('rStatus').textContent = f.sex === 'male' ? (f.courting ? `courting ${f.courting.name}` : 'male') : (f.mated ? 'mated female' : 'virgin female');
     const c = lifecycle.counts();

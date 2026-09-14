@@ -292,17 +292,21 @@ paint = material('paint', color=(0.90, 0.88, 0.82), rough=0.6)
 glassM = material('glass', color=(0.95, 0.98, 1.0), rough=0.04, transmission=1.0, ior=1.5, alpha=0.15)
 
 # counter (top at y = 0), front apron, wall, window frame, sill
-box('counter', (250, 140, 12), P(0, -6, 2), wood, setc, bevel=1.2, uvscale=250)
-box('apron', (250, 6, 60), P(0, -42, 69), paint, setc, bevel=0.8)
-box('wall', (600, 2, 300), P(0, 120, -70), tiles, setc, uvscale=110)
-W, H, y0 = 230, 190, 18
+box('counter', (360, 200, 12), P(0, -6, 2), wood, setc, bevel=1.2, uvscale=360)
+box('apron', (360, 6, 60), P(0, -42, 99), paint, setc, bevel=0.8)
+W, H, y0 = 330, 200, 18
+# tiled wall built around the window opening so the sky shows through
+box('wall_l', (400 - W / 2 - 4, 2, 320), P(-(W / 2 + 4) - (400 - W / 2 - 4) / 2, 120, -100), tiles, setc, uvscale=110)
+box('wall_r', (400 - W / 2 - 4, 2, 320), P((W / 2 + 4) + (400 - W / 2 - 4) / 2, 120, -100), tiles, setc, uvscale=110)
+box('wall_b', (W + 8, 2, y0 + 40), P(0, (y0 - 40) / 2, -100), tiles, setc, uvscale=110)
+box('wall_t', (W + 8, 2, 320 - (y0 + H + 4) + 40), P(0, (y0 + H + 4) + (320 - (y0 + H + 4) + 40) / 2 - 40, -100), tiles, setc, uvscale=110)
 for nm, (x, y, w, h) in {'frame_l': (-W / 2, y0 + H / 2, 8, H + 8), 'frame_r': (W / 2, y0 + H / 2, 8, H + 8), 'frame_b': (0, y0, W + 8, 10), 'frame_t': (0, y0 + H, W + 8, 8), 'mullion': (0, y0 + H / 2, 6, H), 'transom': (0, y0 + H * 0.55, W, 5)}.items():
-    box(nm, (w, 12, h), P(x, y, -69), paint, setc, bevel=0.6)
-box('sill', (W + 30, 22, 6), P(0, 3, -60), paint, setc, bevel=1.0)
-gl = box('window_glass', (W, 1, H), P(0, y0 + H / 2, -75), glassM, setc)
+    box(nm, (w, 12, h), P(x, y, -99), paint, setc, bevel=0.6)
+box('sill', (W + 30, 22, 6), P(0, 3, -90), paint, setc, bevel=1.0)
+gl = box('window_glass', (W, 1, H), P(0, y0 + H / 2, -105), glassM, setc)
 
 # banana: the same curve as world.js, pentagonal ridges, tapered ends
-bpts = [P(-105, 9, 10), P(-70, 12, 2), P(-35, 12, 6), P(-4, 9, 18)]
+bpts = [P(-150, 9, 15), P(-115, 12, 7), P(-80, 12, 11), P(-49, 9, 23)]
 def banana_r(t, th):
     taper = min(1, t / 0.12) ** 0.5 * min(1, (1 - t) / 0.10) ** 0.6
     return 11 * (1 + 0.07 * math.cos(5 * th)) * (0.35 + 0.65 * taper)
@@ -314,8 +318,8 @@ cylinder('banana_stem', 3.2, 2.2, 14, p0 - stem_dir * 2, axis=stem_dir, mat=mate
 # plate with a blue rim, two apple slices
 ceramic = material('ceramic', color=(0.96, 0.97, 0.95), rough=0.18, coat=0.4)
 blueM = material('rim', color=(0.35, 0.52, 0.78), rough=0.25, coat=0.4)
-lathe('plate', [(0, 0), (26, 0), (30, 1.5), (33, 3.0), (34.5, 4.2), (33.5, 5.0), (31, 4.6), (27, 3.4), (0, 3.2)], 64, ceramic, setc, 1, P(58, 0, 28))
-lathe('plate_rim', [(31.5, 4.0), (34.8, 4.4), (34.2, 5.4), (31.2, 4.9), (31.5, 4.0)], 64, blueM, setc, 0, P(58, 0, 28), closed_bottom=False)
+lathe('plate', [(0, 0), (26, 0), (30, 1.5), (33, 3.0), (34.5, 4.2), (33.5, 5.0), (31, 4.6), (27, 3.4), (0, 3.2)], 64, ceramic, setc, 1, P(60, 0, 40))
+lathe('plate_rim', [(31.5, 4.0), (34.8, 4.4), (34.2, 5.4), (31.2, 4.9), (31.5, 4.0)], 64, blueM, setc, 0, P(60, 0, 40), closed_bottom=False)
 fleshM = material('apple_flesh', tex=tex_apple_flesh(), rough=0.55)
 skinM = material('apple_skin', color=(0.72, 0.12, 0.10), rough=0.35, coat=0.6)
 def apple_slice(name, x, z, rot):
@@ -338,35 +342,35 @@ def apple_slice(name, x, z, rot):
     sk = make_obj(name + '_skin', bm2, skinM, True, setc, 0)
     sk.location = P(x, 4, z); sk.rotation_euler = rotY3(rot)
     sol = sk.modifiers.new('solid', 'SOLIDIFY'); sol.thickness = 1.2; sol.offset = 1
-apple_slice('slice_1', 50, 22, 0.6); apple_slice('slice_2', 68, 36, 2.9)
+apple_slice('slice_1', 52, 34, 0.6); apple_slice('slice_2', 70, 48, 2.9)
 
 # jam jar, jam, lid, drip
 jar_profile = [(0, 0), (19, 0), (21, 1.5), (21.5, 6), (22.5, 30), (22.5, 50), (20.5, 55), (19.5, 58), (20.5, 61), (20.5, 62)]
-jar = lathe('jar', jar_profile, 64, glassM, setc, 1, P(96, 0, -32))
+jar = lathe('jar', jar_profile, 64, glassM, setc, 1, P(140, 0, -60))
 sol = jar.modifiers.new('solid', 'SOLIDIFY'); sol.thickness = 1.6; sol.offset = -1
 jamM = material('jam', color=(0.42, 0.06, 0.16), rough=0.28, coat=0.3, spec=0.7)
-lathe('jam', [(0, 1.5), (18.5, 1.5), (19.5, 6), (20.5, 30), (20.5, 36), (19, 38.5), (12, 39.5), (0, 39.8)], 48, jamM, setc, 1, P(96, 0, -32))
+lathe('jam', [(0, 1.5), (18.5, 1.5), (19.5, 6), (20.5, 30), (20.5, 36), (19, 38.5), (12, 39.5), (0, 39.8)], 48, jamM, setc, 1, P(140, 0, -60))
 metal = material('lid', color=(0.72, 0.70, 0.66), rough=0.35, metal=0.9)
-lid = lathe('lid', [(0, 0), (22, 0), (23, 1), (23, 5), (22, 6), (0, 6)], 64, metal, setc, 0, P(64, 0, -4))
+lid = lathe('lid', [(0, 0), (22, 0), (23, 1), (23, 5), (22, 6), (0, 6)], 64, metal, setc, 0, P(108, 0, -30))
 lid.rotation_euler = rotY3(0.1)
 dripM = material('drip', color=(0.55, 0.10, 0.22), rough=0.12, coat=0.9)
-sphere('drip', 6, P(72, 1.4, -32), (1.4, 1.1, 0.32), dripM, setc, subsurf=1)
-sphere('drip2', 3, P(80, 1.0, -28), (1.2, 1.0, 0.3), dripM, setc, subsurf=1)
+sphere('drip', 6, P(116, 1.4, -60), (1.4, 1.1, 0.32), dripM, setc, subsurf=1)
+sphere('drip2', 3, P(124, 1.0, -56), (1.2, 1.0, 0.3), dripM, setc, subsurf=1)
 
 # spilled juice: a flat glossy puddle
 juiceM = material('juice', color=(0.78, 0.42, 0.10), rough=0.06, coat=1.0)
 bm = bmesh.new(); pts = []
 for k in range(40):
     a = 2 * math.pi * k / 40; rr = 15 * (1 + 0.18 * math.sin(a * 3) + 0.1 * math.cos(a * 5))
-    pts.append(bm.verts.new(P(-30 + math.cos(a) * rr * 1.3, 0, 48 + math.sin(a) * rr * 0.85)))
+    pts.append(bm.verts.new(P(-40 + math.cos(a) * rr * 1.3, 0, 72 + math.sin(a) * rr * 0.85)))
 f = bm.faces.new(pts)
 sp = make_obj('spill', bm, juiceM, False, setc, 0); sp.location = Vector((0, 0, 0.25))
 
 # cloth: simulated over a hidden block, then frozen
 clothM = material('cloth', tex=tex_cloth(), rough=0.95)
-blk = box('cloth_block', (40, 30, 9), P(-96, 4.5, -44), None, setc)
+blk = box('cloth_block', (40, 30, 9), P(-150, 4.5, -70), None, setc)
 blk.hide_render = True
-bpy.ops.mesh.primitive_plane_add(size=1, location=P(-96, 18, -44))
+bpy.ops.mesh.primitive_plane_add(size=1, location=P(-150, 18, -70))
 cl = bpy.context.active_object; cl.name = 'cloth'; cl.scale = (64, 52, 1)
 bpy.ops.object.transform_apply(scale=True)
 bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.subdivide(number_cuts=34); bpy.ops.object.mode_set(mode='OBJECT')
@@ -379,7 +383,7 @@ for o in list(scene.collection.objects):
 cmod = cl.modifiers.new('cloth', 'CLOTH'); cmod.settings.quality = 6; cmod.settings.mass = 0.3; cmod.settings.tension_stiffness = 6; cmod.settings.bending_stiffness = 0.4
 cmod.collision_settings.use_self_collision = True; cmod.collision_settings.distance_min = 0.4
 blk.modifiers.new('col', 'COLLISION')
-box('counter_col', (250, 140, 12), P(0, -6, 2), None, setc).modifiers.new('col', 'COLLISION')
+box('counter_col', (360, 200, 12), P(0, -6, 2), None, setc).modifiers.new('col', 'COLLISION')
 bpy.data.objects['counter_col'].hide_render = True
 scene.frame_start = 1; scene.frame_end = 45
 for fr in range(1, 46): scene.frame_set(fr)
@@ -392,10 +396,134 @@ for nm in ('cloth_block', 'counter_col'):
 
 # fruit bowl with two oranges (obstacle at (100, 45) r 30 in world.js)
 bowlM = material('bowl', color=(0.20, 0.32, 0.40), rough=0.3, coat=0.5)
-lathe('bowl', [(0, 0), (14, 0), (18, 1.2), (24, 6), (28, 14), (29, 20), (27.5, 21), (26.5, 20), (23, 14), (18, 7), (14, 4), (0, 3.5)], 64, bowlM, setc, 1, P(100, 0, 45))
+lathe('bowl', [(0, 0), (14, 0), (18, 1.2), (24, 6), (28, 14), (29, 20), (27.5, 21), (26.5, 20), (23, 14), (18, 7), (14, 4), (0, 3.5)], 64, bowlM, setc, 1, P(150, 0, 55))
 orangeM = material('orange', color=(0.95, 0.48, 0.10), rough=0.55)
-sphere('orange_1', 12, P(94, 15, 42), (1, 0.92, 1), orangeM, setc, subsurf=1)
-sphere('orange_2', 11, P(110, 14, 52), (1, 0.92, 1), orangeM, setc, subsurf=1)
+sphere('orange_1', 12, P(144, 15, 52), (1, 0.92, 1), orangeM, setc, subsurf=1)
+sphere('orange_2', 11, P(160, 14, 62), (1, 0.92, 1), orangeM, setc, subsurf=1)
+sphere('lemon', 9, P(152, 13, 42), (1.25, 0.9, 0.95), material('lemon', color=(0.95, 0.82, 0.12), rough=0.5), setc, subsurf=1)
+
+# coffee mug with a bitter coffee ring at its foot
+mugM = material('mug', color=(0.24, 0.30, 0.36), rough=0.35, coat=0.5)
+mug = lathe('mug', [(0, 0), (20, 0), (22, 1.5), (23, 8), (23.5, 40), (23, 44), (22, 45), (21, 44), (21, 6), (0, 5)], 56, mugM, setc, 1, P(-100, 0, -55))
+coffeeM = material('coffee', color=(0.22, 0.12, 0.06), rough=0.15, coat=1.0)
+lathe('coffee', [(0, 30), (20.6, 30), (20.6, 31), (0, 31)], 48, coffeeM, setc, 0, P(-100, 0, -55))
+handle = bpy.data.objects.new('mug_handle', bpy.data.meshes.new('mug_handle_me'))
+bm = bmesh.new(); bmesh.ops.create_circle(bm, cap_ends=False, radius=1, segments=8)
+bm.to_mesh(handle.data); bm.free()
+# handle as a torus segment
+hbm = bmesh.new(); R, r = 13, 3.2
+for i in range(0, 25):
+    pass
+hbm.free()
+bpy.data.objects.remove(handle)
+def torus_segment(name, R, r, a0, a1, at, mat, seg=24, ring=10):
+    bm = bmesh.new(); rings = []
+    for i in range(seg + 1):
+        a = a0 + (a1 - a0) * i / seg; c = Vector((math.cos(a) * R, 0, math.sin(a) * R))
+        ring_v = []
+        for j in range(ring):
+            t = 2 * math.pi * j / ring
+            n = Vector((math.cos(a), 0, math.sin(a))) * (math.cos(t) * r) + Vector((0, 1, 0)) * (math.sin(t) * r)
+            ring_v.append(bm.verts.new(c + n))
+        rings.append(ring_v)
+    for i in range(seg):
+        for j in range(ring): bm.faces.new((rings[i][j], rings[i][(j + 1) % ring], rings[i + 1][(j + 1) % ring], rings[i + 1][j]))
+    ob = make_obj(name, bm, mat, True, setc, 1); ob.location = at; return ob
+torus_segment('mug_handle', 14, 3.4, -math.pi * 0.5, math.pi * 0.5, P(-100 + 23, 22, -55), mugM)
+bpy.data.objects['mug_handle'].rotation_euler = rotY3(math.pi / 2)
+# the coffee ring: a thin glossy dark puddle
+bm = bmesh.new(); pts = []
+for k in range(48):
+    a = 2 * math.pi * k / 48; rr = 21 + 3 * math.sin(a * 4) + 1.5 * math.cos(a * 7)
+    pts.append(bm.verts.new(P(-80 + math.cos(a) * rr * 1.1, 0, -36 + math.sin(a) * rr * 0.8)))
+bm.faces.new(pts)
+cr = make_obj('coffee_ring', bm, material('coffee_ring', color=(0.30, 0.17, 0.08), rough=0.12, coat=1.0), False, setc, 0); cr.location = Vector((0, 0, 0.2))
+
+# sugar bowl with a spill of sugar
+sugarBowlM = material('sugar_bowl', color=(0.94, 0.94, 0.92), rough=0.2, coat=0.4)
+lathe('sugar_bowl', [(0, 0), (16, 0), (19, 2), (22, 10), (23, 20), (21.5, 22), (20.5, 21), (20, 10), (17, 3), (0, 2.5)], 56, sugarBowlM, setc, 1, P(20, 0, -70))
+sugarM = material('sugar', color=(0.98, 0.97, 0.94), rough=0.55, spec=0.9)
+lathe('sugar_pile', [(0, 2.5), (17, 2.5), (16, 6), (10, 12), (0, 14)], 40, sugarM, setc, 1, P(20, 0, -70))
+bm = bmesh.new(); pts = []
+for k in range(40):
+    a = 2 * math.pi * k / 40; rr = 12 + 2.5 * math.sin(a * 3) + 1.2 * math.cos(a * 6)
+    pts.append(bm.verts.new(P(38 + math.cos(a) * rr * 1.3, 0, -52 + math.sin(a) * rr)))
+bm.faces.new(pts)
+sp2 = make_obj('sugar_spill', bm, sugarM, False, setc, 0); sp2.location = Vector((0, 0, 0.6))
+sp2.modifiers.new('solid', 'SOLIDIFY').thickness = -1.0
+for i in range(18):
+    a = random.random() * 6.28; rr = 14 + random.random() * 12
+    g = sphere(f'sugar_grain_{i}', 0.9 + random.random() * 0.6, P(38 + math.cos(a) * rr * 1.3, 0.8, -52 + math.sin(a) * rr), (1, 0.7, 1), sugarM, setc)
+
+# a cut orange half, flesh up
+def tex_orange_flesh():
+    h = w = 512; yy, xx = np.mgrid[0:h, 0:w]; r = np.hypot(yy - h / 2, xx - w / 2) / (h / 2); a = np.arctan2(yy - h / 2, xx - w / 2)
+    flesh = np.array([0.98, 0.58, 0.12]); pith = np.array([0.98, 0.92, 0.78])
+    seg = np.abs(np.sin(a * 5)) < 0.06
+    col = flesh[None, None, :] * np.ones((h, w, 1)); col = np.where((seg | (r > 0.86) | (r < 0.06))[..., None], pith, col)
+    col += (noise2(h, w, 5, 9)[..., None] - 0.5) * 0.08
+    return save_image('orange_flesh', np.dstack([col, np.ones((h, w))]))
+orangeFleshM = material('orange_flesh', tex=tex_orange_flesh(), rough=0.35, coat=0.4)
+half = lathe('orange_half', [(0, 0), (16, 0), (20, 3), (22.5, 9), (23, 17), (22.6, 18.5), (0, 18.5)], 56, orangeM, setc, 1, P(-10, 0, 8))
+# flesh disc on top with its own material and UVs
+bm = bmesh.new(); uv_layer = bm.loops.layers.uv.new('UVMap'); ring_v = [bm.verts.new(P(-10 + math.cos(2 * math.pi * k / 56) * 22.4, 18.6, 8 + math.sin(2 * math.pi * k / 56) * 22.4)) for k in range(56)]
+f = bm.faces.new(ring_v)
+for l in f.loops: l[uv_layer].uv = ((l.vert.co.x + 10) / 44.8 + 0.5, (l.vert.co.y - (-8)) / 44.8 + 0.5)
+make_obj('orange_face', bm, orangeFleshM, False, setc, 0)
+
+# grapes on a stem
+grapeM = material('grape', color=(0.45, 0.16, 0.36), rough=0.3, coat=0.6)
+stemM = material('grape_stem', color=(0.45, 0.42, 0.25), rough=0.8)
+gx, gz = 100, 5
+for i in range(14):
+    a = i * 2.4; rr = 3 + (i % 5) * 5.5; x = gx + math.cos(a) * rr; z = gz + math.sin(a) * rr * 0.7
+    yy_ = 7 + (i % 3) * 5 - (i % 5) * 0.8
+    sphere(f'grape_{i}', 7 + (i % 3) * 0.6, P(x, yy_, z), (1, 1.15, 1), grapeM, setc, subsurf=1)
+cylinder('grape_stem', 1.6, 1.0, 42, P(gx - 12, 18, gz + 3), axis=Vector((1, 0.15, -0.2)), mat=stemM, coll=setc)
+
+# potted herb with soil
+potM = material('pot', color=(0.72, 0.42, 0.28), rough=0.7)
+lathe('pot', [(0, 0), (22, 0), (24, 2), (28, 42), (30, 43), (30.5, 47), (28.5, 47.5), (26, 43), (25, 41), (0, 40)], 56, potM, setc, 1, P(-160, 0, 45))
+soilM = material('soil', color=(0.20, 0.13, 0.08), rough=0.95)
+lathe('soil', [(0, 39), (25.5, 39), (24, 41.5), (16, 43), (0, 43.5)], 40, soilM, setc, 1, P(-160, 0, 45))
+leafM = material('leaf', color=(0.22, 0.48, 0.18), rough=0.55)
+def leaf(name, at, yaw, tilt, L=22, Wd=11):
+    bm = bmesh.new(); pts_ = []
+    for k in range(20):
+        t = k / 19; pts_.append((math.sin(math.pi * t) ** 0.8 * Wd * 0.5 * (1 if k < 10 else 1), t * L))
+    verts = [bm.verts.new(Vector((x, 0, y))) for (x, y) in pts_] + [bm.verts.new(Vector((-x, 0, y))) for (x, y) in reversed(pts_[1:-1])]
+    bm.faces.new(verts)
+    ob = make_obj(name, bm, leafM, True, setc, 1); ob.location = at; ob.rotation_euler = Euler((tilt, 0, yaw), 'XYZ')
+    ob.modifiers.new('solid', 'SOLIDIFY').thickness = 0.6
+for i in range(9):
+    yaw = i * 0.75; tilt = 0.45 + (i % 3) * 0.25
+    leaf(f'leaf_{i}', P(-160 + math.cos(yaw) * 5, 42 + (i % 2) * 6, 45 - math.sin(yaw) * 5), yaw, tilt, 20 + (i % 4) * 4, 10 + (i % 3) * 2)
+    cylinder(f'stem_{i}', 0.8, 0.6, 12 + (i % 2) * 6, P(-160, 40, 45), axis=Vector((math.cos(yaw) * 0.4, 1, -math.sin(yaw) * 0.4)), mat=leafM, coll=setc)
+
+# crumbs
+crumbM = material('crumb', color=(0.78, 0.62, 0.36), rough=0.9)
+for i in range(16):
+    x = -60 + random.random() * 50 - 25; z = -22 + random.random() * 30 - 15
+    sphere(f'crumb_{i}', 1.2 + random.random() * 2.0, P(x, 0.8, z), (1, 0.55, 0.8 + random.random() * 0.4), crumbM, setc)
+
+# a curtain at the left of the window: cloth hung from a rod
+curtainM = material('curtain', color=(0.93, 0.90, 0.80), rough=0.9)
+bpy.ops.mesh.primitive_plane_add(size=1, location=P(-W / 2 - 25, y0 + H / 2 + 20, -86))
+cu = bpy.context.active_object; cu.name = 'curtain'; cu.scale = (60, 1, H + 40); cu.rotation_euler = Euler((math.radians(90), 0, 0), 'XYZ')
+bpy.ops.object.transform_apply(scale=True, rotation=True)
+bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.subdivide(number_cuts=30); bpy.ops.object.mode_set(mode='OBJECT')
+for p_ in cu.data.polygons: p_.use_smooth = True
+cu.data.materials.append(curtainM)
+scene.collection.objects.unlink(cu); setc.objects.link(cu)
+vg = cu.vertex_groups.new(name='pin')
+top = max(v.co.z for v in cu.data.vertices)
+vg.add([v.index for v in cu.data.vertices if abs(v.co.z - top) < 1.0], 1.0, 'REPLACE')
+cm = cu.modifiers.new('cloth', 'CLOTH'); cm.settings.vertex_group_mass = 'pin'; cm.settings.quality = 5; cm.settings.mass = 0.2; cm.settings.bending_stiffness = 0.3
+cm.settings.effector_weights.gravity = 1.0
+for fr in range(1, 30): scene.frame_set(fr)
+bpy.context.view_layer.objects.active = cu; cu.select_set(True); bpy.ops.object.modifier_apply(modifier='cloth')
+cu.modifiers.new('solid', 'SOLIDIFY').thickness = 0.8
+rod = cylinder('curtain_rod', 2.2, 2.2, W + 90, P(-W / 2 - 45, y0 + H + 22, -84), axis=Vector((1, 0, 0)), mat=metal, coll=setc, seg=16)
 
 export(setc, 'set.glb')
 
@@ -501,7 +629,7 @@ export(brood, 'pupa.glb')
 # ================================================================ PREVIEW RENDER
 try:
     cam_data = bpy.data.cameras.new('cam'); cam = bpy.data.objects.new('cam', cam_data); scene.collection.objects.link(cam)
-    cam.location = P(40, 120, 205); cam.rotation_euler = Euler((math.radians(62), 0, math.radians(11)), 'XYZ'); cam_data.lens = 38
+    cam.location = P(50, 140, 280); cam.rotation_euler = Euler((math.radians(62), 0, math.radians(11)), 'XYZ'); cam_data.lens = 32
     scene.camera = cam
     sun = bpy.data.lights.new('sun', 'SUN'); sun.energy = 3.5; so = bpy.data.objects.new('sun', sun); scene.collection.objects.link(so)
     so.rotation_euler = Euler((math.radians(50), math.radians(-20), math.radians(160)), 'XYZ')
