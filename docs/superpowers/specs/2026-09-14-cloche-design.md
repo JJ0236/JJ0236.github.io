@@ -619,3 +619,14 @@ geometry:
 - Cost: population update 0.1 ms a frame for two flies; the headless
   software renderer needs over a second a frame for the 100 k-triangle set
   with shadows, which a GPU does in a millisecond or two.
+
+### Fly silhouette, 2026-09-15
+
+Josh: "they don't look like flies anymore". The first Blender body had
+drifted toward a wasp: long pointed banded abdomen, small eyes, short
+wings, legs bunched underneath. Rebuilt to the Drosophila silhouette: a
+wide head dominated by brick-red eyes, a hump-backed thorax, a short
+rounded abdomen with thin dark bands (black tip on the male), clear wings
+longer than the body held flat over the back, and long thin legs sprawled
+wide with knees up, joint spheres at hip and knee. The tarsus had been
+rotated about the wrong origin and floated free of the tibia; fixed.

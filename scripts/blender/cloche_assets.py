@@ -112,8 +112,8 @@ def tex_cloth():
 
 def tex_wing():
     h, w = 512, 256; yy, xx = np.mgrid[0:h, 0:w]; u = xx / w; v = yy / h
-    alpha = np.ones((h, w)) * 0.35
-    col = np.ones((h, w, 3)) * np.array([0.88, 0.92, 0.97])
+    alpha = np.ones((h, w)) * 0.22
+    col = np.ones((h, w, 3)) * np.array([0.90, 0.93, 0.98])
     def vein(f, width=0.012, strength=1.0):
         d = np.abs(u - f(v)); m = np.clip(1 - d / width, 0, 1) * strength
         return m
@@ -129,13 +129,14 @@ def tex_wing():
 
 def tex_abdomen(male):
     h, w = 512, 256; yy, xx = np.mgrid[0:h, 0:w]; v = yy / h   # v runs from thorax (0) to tip (1)
-    tan = np.array([0.66, 0.46, 0.22]); black = np.array([0.10, 0.08, 0.07])
+    tan = np.array([0.74, 0.58, 0.32]); black = np.array([0.12, 0.09, 0.07])
     col = tan[None, None, :] * np.ones((h, w, 1))
     band = np.zeros((h, w))
     for k in range(5):
-        c = 0.12 + k * 0.19; wdt = 0.05 if not male else 0.045
-        band = np.maximum(band, np.clip(1 - np.abs(v - c) / wdt, 0, 1) ** 0.6)
-    if male: band = np.maximum(band, np.clip((v - 0.62) * 8, 0, 1))
+        c = 0.2 + k * 0.17; wdt = 0.022 + 0.004 * k
+        b = np.clip(1 - np.abs(v - c) / wdt, 0, 1) ** 0.5
+        band = np.maximum(band, b * (0.55 + 0.45 * min(1, k / 3)))
+    if male: band = np.maximum(band, np.clip((v - 0.66) * 9, 0, 1))
     col = col * (1 - band[..., None] * 0.9) + black[None, None, :] * band[..., None] * 0.9
     col += (noise2(h, w, 5, 8 + int(male))[..., None] - 0.5) * 0.05
     return save_image('abdomen_' + ('m' if male else 'f'), np.dstack([col, np.ones((h, w))]))
@@ -401,31 +402,32 @@ export(setc, 'set.glb')
 # ================================================================ FLIES
 def build_fly(male):
     coll = new_collection('fly_m' if male else 'fly_f')
-    cuticle = material('cuticle_' + ('m' if male else 'f'), color=(0.50, 0.34, 0.17), rough=0.55, coat=0.08)
+    cuticle = material('cuticle_' + ('m' if male else 'f'), color=(0.62, 0.46, 0.26), rough=0.55, coat=0.08)
+    thoraxM = material('thorax_' + ('m' if male else 'f'), color=(0.50, 0.40, 0.28), rough=0.5, coat=0.1)
     darkM = material('dark_' + ('m' if male else 'f'), color=(0.12, 0.09, 0.07), rough=0.5)
-    legM = material('leg_' + ('m' if male else 'f'), color=(0.38, 0.26, 0.13), rough=0.6)
-    eyeM = material('eye_' + ('m' if male else 'f'), color=(0.80, 0.10, 0.05), rough=0.32, coat=0.5)
+    legM = material('leg_' + ('m' if male else 'f'), color=(0.55, 0.42, 0.24), rough=0.6)
+    eyeM = material('eye_' + ('m' if male else 'f'), color=(0.78, 0.09, 0.03), rough=0.35, coat=0.4)
     abdoM = material('abdomen_' + ('m' if male else 'f'), tex=tex_abdomen(male), rough=0.5, coat=0.1)
-    wingM = material('wingmat_' + ('m' if male else 'f'), tex=tex_wing(), alpha='tex', rough=0.2, spec=0.8)
+    wingM = material('wingmat_' + ('m' if male else 'f'), tex=tex_wing(), alpha='tex', rough=0.12, spec=1.0)
     root = empty('root', Vector((0, 0, 0)), coll=coll)
     body = empty('body', Vector((0, 0, 0)), parent=root, coll=coll)
     # thorax
-    th = sphere('thorax', 0.74, P(0, 0.95, 0.25), (1.0, 1.15, 0.85), cuticle, coll, subsurf=1); th.parent = body
-    sc = sphere('scutellum', 0.3, P(0, 1.2, -0.45), (1.1, 0.7, 1.0), cuticle, coll, subsurf=1); sc.parent = body
+    th = sphere('thorax', 0.68, P(0, 1.02, 0.25), (1.0, 1.3, 0.95), thoraxM, coll, subsurf=1); th.parent = body
+    sc = sphere('scutellum', 0.28, P(0, 1.25, -0.45), (1.1, 0.6, 1.0), thoraxM, coll, subsurf=1); sc.parent = body
     # abdomen on a pivot; a tube tapering to the tip (built in the pivot's frame)
     abd = empty('abdomen', P(0, 0.85, -0.55), parent=body, coll=coll)
-    L = 2.0 if male else 2.6
-    apts = [P(0, 0, 0.05), P(0, 0.01, 0.05 - L * 0.5), P(0, -0.05, 0.05 - L)]
+    L = 1.55 if male else 1.95
+    apts = [P(0, 0, 0.1), P(0, 0.02, 0.1 - L * 0.5), P(0, -0.08, 0.1 - L)]
     def abd_r(t, thta):
-        base = 0.72 if not male else 0.66
-        prof = math.sin(math.pi * (0.12 + 0.88 * t)) ** (0.9 if male else 0.7)
-        return base * max(0.04, prof) * (1 + 0.1 * math.cos(thta * 2))
+        base = 0.66 if male else 0.74
+        prof = math.sin(math.pi * (0.06 + 0.94 * t)) ** (0.55 if male else 0.5)
+        return base * max(0.05, prof) * (1 + 0.12 * math.cos(thta * 2))
     ab = tube('abdomen_mesh', apts, abd_r, sides=20, rings=24, mat=abdoM, coll=coll, subsurf=1); ab.parent = abd
     # head, in its own frame
-    head = empty('head', P(0, 1.0, 1.15), parent=body, coll=coll)
-    hm = sphere('head_mesh', 0.42, Vector((0, 0, 0)), (1.05, 0.9, 0.9), cuticle, coll, subsurf=1); hm.parent = head
+    head = empty('head', P(0, 1.02, 1.12), parent=body, coll=coll)
+    hm = sphere('head_mesh', 0.4, Vector((0, 0, 0)), (1.25, 0.95, 0.8), cuticle, coll, subsurf=1); hm.parent = head
     for s, nm in ((-1, 'L'), (1, 'R')):
-        e = sphere('eye_' + nm, 0.27, P(s * 0.33, 0.04, 0.14), (0.8, 1.05, 1.0), eyeM, coll, subsurf=1); e.parent = head
+        e = sphere('eye_' + nm, 0.36, P(s * 0.36, 0.02, 0.08), (0.75, 1.1, 1.0), eyeM, coll, subsurf=1); e.parent = head
         ant = empty('ant' + nm, P(s * 0.16, 0.22, 0.41), rot=rotX(-0.6), parent=head, coll=coll)
         seg = cylinder('ant_seg_' + nm, 0.07, 0.04, 0.5, Vector((0, 0, 0)), axis='z', mat=darkM, coll=coll); seg.parent = ant
         ar = cylinder('arista_' + nm, 0.015, 0.008, 0.55, Vector((0, 0, 0.48)), axis=Vector((s * 0.6, 0, 0.8)), mat=darkM, coll=coll); ar.parent = ant
@@ -440,29 +442,31 @@ def build_fly(male):
     legz = [0.85, 0.25, -0.35]
     for i in range(3):
         for s, nm in ((-1, 'L'), (1, 'R')):
-            hip = empty(f'hip_{nm}{i + 1}', P(s * 0.55, 0.6, legz[i]), rot=rotY3(-s * (i - 1) * 0.35), parent=body, coll=coll)
-            fp = empty(f'femur_{nm}{i + 1}', Vector((0, 0, 0)), rot=rotZ3(s * 1.15), parent=hip, coll=coll)
-            fe = cylinder(f'femur_mesh_{nm}{i + 1}', 0.1, 0.065, 1.0, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); fe.parent = fp
-            kn = empty(f'knee_{nm}{i + 1}', Vector((0, 0, -1.0)), rot=rotZ3(-s * 1.55), parent=fp, coll=coll)
-            ti = cylinder(f'tibia_mesh_{nm}{i + 1}', 0.06, 0.04, 0.95, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); ti.parent = kn
-            ta = cylinder(f'tarsus_mesh_{nm}{i + 1}', 0.04, 0.02, 0.55, Vector((0, 0, -0.95)), axis=Vector((0, 0, -1)), mat=legM, coll=coll, subsurf=1); ta.parent = kn
-            ta.rotation_euler = rotZ3(s * 0.35)
+            hip = empty(f'hip_{nm}{i + 1}', P(s * 0.5, 0.62, legz[i]), rot=rotY3(-s * (i - 1) * 0.35), parent=body, coll=coll)
+            fp = empty(f'femur_{nm}{i + 1}', Vector((0, 0, 0)), rot=rotZ3(s * 1.25), parent=hip, coll=coll)
+            fe = cylinder(f'femur_mesh_{nm}{i + 1}', 0.075, 0.055, 1.05, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); fe.parent = fp
+            kn = empty(f'knee_{nm}{i + 1}', Vector((0, 0, -1.05)), rot=rotZ3(-s * 1.7), parent=fp, coll=coll)
+            ti = cylinder(f'tibia_mesh_{nm}{i + 1}', 0.05, 0.035, 1.0, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); ti.parent = kn
+            ta = cylinder(f'tarsus_mesh_{nm}{i + 1}', 0.032, 0.018, 0.65, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); ta.parent = kn
+            ta.location = Vector((0, 0, -1.0)); ta.rotation_euler = rotZ3(s * 0.35)
+            kj = sphere(f'knee_joint_{nm}{i + 1}', 0.06, Vector((0, 0, 0)), (1, 1, 1), legM, coll, subsurf=0); kj.parent = kn
+            hj = sphere(f'hip_joint_{nm}{i + 1}', 0.085, Vector((0, 0, 0)), (1, 1, 1), legM, coll, subsurf=0); hj.parent = fp
             if male and i == 0:
                 comb = box(f'sexcomb_{nm}', (0.09, 0.06, 0.16), Vector((0, 0.05, -0.5)), darkM, coll); comb.parent = kn
     # wings
     for s, nm in ((-1, 'L'), (1, 'R')):
-        wp = empty('wing' + nm, P(s * 0.28, 1.5, 0.05), rot=rotY3(s * 0.28), parent=body, coll=coll)
+        wp = empty('wing' + nm, P(s * 0.22, 1.55, 0.05), rot=rotY3(s * 0.1), parent=body, coll=coll)
         bm = bmesh.new(); uv_layer = bm.loops.layers.uv.new('UVMap')
         outline = []
         for k in range(28):
             t = k / 27; ang = math.pi * t
             wdt = 0.42 * math.sin(ang) ** 0.8 * (1 + 0.15 * math.sin(2 * ang))
             outline.append((s * (0.18 + wdt), -0.05 - 2.45 * (1 - math.cos(ang)) / 2 * 2 / 2))
-        pts = [(s * 0.12, 0.0)] + [(s * (0.14 + 0.45 * math.sin(math.pi * k / 27) ** 0.7 * (1.0 + 0.2 * (k / 27))), -2.5 * k / 27) for k in range(28)] + [(s * 0.10, -2.5)]
+        pts = [(s * 0.1, 0.0)] + [(s * (0.12 + 0.5 * math.sin(math.pi * k / 27) ** 0.65 * (1.0 + 0.35 * (k / 27))), -3.0 * k / 27) for k in range(28)] + [(s * 0.08, -3.0)]
         verts = [bm.verts.new(P(x, 0, z)) for (x, z) in pts]
         f = bm.faces.new(verts)
         for l in f.loops:
-            c = l.vert.co; l[uv_layer].uv = (0.5 + s * (c.x - s * 0.12) / 1.1, -c.y / 2.5)
+            c = l.vert.co; l[uv_layer].uv = (0.5 + s * (c.x - s * 0.1) / 1.3, -c.y / 3.0)
         w = make_obj('wing_mesh_' + nm, bm, wingM, True, coll, 0); w.parent = wp
         # halteres
         hal = cylinder('haltere_' + nm, 0.03, 0.06, 0.35, P(s * 0.45, 1.25, -0.35), axis=Vector((s * 0.7, -0.5, -0.5)), mat=darkM, coll=coll); hal.parent = body
@@ -512,8 +516,12 @@ try:
     scene.render.filepath = os.path.join(OUT, '_preview.png')
     bpy.ops.render.render(write_still=True)
     print('preview rendered', scene.render.filepath)
-    cam.location = P(-5, 26, 46); cam.rotation_euler = Euler((math.radians(62), 0, math.radians(20)), 'XYZ'); cam_data.lens = 60
+    r = [o for o in bpy.data.collections['fly_m'].objects if o.parent is None][0]; r.location = P(0, 0, 0); r.scale = (2.8, 2.8, 2.8)
+    cam_data.lens = 85
+    cam.location = P(9, 12, 16); cam.rotation_euler = Euler((math.radians(55), 0, math.radians(30)), 'XYZ')
     scene.render.filepath = os.path.join(OUT, '_preview_fly.png'); bpy.ops.render.render(write_still=True)
+    cam.location = P(20, 4, 3); cam.rotation_euler = Euler((math.radians(82), 0, math.radians(90)), 'XYZ')
+    scene.render.filepath = os.path.join(OUT, '_preview_fly_side.png'); bpy.ops.render.render(write_still=True)
     print('fly preview rendered')
 except Exception as e:
     print('preview failed:', repr(e)[:300])
