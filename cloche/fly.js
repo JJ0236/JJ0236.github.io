@@ -36,6 +36,7 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
   const body = new THREE.Group();          // pitches on a jump
   group.add(body);
   let mat, dark, legMat, eyeMat, abdoMat, wingMat, thorax, abdomen, abdoPiv, head, rostrum, labella, labL, labR;
+  let legLF = template ? 1.0 : 0.95, legLT = template ? 1.42 : 1.25, legDelta = 0;   // femur, knee-to-claw reach, reach angle off the tibia
   const legs = [], wings = [];
   let paleness = teneral ? 1 : 0;
   let baseCols = [];
@@ -54,6 +55,8 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
     for (const m of seen.values()) baseCols.push([m, m.color.clone()]);
     body.add(model);
     const find = n => { const o = model.getObjectByName(n); if (!o) console.warn('fly model: missing', n); return o || new THREE.Group(); };
+    const rig = model.getObjectByName('root')?.userData || {};
+    if (rig.legLF) { legLF = rig.legLF; legLT = rig.legLT; legDelta = rig.legDelta || 0; }
     head = find('head'); rostrum = find('rostrum'); labella = find('labella'); labL = find('labL'); labR = find('labR'); abdoPiv = find('abdomen');
     for (let i = 0; i < 3; i++) for (const s of [-1, 1]) {
       const nm = (s < 0 ? 'L' : 'R') + (i + 1);
@@ -132,8 +135,8 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
   if (teneral) applyPale();
   const restRostrumX = rostrum.rotation.x, restHeadX = head.rotation.x, restAbdoX = abdoPiv.rotation.x;
   // leg lengths in model units, and where each foot wants to stand relative to the root
-  const LF = template ? 1.0 : 0.95, LT = template ? 1.42 : 1.25;
-  const NOMINAL = [[1.2, 0, 1.0], [1.3, 0, 0.15], [1.15, 0, -0.8]];   // lateral, up, forward
+  const LF = legLF, LT = legLT;
+  const NOMINAL = template ? [[1.5, 0, 1.25], [1.7, 0, 0.2], [1.55, 0, -1.0]] : [[1.2, 0, 1.0], [1.3, 0, 0.15], [1.15, 0, -0.8]];   // lateral, up, forward
   for (const L of legs) {
     L.foot = new THREE.Vector3(); L.planted = false; L.swing = null;
     L.group = (L.index + (L.side > 0 ? 1 : 0)) % 2;
@@ -160,7 +163,7 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
     const thetaF = phi + alpha;
     L.hip.rotation.y = psi;
     L.fPiv.rotation.z = s * (thetaF + Math.PI / 2);
-    L.knee.rotation.z = -s * (Math.PI - beta);
+    L.knee.rotation.z = -s * (Math.PI - beta) - s * legDelta;   // the tarsus bends outward, so aim the tibia a little inside the foot
   }
   function nominalFoot(L, out) { out.copy(L.nom); group.localToWorld(out); if (world?.surfaceAt) { const sf = world.surfaceAt(out.x, out.z, out.y + 30); out.y = sf.y; } return out; }
 

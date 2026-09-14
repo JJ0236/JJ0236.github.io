@@ -110,36 +110,83 @@ def tex_cloth():
     col += weave[..., None]
     return save_image('cloth', np.dstack([col, np.ones((h, w))]))
 
-def tex_wing():
-    h, w = 512, 256; yy, xx = np.mgrid[0:h, 0:w]; u = xx / w; v = yy / h
-    alpha = np.ones((h, w)) * 0.22
-    col = np.ones((h, w, 3)) * np.array([0.90, 0.93, 0.98])
-    def vein(f, width=0.012, strength=1.0):
-        d = np.abs(u - f(v)); m = np.clip(1 - d / width, 0, 1) * strength
-        return m
-    veins = np.zeros((h, w))
-    for k, (a, b, c) in enumerate([(0.18, 0.05, 0.0), (0.34, 0.08, 0.02), (0.52, 0.12, -0.02), (0.70, 0.10, 0.0), (0.86, 0.06, 0.0)]):
-        veins = np.maximum(veins, vein(lambda t, a=a, b=b, c=c: a + b * t + c * t * t, 0.010, 1.0))
-    veins = np.maximum(veins, vein(lambda t: 0.5 + 0.45 * np.sin(t * math.pi * 1.0) * 0 + 0.0, 0.0))
-    cross = np.clip(1 - np.abs(v - 0.55) / 0.006, 0, 1) * ((u > 0.3) & (u < 0.72))
-    veins = np.maximum(veins, cross)
-    col = col * (1 - veins[..., None] * 0.75) + np.array([0.25, 0.22, 0.18])[None, None, :] * veins[..., None] * 0.75
-    alpha = np.maximum(alpha, veins * 0.95)
-    return save_image('wing', np.dstack([col, alpha]))
-
-def tex_abdomen(male):
-    h, w = 512, 256; yy, xx = np.mgrid[0:h, 0:w]; v = yy / h   # v runs from thorax (0) to tip (1)
-    tan = np.array([0.74, 0.58, 0.32]); black = np.array([0.12, 0.09, 0.07])
-    col = tan[None, None, :] * np.ones((h, w, 1))
-    band = np.zeros((h, w))
-    for k in range(5):
-        c = 0.2 + k * 0.17; wdt = 0.022 + 0.004 * k
-        b = np.clip(1 - np.abs(v - c) / wdt, 0, 1) ** 0.5
-        band = np.maximum(band, b * (0.55 + 0.45 * min(1, k / 3)))
-    if male: band = np.maximum(band, np.clip((v - 0.66) * 9, 0, 1))
-    col = col * (1 - band[..., None] * 0.9) + black[None, None, :] * band[..., None] * 0.9
-    col += (noise2(h, w, 5, 8 + int(male))[..., None] - 0.5) * 0.05
-    return save_image('abdomen_' + ('m' if male else 'f'), np.dstack([col, np.ones((h, w))]))
+_fly_tex = {}
+def fly_textures():
+    """Compound-eye facets (colour + normal map), cuticle, abdomen tergites, wing veins."""
+    if _fly_tex: return _fly_tex
+    # compound eye: hexagonal ommatidia, each a tiny dome
+    h = w = 512; n = 46
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
+    sx = w / n; sy = sx * math.sqrt(3) / 2
+    row = np.floor(yy / sy)
+    best = np.full((h, w), 1e9); bcx = np.zeros((h, w)); bcy = np.zeros((h, w))
+    for dr in (-1, 0, 1):
+        r2 = row + dr; off = np.mod(r2, 2) * sx / 2
+        c2 = np.floor((xx - off) / sx)
+        for dc in (-1, 0, 1):
+            ccx = (c2 + dc + 0.5) * sx + off; ccy = (r2 + 0.5) * sy
+            dd = np.hypot(xx - ccx, yy - ccy); m = dd < best
+            best = np.where(m, dd, best); bcx = np.where(m, ccx, bcx); bcy = np.where(m, ccy, bcy)
+    R = sx * 0.58; rn = np.clip(best / R, 0, 1); dome = np.sqrt(np.clip(1 - rn ** 2, 0, 1))
+    base = np.array([0.34, 0.03, 0.02]); hi = np.array([0.55, 0.06, 0.03]); edge = np.array([0.10, 0.008, 0.006])
+    col = base * (1 - dome[..., None] * 0.55) + hi * dome[..., None] * 0.55
+    col = np.where((rn > 0.84)[..., None], edge * np.ones_like(col), col)
+    col *= (0.85 + 0.3 * noise2(h, w, 3, 21))[..., None]
+    _fly_tex['eye'] = save_image('fly_eye', np.dstack([col, np.ones((h, w))]))
+    rx = (xx - bcx) / R; ry = (yy - bcy) / R
+    nrm = np.dstack([rx * 0.85, ry * 0.85, np.ones((h, w))]); nrm /= np.linalg.norm(nrm, axis=2, keepdims=True)
+    _fly_tex['eye_n'] = save_image('fly_eye_n', np.dstack([nrm * 0.5 + 0.5, np.ones((h, w))]))
+    _fly_tex['eye_n'].colorspace_settings.name = 'Non-Color'
+    # cuticle: tan-brown with fine mottling (pollinose thorax is a little greyer and darker)
+    def cuticle(name, rgb, seed):
+        hh = ww = 256
+        c = np.array(rgb)[None, None] * (0.86 + 0.28 * noise2(hh, ww, 5, seed))[..., None]
+        return save_image(name, np.dstack([c, np.ones((hh, ww))]))
+    _fly_tex['thorax'] = cuticle('fly_thorax', (0.47, 0.35, 0.21), 22)
+    _fly_tex['head'] = cuticle('fly_head', (0.66, 0.47, 0.25), 23)
+    # abdomen: u runs base → tip, v runs ventral → dorsal
+    def abdomen(male):
+        hh, ww = 256, 512
+        vv, uu = np.mgrid[0:hh, 0:ww].astype(np.float64); u = uu / ww; v = vv / hh
+        tan = np.array([0.72, 0.55, 0.30]); pale = np.array([0.86, 0.78, 0.58]); dark = np.array([0.09, 0.06, 0.04])
+        dors = np.clip((v - 0.38) / 0.36, 0, 1)
+        col = pale * (1 - dors[..., None]) + tan * dors[..., None]
+        segs = 6; t = np.clip((u - 0.05) / 0.9, 0, 0.99999) * segs; k = np.floor(t); fr = t - k
+        wdt = 0.24 + 0.05 * k
+        band = np.clip((fr - (1 - wdt)) / 0.05, 0, 1)
+        if male: band = np.maximum(band, (k >= 4).astype(float))
+        band *= dors ** 1.6
+        memb = np.clip(1 - fr / 0.035, 0, 1)
+        col = col * (1 - band[..., None] * 0.9) + dark * band[..., None] * 0.9
+        col = col * (1 - memb[..., None] * 0.3) + pale * memb[..., None] * 0.3
+        col *= (0.9 + 0.2 * noise2(hh, ww, 5, 30 + int(male)))[..., None]
+        return save_image('fly_abdomen_' + ('m' if male else 'f'), np.dstack([col, np.ones((hh, ww))]))
+    _fly_tex['abdomen_f'] = abdomen(False); _fly_tex['abdomen_m'] = abdomen(True)
+    # wing: u runs from the inner (posterior) edge to the costal edge, v from hinge to tip
+    hh, ww = 512, 256
+    vv, uu = np.mgrid[0:hh, 0:ww].astype(np.float64); c = uu / ww; a = vv / hh
+    veins = np.zeros((hh, ww))
+    def vein(cfun, a0, a1, wd=0.011):
+        cc = cfun(a); m = (a >= a0) & (a <= a1)
+        return np.where(m, np.clip(1 - np.abs(c - cc) / wd, 0, 1), 0)
+    for f, a0, a1, wd in [
+        (lambda a: 0.968 + 0 * a, 0.0, 0.86, 0.03),                                   # costa
+        (lambda a: 0.88 + 0.09 * np.clip(a / 0.36, 0, 1), 0.03, 0.36, 0.010),           # subcosta
+        (lambda a: 0.76 + 0.21 * np.clip(a / 0.70, 0, 1) ** 1.7, 0.04, 0.70, 0.011),    # L2
+        (lambda a: 0.60 + 0.16 * a, 0.04, 0.97, 0.011),                                 # L3
+        (lambda a: 0.45 - 0.02 * a, 0.07, 0.97, 0.011),                                 # L4
+        (lambda a: 0.27 - 0.20 * np.clip(a / 0.82, 0, 1) ** 1.3, 0.09, 0.82, 0.011),    # L5
+    ]:
+        veins = np.maximum(veins, vein(f, a0, a1, wd * 1.45))
+    acv = (np.abs(a - 0.40) < 0.007) & (c > 0.442) & (c < 0.664)
+    pcv = (np.abs(a - 0.63) < 0.007) & (c > 0.13) & (c < 0.437)
+    veins = np.maximum(veins, (acv | pcv).astype(float))
+    margin = np.clip(1 - np.minimum(c, 1 - c) / 0.025, 0, 1) * 0.35
+    memb = np.array([0.60, 0.62, 0.64]); vc = np.array([0.24, 0.17, 0.10])
+    col = memb * (1 - veins[..., None]) + vc * veins[..., None]
+    alpha = np.maximum(0.30 + 0.06 * noise2(hh, ww, 3, 40), np.maximum(veins * 0.95, margin * 1.6))
+    _fly_tex['wing'] = save_image('fly_wing', np.dstack([col, alpha]))
+    return _fly_tex
 
 # ---------------------------------------------------------------- materials
 def material(name, color=(0.8, 0.8, 0.8), rough=0.5, metal=0.0, tex=None, transmission=0.0, ior=1.45, alpha=None, emission=None, coat=0.0, spec=0.5):
@@ -275,13 +322,13 @@ def empty(name, at, rot=None, parent=None, coll=None):
 def parent_keep(child, parent):
     child.parent = parent; child.matrix_parent_inverse = parent.matrix_world.inverted()
 
-def export(coll, filename):
+def export(coll, filename, extras=False):
     bpy.ops.object.select_all(action='DESELECT')
     objs = [o for o in coll.all_objects]
     for o in objs: o.select_set(True)
     bpy.context.view_layer.objects.active = objs[0]
     path = os.path.join(OUT, filename)
-    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_texcoords=True, export_normals=True, export_materials='EXPORT', export_image_format='AUTO', export_animations=False, export_extras=False)
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True, export_texcoords=True, export_normals=True, export_materials='EXPORT', export_image_format='AUTO', export_animations=False, export_extras=extras)
     print('exported', path, os.path.getsize(path), 'bytes')
 
 # ================================================================ THE SET
@@ -528,77 +575,279 @@ rod = cylinder('curtain_rod', 2.2, 2.2, W + 90, P(-W / 2 - 45, y0 + H + 22, -84)
 export(setc, 'set.glb')
 
 # ================================================================ FLIES
+# bmesh builders: several parts per object keep draw calls down
+def bm_ellipsoid(bm, c, rad, useg=24, vseg=16, uvl=None, uscale=1.0, mat_index=0):
+    cx, cy, cz = c; rx, ry, rz = rad
+    top = bm.verts.new((cx, cy, cz + rz)); bot = bm.verts.new((cx, cy, cz - rz))
+    rings = []
+    for j in range(1, vseg):
+        th = math.pi * j / vseg
+        rings.append([bm.verts.new((cx + rx * math.sin(th) * math.cos(2 * math.pi * i / useg), cy + ry * math.sin(th) * math.sin(2 * math.pi * i / useg), cz + rz * math.cos(th))) for i in range(useg)])
+    faces = []
+    def add(verts, uvs):
+        f = bm.faces.new(verts); f.material_index = mat_index; faces.append(f)
+        if uvl is not None:
+            for l, (u, v) in zip(f.loops, uvs): l[uvl].uv = (u * uscale, v)
+    for i in range(useg):
+        i2 = (i + 1) % useg; u0 = i / useg; u1 = (i + 1) / useg
+        add((top, rings[0][i], rings[0][i2]), [((u0 + u1) / 2, 1), (u0, 1 - 1 / vseg), (u1, 1 - 1 / vseg)])
+        for j in range(vseg - 2):
+            v0 = 1 - (j + 1) / vseg; v1 = 1 - (j + 2) / vseg
+            add((rings[j][i], rings[j + 1][i], rings[j + 1][i2], rings[j][i2]), [(u0, v0), (u0, v1), (u1, v1), (u1, v0)])
+        add((bot, rings[-1][i2], rings[-1][i]), [((u0 + u1) / 2, 0), (u1, 1 / vseg), (u0, 1 / vseg)])
+    return faces
+
+def bm_tube(bm, a, b, r1, r2, seg=8, cap=True, mat_index=0):
+    a = Vector(a); b = Vector(b); d = b - a
+    if d.length < 1e-6: return
+    d.normalize()
+    ref = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
+    s1 = d.cross(ref).normalized(); s2 = d.cross(s1)
+    ring = lambda c, r: [bm.verts.new(c + (s1 * math.cos(2 * math.pi * i / seg) + s2 * math.sin(2 * math.pi * i / seg)) * r) for i in range(seg)]
+    r0 = ring(a, r1)
+    if r2 < 1e-5:
+        tip = bm.verts.new(b)
+        for i in range(seg): bm.faces.new((r0[i], r0[(i + 1) % seg], tip)).material_index = mat_index
+    else:
+        rb = ring(b, r2)
+        for i in range(seg): bm.faces.new((r0[i], r0[(i + 1) % seg], rb[(i + 1) % seg], rb[i])).material_index = mat_index
+        if cap: bm.faces.new(rb).material_index = mat_index
+    if cap: bm.faces.new(r0[::-1]).material_index = mat_index
+
 def build_fly(male):
-    coll = new_collection('fly_m' if male else 'fly_f')
-    cuticle = material('cuticle_' + ('m' if male else 'f'), color=(0.62, 0.46, 0.26), rough=0.55, coat=0.08)
-    thoraxM = material('thorax_' + ('m' if male else 'f'), color=(0.50, 0.40, 0.28), rough=0.5, coat=0.1)
-    darkM = material('dark_' + ('m' if male else 'f'), color=(0.12, 0.09, 0.07), rough=0.5)
-    legM = material('leg_' + ('m' if male else 'f'), color=(0.55, 0.42, 0.24), rough=0.6)
-    eyeM = material('eye_' + ('m' if male else 'f'), color=(0.78, 0.09, 0.03), rough=0.35, coat=0.4)
-    abdoM = material('abdomen_' + ('m' if male else 'f'), tex=tex_abdomen(male), rough=0.5, coat=0.1)
-    wingM = material('wingmat_' + ('m' if male else 'f'), tex=tex_wing(), alpha='tex', rough=0.12, spec=1.0)
+    T = fly_textures()
+    tag = 'm' if male else 'f'
+    coll = new_collection('fly_' + tag)
+    def texmat(name, img, rough, normal=None, alpha=False):
+        m = material(name, tex=img, rough=rough, alpha='tex' if alpha else None, spec=0.35)
+        if normal is not None:
+            nt = m.node_tree; bsdf = nt.nodes['Principled BSDF']
+            ni = nt.nodes.new('ShaderNodeTexImage'); ni.image = normal
+            nm = nt.nodes.new('ShaderNodeNormalMap'); nm.inputs['Strength'].default_value = 1.0
+            nt.links.new(ni.outputs['Color'], nm.inputs['Color']); nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
+        return m
+    thoraxM = texmat('fly_thorax_' + tag, T['thorax'], 0.72)
+    headM = texmat('fly_head_' + tag, T['head'], 0.66)
+    eyeM = texmat('fly_eye_' + tag, T['eye'], 0.42, normal=T['eye_n'])
+    abdoM = texmat('fly_abdomen_' + tag, T['abdomen_' + tag], 0.6)
+    wingM = texmat('fly_wing_' + tag, T['wing'], 0.2, alpha=True)
+    legM = material('fly_leg_' + tag, color=(0.24, 0.14, 0.055), rough=0.62, spec=0.3)
+    darkM = material('fly_bristle_' + tag, color=(0.06, 0.045, 0.035), rough=0.5, spec=0.35)
+    ocelM = material('fly_ocellus_' + tag, color=(0.25, 0.06, 0.03), rough=0.2, spec=0.6)
+
+    def obj(name, build, mats, parent, uv=False, recalc=True):
+        bm = bmesh.new(); uvl = bm.loops.layers.uv.new('UVMap') if uv else None
+        build(bm, uvl)
+        if recalc: bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        o = make_obj(name, bm, mats[0], True, coll, 0)
+        for m in mats[1:]: o.data.materials.append(m)
+        o.parent = parent
+        return o
+
     root = empty('root', Vector((0, 0, 0)), coll=coll)
     body = empty('body', Vector((0, 0, 0)), parent=root, coll=coll)
-    # thorax
-    th = sphere('thorax', 0.68, P(0, 1.02, 0.25), (1.0, 1.3, 0.95), thoraxM, coll, subsurf=1); th.parent = body
-    sc = sphere('scutellum', 0.28, P(0, 1.25, -0.45), (1.1, 0.6, 1.0), thoraxM, coll, subsurf=1); sc.parent = body
-    # abdomen on a pivot; a tube tapering to the tip (built in the pivot's frame)
-    abd = empty('abdomen', P(0, 0.85, -0.55), parent=body, coll=coll)
-    L = 1.55 if male else 1.95
-    apts = [P(0, 0, 0.1), P(0, 0.02, 0.1 - L * 0.5), P(0, -0.08, 0.1 - L)]
-    def abd_r(t, thta):
-        base = 0.66 if male else 0.74
-        prof = math.sin(math.pi * (0.06 + 0.94 * t)) ** (0.55 if male else 0.5)
-        return base * max(0.05, prof) * (1 + 0.12 * math.cos(thta * 2))
-    ab = tube('abdomen_mesh', apts, abd_r, sides=20, rings=24, mat=abdoM, coll=coll, subsurf=1); ab.parent = abd
-    # head, in its own frame
-    head = empty('head', P(0, 1.02, 1.12), parent=body, coll=coll)
-    hm = sphere('head_mesh', 0.4, Vector((0, 0, 0)), (1.25, 0.95, 0.8), cuticle, coll, subsurf=1); hm.parent = head
-    for s, nm in ((-1, 'L'), (1, 'R')):
-        e = sphere('eye_' + nm, 0.36, P(s * 0.36, 0.02, 0.08), (0.75, 1.1, 1.0), eyeM, coll, subsurf=1); e.parent = head
-        ant = empty('ant' + nm, P(s * 0.16, 0.22, 0.41), rot=rotX(-0.6), parent=head, coll=coll)
-        seg = cylinder('ant_seg_' + nm, 0.07, 0.04, 0.5, Vector((0, 0, 0)), axis='z', mat=darkM, coll=coll); seg.parent = ant
-        ar = cylinder('arista_' + nm, 0.015, 0.008, 0.55, Vector((0, 0, 0.48)), axis=Vector((s * 0.6, 0, 0.8)), mat=darkM, coll=coll); ar.parent = ant
-    # proboscis: rostrum pivot under the head, tucked at rest by +1.25 rad about X
-    ros = empty('rostrum', P(0, -0.30, 0.30), rot=rotX(1.25), parent=head, coll=coll)
-    rs = cylinder('rostrum_mesh', 0.15, 0.11, 0.62, Vector((0, 0, 0)), axis='-z', mat=darkM, coll=coll, subsurf=1); rs.parent = ros
-    lab = empty('labella', Vector((0, 0, -0.62)), parent=ros, coll=coll)
-    for s, nm in ((-1, 'L'), (1, 'R')):
+
+    # ---- thorax: a domed mesonotum, the scutellum behind it, halteres
+    TC, TR = (0, 1.0, 0.18), (0.6, 0.58, 0.84)          # page centre, radii (width, height, length)
+    def thorax(bm, uvl):
+        bm_ellipsoid(bm, P(*TC), (TR[0], TR[2], TR[1]), 30, 20, uvl, 2.0)
+        bm_ellipsoid(bm, P(0, 1.3, -0.64), (0.27, 0.2, 0.13), 16, 10, uvl, 2.0)
+        bm_ellipsoid(bm, P(0, 0.62, 0.3), (0.42, 0.62, 0.22), 16, 10, uvl, 2.0)          # sternum under the legs
+    obj('thorax', thorax, [thoraxM], body, uv=True)
+    def halteres(bm, uvl):
+        for sd in (-1, 1):
+            bm_tube(bm, P(sd * 0.4, 1.02, -0.52), P(sd * 0.6, 1.08, -0.72), 0.028, 0.02, 6)
+            bm_ellipsoid(bm, P(sd * 0.62, 1.09, -0.75), (0.07, 0.06, 0.065), 8, 6)
+    obj('halteres', halteres, [legM], body)
+
+    def on_thorax(xf, zf):
+        cx, cy, cz = TC; ax, ay, az = TR
+        y = cy + ay * math.sqrt(max(0.0, 1 - xf * xf - zf * zf))
+        p = Vector((xf * ax, y, cz + zf * az))
+        n = Vector((xf / ax, (y - cy) / (ay * ay), zf / az)).normalized()
+        return p, n
+    def bristles_thorax(bm, uvl):
+        macro = [(0.26, 0.22, 0.42), (0.26, -0.18, 0.5), (0.6, 0.3, 0.34), (0.55, -0.28, 0.4), (0.45, 0.62, 0.3), (0.42, -0.58, 0.36), (0.7, 0.0, 0.3)]
+        for xf, zf, ln in macro:
+            for sd in (-1, 1):
+                p, n = on_thorax(sd * xf, zf)
+                d = (n * 0.3 + Vector((sd * 0.16, 0.05, -1.0))).normalized()
+                bm_tube(bm, P(*p), P(*(p + d * ln)), 0.0095, 0.0, 5, cap=False)
+        for xf in (-0.19, -0.07, 0.07, 0.19):          # acrostichal hairs
+            for k in range(6):
+                zf = -0.45 + k * 0.19
+                p, n = on_thorax(xf, zf)
+                d = (n * 0.25 + Vector((0, 0.0, -1.0))).normalized()
+                bm_tube(bm, P(*p), P(*(p + d * 0.09)), 0.0038, 0.0, 4, cap=False)
+        for sd in (-1, 1):                              # scutellars
+            for bx, bz, ln in ((0.1, -0.74, 0.62), (0.22, -0.58, 0.42)):
+                p = Vector((sd * bx, 1.4, bz)); d = Vector((sd * 0.12, 0.28, -1.0)).normalized()
+                bm_tube(bm, P(*p), P(*(p + d * ln)), 0.0105, 0.0, 5, cap=False)
+    obj('thorax_bristles', bristles_thorax, [darkM], body)
+
+    # ---- head: a capsule, two huge faceted eyes, ocelli, bristles, antennae, proboscis
+    head = empty('head', P(0, 1.02, 1.1), parent=body, coll=coll)
+    def headcap(bm, uvl):
+        bm_ellipsoid(bm, P(0, 0.0, 0.0), (0.32, 0.3, 0.36), 26, 18, uvl, 2.0)
+    obj('head_mesh', headcap, [headM], head, uv=True)
+    def eyes(bm, uvl):
+        for sd in (-1, 1):
+            bm_ellipsoid(bm, P(sd * 0.25, 0.03, 0.08), (0.23, 0.33, 0.39), 36, 26, uvl, 2.0)
+    obj('eyes', eyes, [eyeM], head, uv=True)
+    def headbits(bm, uvl):
+        for q in ((0, 0.37, 0.0), (0.055, 0.355, -0.07), (-0.055, 0.355, -0.07)):
+            bm_ellipsoid(bm, P(*q), (0.028, 0.028, 0.02), 8, 6, mat_index=1)
+        for x, y, z, ln, dx, dy, dz in ((0.13, 0.34, 0.14, 0.26, 0.2, 0.6, -0.9), (0.17, 0.33, 0.02, 0.3, 0.3, 0.5, -1.0),
+                                        (0.25, 0.28, -0.12, 0.34, 0.6, 0.4, -1.0), (0.05, 0.37, -0.03, 0.24, 0.4, 0.8, -0.7),
+                                        (0.21, 0.2, -0.24, 0.22, 0.7, 0.2, -1.0)):
+            for sd in (-1, 1):
+                p = Vector((sd * x, y, z)); d = Vector((sd * dx, dy, dz)).normalized()
+                bm_tube(bm, P(*p), P(*(p + d * ln)), 0.0085, 0.0, 5, cap=False)
+    obj('head_bristles', headbits, [darkM, ocelM], head)
+
+    for sd, nm in ((-1, 'L'), (1, 'R')):
+        ant = empty('ant' + nm, P(sd * 0.085, 0.13, 0.33), parent=head, coll=coll)
+        def antenna(bm, uvl, sd=sd):
+            bm_tube(bm, P(0, 0, 0), P(sd * 0.01, -0.05, 0.05), 0.035, 0.03, 8)                # scape
+            bm_ellipsoid(bm, P(sd * 0.012, -0.08, 0.07), (0.055, 0.05, 0.055), 10, 8)          # pedicel
+            bm_ellipsoid(bm, P(sd * 0.02, -0.19, 0.1), (0.065, 0.085, 0.12), 12, 10)            # funiculus
+        obj('antenna_' + nm, antenna, [headM], ant)
+        def arista(bm, uvl, sd=sd):
+            pts = [Vector((sd * 0.07, -0.13, 0.15)), Vector((sd * 0.1, -0.04, 0.22)), Vector((sd * 0.13, 0.06, 0.28)), Vector((sd * 0.15, 0.16, 0.32))]
+            for k in range(3):
+                bm_tube(bm, P(*pts[k]), P(*pts[k + 1]), 0.006 - 0.0015 * k, 0.0045 - 0.0015 * k, 5, cap=False)
+            for k in range(7):
+                t = (k + 0.5) / 7; q = pts[0].lerp(pts[3], t)
+                for up in (1, -1):
+                    br = Vector((0, 0.012, 0.035)) if up > 0 else Vector((0, -0.02, -0.012))
+                    bm_tube(bm, P(*q), P(*(q + br)), 0.0022, 0.0, 4, cap=False)
+        obj('arista_' + nm, arista, [darkM], ant)
+
+    ros = empty('rostrum', P(0, -0.28, 0.2), rot=rotX(1.25), parent=head, coll=coll)
+    def rostrum(bm, uvl): bm_tube(bm, Vector((0, 0, 0)), Vector((0, 0, -0.5)), 0.12, 0.09, 10)
+    obj('rostrum_mesh', rostrum, [legM], ros)
+    lab = empty('labella', Vector((0, 0, -0.5)), parent=ros, coll=coll)
+    for sd, nm in ((-1, 'L'), (1, 'R')):
         piv = empty('lab' + nm, Vector((0, 0, 0)), parent=lab, coll=coll)
-        lb = sphere('lab' + nm + '_mesh', 0.15, Vector((s * 0.1, 0, 0)), (1.0, 1.3, 0.6), cuticle, coll, subsurf=1); lb.parent = piv
-    # legs
-    legz = [0.85, 0.25, -0.35]
+        def lobe(bm, uvl, sd=sd): bm_ellipsoid(bm, Vector((sd * 0.08, 0, -0.03)), (0.1, 0.13, 0.06), 12, 8)
+        obj('lab' + nm + '_mesh', lobe, [headM], piv)
+
+    # ---- abdomen: six tergites with ridges, a pointed tip (female) or a blunt dark one (male)
+    abd = empty('abdomen', P(0, 0.95, -0.6), parent=body, coll=coll)
+    L = 1.3 if male else 1.72; W = 0.56 if male else 0.68; droop = 0.24 if male else 0.1
+    def abdomen(bm, uvl):
+        Rn, S = 36, 24; rings = []; ctr = []
+        for r in range(Rn + 1):
+            t = r / Rn
+            zc = 0.1 - L * t; yc = -droop * t * t - 0.04 * t
+            if male: prof = math.sqrt(max(0.0, math.sin(math.pi * (0.12 + 0.88 * t)))) * max(0.0, 1 - t ** 5) ** 0.5
+            else: prof = max(0.0, math.sin(math.pi * (0.1 + 0.9 * t))) ** 0.55 * (1 - 0.12 * t)
+            tt = (t - 0.05) / 0.9 * 6; fr = tt - math.floor(tt)
+            dip = (math.exp(-(fr / 0.06) ** 2) + math.exp(-((1 - fr) / 0.06) ** 2)) if 0 < tt < 6 else 0
+            wdt = max(0.015, W * prof * (1 - 0.05 * dip))
+            ring = []
+            for k in range(S):
+                th = 2 * math.pi * k / S
+                v = bm.verts.new(P(math.cos(th) * wdt, yc + math.sin(th) * wdt * 0.8, zc))
+                ring.append((v, (t, (math.sin(th) + 1) / 2)))
+            rings.append(ring); ctr.append((yc, zc))
+        for r in range(Rn):
+            for k in range(S):
+                q = [rings[r][k], rings[r + 1][k], rings[r + 1][(k + 1) % S], rings[r][(k + 1) % S]]
+                f = bm.faces.new([v for v, _ in q])
+                for l, (_, uvp) in zip(f.loops, q): l[uvl].uv = uvp
+        for r, endt in ((0, 0.0), (Rn, 1.0)):
+            cv = bm.verts.new(P(0, ctr[r][0], ctr[r][1] + (0.02 if r == 0 else -0.02)))
+            for k in range(S):
+                a_, b_ = rings[r][k], rings[r][(k + 1) % S]
+                f = bm.faces.new((a_[0], b_[0], cv))
+                for l, uvp in zip(f.loops, (a_[1], b_[1], (endt, 0.5))): l[uvl].uv = uvp
+    obj('abdomen_mesh', abdomen, [abdoM], abd, uv=True)
+    def abdomen_hairs(bm, uvl):
+        for kseg in range(6):
+            t = 0.05 + (kseg + 0.88) / 6 * 0.9
+            zc = 0.1 - L * t; yc = -droop * t * t - 0.04 * t
+            if male: prof = math.sqrt(max(0.0, math.sin(math.pi * (0.12 + 0.88 * t)))) * max(0.0, 1 - t ** 5) ** 0.5
+            else: prof = max(0.0, math.sin(math.pi * (0.1 + 0.9 * t))) ** 0.55 * (1 - 0.12 * t)
+            wdt = W * prof
+            for k in range(9):
+                th = math.pi * (0.2 + 0.6 * k / 8)
+                p = Vector((math.cos(th) * wdt, yc + math.sin(th) * wdt * 0.8, zc))
+                d = Vector((math.cos(th) * 0.4, math.sin(th) * 0.5, -1.0)).normalized()
+                bm_tube(bm, P(*p), P(*(p + d * 0.1)), 0.0042, 0.0, 4, cap=False)
+        if not male:
+            tip = Vector((0, -droop - 0.04, 0.1 - L))
+            for sd in (-1, 1): bm_tube(bm, P(*(tip + Vector((sd * 0.03, 0, 0.06)))), P(*(tip + Vector((sd * 0.02, -0.03, -0.1)))), 0.035, 0.0, 6)
+    obj('abdomen_hairs', abdomen_hairs, [darkM], abd)
+
+    # ---- wings: longer than the body, held flat over the abdomen, one overlapping the other
+    Lw = 2.5
+    for sd, nm in ((-1, 'L'), (1, 'R')):
+        wp = empty('wing' + nm, P(sd * 0.16, 1.66, -0.1), rot=rotY3(sd * 0.1), parent=body, coll=coll)
+        def wing(bm, uvl, sd=sd):
+            A, C = 32, 8; grid = []
+            for i in range(A + 1):
+                a = i / A
+                wprof = (a ** 0.38) * max(0.0, 1 - a ** 5) ** 0.5
+                xo = 0.03 + 0.62 * wprof; xi = 0.03 - 0.15 * wprof
+                row = []
+                for j in range(C + 1):
+                    c = j / C
+                    y = 0.05 - 0.62 * a ** 1.4 + 0.03 * math.sin(math.pi * c) * wprof + (0.02 if sd < 0 else 0)
+                    row.append((bm.verts.new(P(sd * (xi + (xo - xi) * c), y, -Lw * a)), (c, a)))
+                grid.append(row)
+            for i in range(A):
+                for j in range(C):
+                    q = [grid[i][j], grid[i + 1][j], grid[i + 1][j + 1], grid[i][j + 1]]
+                    f = bm.faces.new([v for v, _ in q])
+                    for l, (_, uvp) in zip(f.loops, q): l[uvl].uv = uvp
+        obj('wing_mesh_' + nm, wing, [wingM], wp, uv=True, recalc=False)
+
+    # ---- legs: coxa, femur, tibia, five tarsomeres and claws; the tarsus bends outward to lie flat
+    LF, TIB, TARS, BEND = 0.95, 0.88, 0.72, 0.5
+    legz = [0.62, 0.22, -0.2]
+    tars_len = [0.32, 0.17, 0.15, 0.14, 0.22]
     for i in range(3):
-        for s, nm in ((-1, 'L'), (1, 'R')):
-            hip = empty(f'hip_{nm}{i + 1}', P(s * 0.5, 0.62, legz[i]), rot=rotY3(-s * (i - 1) * 0.35), parent=body, coll=coll)
-            fp = empty(f'femur_{nm}{i + 1}', Vector((0, 0, 0)), rot=rotZ3(s * 1.25), parent=hip, coll=coll)
-            fe = cylinder(f'femur_mesh_{nm}{i + 1}', 0.075, 0.055, 1.05, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); fe.parent = fp
-            kn = empty(f'knee_{nm}{i + 1}', Vector((0, 0, -1.05)), rot=rotZ3(-s * 1.7), parent=fp, coll=coll)
-            ti = cylinder(f'tibia_mesh_{nm}{i + 1}', 0.05, 0.035, 1.0, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); ti.parent = kn
-            ta = cylinder(f'tarsus_mesh_{nm}{i + 1}', 0.032, 0.018, 0.65, Vector((0, 0, 0)), axis='-z', mat=legM, coll=coll, subsurf=1); ta.parent = kn
-            ta.location = Vector((0, 0, -1.0)); ta.rotation_euler = rotZ3(s * 0.35)
-            kj = sphere(f'knee_joint_{nm}{i + 1}', 0.06, Vector((0, 0, 0)), (1, 1, 1), legM, coll, subsurf=0); kj.parent = kn
-            hj = sphere(f'hip_joint_{nm}{i + 1}', 0.085, Vector((0, 0, 0)), (1, 1, 1), legM, coll, subsurf=0); hj.parent = fp
-            if male and i == 0:
-                comb = box(f'sexcomb_{nm}', (0.09, 0.06, 0.16), Vector((0, 0.05, -0.5)), darkM, coll); comb.parent = kn
-    # wings
-    for s, nm in ((-1, 'L'), (1, 'R')):
-        wp = empty('wing' + nm, P(s * 0.22, 1.55, 0.05), rot=rotY3(s * 0.1), parent=body, coll=coll)
-        bm = bmesh.new(); uv_layer = bm.loops.layers.uv.new('UVMap')
-        outline = []
-        for k in range(28):
-            t = k / 27; ang = math.pi * t
-            wdt = 0.42 * math.sin(ang) ** 0.8 * (1 + 0.15 * math.sin(2 * ang))
-            outline.append((s * (0.18 + wdt), -0.05 - 2.45 * (1 - math.cos(ang)) / 2 * 2 / 2))
-        pts = [(s * 0.1, 0.0)] + [(s * (0.12 + 0.5 * math.sin(math.pi * k / 27) ** 0.65 * (1.0 + 0.35 * (k / 27))), -3.0 * k / 27) for k in range(28)] + [(s * 0.08, -3.0)]
-        verts = [bm.verts.new(P(x, 0, z)) for (x, z) in pts]
-        f = bm.faces.new(verts)
-        for l in f.loops:
-            c = l.vert.co; l[uv_layer].uv = (0.5 + s * (c.x - s * 0.1) / 1.3, -c.y / 3.0)
-        w = make_obj('wing_mesh_' + nm, bm, wingM, True, coll, 0); w.parent = wp
-        # halteres
-        hal = cylinder('haltere_' + nm, 0.03, 0.06, 0.35, P(s * 0.45, 1.25, -0.35), axis=Vector((s * 0.7, -0.5, -0.5)), mat=darkM, coll=coll); hal.parent = body
-    export(coll, 'fly_male.glb' if male else 'fly_female.glb')
+        for sd, nm in ((-1, 'L'), (1, 'R')):
+            hip = empty(f'hip_{nm}{i + 1}', P(sd * 0.34, 0.55, legz[i]), rot=rotY3(-sd * (i - 1) * 0.45), parent=body, coll=coll)
+            def coxa(bm, uvl, sd=sd):
+                bm_tube(bm, Vector((0, 0, 0.05)), Vector((sd * 0.1, 0, -0.1)), 0.065, 0.052, 10)
+                bm_ellipsoid(bm, Vector((sd * 0.1, 0, -0.1)), (0.05, 0.05, 0.05), 10, 8)
+            obj(f'coxa_{nm}{i + 1}', coxa, [legM], hip)
+            fp = empty(f'femur_{nm}{i + 1}', Vector((0, 0, 0)), rot=rotZ3(sd * 1.2), parent=hip, coll=coll)
+            def femur(bm, uvl):
+                bm_tube(bm, Vector((0, 0, 0)), Vector((0, 0, -LF * 0.5)), 0.058, 0.066, 10)
+                bm_tube(bm, Vector((0, 0, -LF * 0.5)), Vector((0, 0, -LF)), 0.066, 0.046, 10)
+                bm_ellipsoid(bm, Vector((0, 0, -LF)), (0.043, 0.043, 0.043), 10, 8)
+                for k in range(4):                       # a row of fine hairs along the femur
+                    z = -LF * (0.2 + 0.18 * k)
+                    bm_tube(bm, Vector((0.05, 0, z)), Vector((0.12, 0, z - 0.06)), 0.006, 0.0, 4, cap=False, mat_index=1)
+            obj(f'femur_mesh_{nm}{i + 1}', femur, [legM, darkM], fp)
+            kn = empty(f'knee_{nm}{i + 1}', Vector((0, 0, -LF)), rot=rotZ3(-sd * 1.6), parent=fp, coll=coll)
+            def lower(bm, uvl, sd=sd, i=i):
+                bm_tube(bm, Vector((0, 0, 0)), Vector((0, 0, -TIB)), 0.042, 0.032, 10)
+                for k in range(5):
+                    z = -TIB * (0.15 + 0.17 * k)
+                    bm_tube(bm, Vector((0.035, 0, z)), Vector((0.09, 0, z - 0.07)), 0.005, 0.0, 4, cap=False, mat_index=1)
+                d = Vector((sd * math.sin(BEND), 0, -math.cos(BEND)))
+                p = Vector((0, 0, -TIB)); r = 0.03
+                for k, ln in enumerate(tars_len):
+                    q = p + d * (ln * TARS)
+                    bm_tube(bm, p, q, r, r * 0.86, 8)
+                    bm_ellipsoid(bm, q, (r * 0.8, r * 0.8, r * 0.8), 8, 6)
+                    if male and i == 0 and k == 0:        # sex comb: a row of dark teeth on the first tarsomere
+                        for c in range(6):
+                            cc = p.lerp(q, 0.2 + 0.12 * c)
+                            bm_tube(bm, cc, cc + Vector((0, -0.07, 0.0)), 0.009, 0.0, 4, cap=False, mat_index=1)
+                    p = q; r *= 0.84
+                for cy_ in (-1, 1):                       # claws
+                    bm_tube(bm, p, p + d * 0.05 + Vector((0, cy_ * 0.035, -0.03)), 0.008, 0.0, 4, cap=False, mat_index=1)
+            obj(f'tibia_mesh_{nm}{i + 1}', lower, [legM, darkM], kn)
+
+    # rig numbers for fly.js: femur length, knee-to-claw reach, and the reach's angle off the tibia
+    tipx = TARS * math.sin(BEND); tipy = TIB + TARS * math.cos(BEND)
+    root['legLF'] = LF; root['legLT'] = math.hypot(tipx, tipy); root['legDelta'] = math.atan2(tipx, tipy)
+    export(coll, 'fly_male.glb' if male else 'fly_female.glb', extras=True)
     return coll
 
 fcoll = build_fly(False)

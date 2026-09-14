@@ -647,3 +647,38 @@ so). A **Gust** chip blows a breeze through the window: every fly's
 Johnston's-organ wind neurons are driven for 600 ms and it is shoved a few
 millimetres; the real wiring answers with a brain-wide burst and grooming.
 Verified in Josh's own Chrome through the extension.
+
+### Anatomy pass, 2026-09-15
+
+Josh: "make the flies more fly like". A GPU close-up showed a glossy toy:
+grey plastic thorax, orange bead eyes, long rods for antennae, toothpick
+legs, invisible wings, no bristles. The fly is now built from Drosophila
+anatomy in `build_fly` (Blender script), with body parts merged per pivot
+to keep draw calls near 35:
+
+- **Compound eyes**: dark brick-red ellipsoids covering the sides of the
+  head, with a generated hexagonal ommatidia texture and a matching normal
+  map so each facet catches light. Matte.
+- **Head**: orange-tan face, three ocelli on the vertex, orbital and
+  vertical bristles, short antennae (scape, pedicel, a drooping oval third
+  segment) each with a feathery arista angled up and forward.
+- **Thorax**: domed tan-brown mesonotum with mottled cuticle, scutellum,
+  sternum under the legs, halteres; macrochaetae (dorsocentral,
+  notopleural, supra-alar, humeral, postalar, scutellar) lying back at a
+  shallow angle, and rows of fine acrostichal hairs.
+- **Abdomen**: six tergites with ridges, tan with dark posterior bands that
+  fade down the sides to a pale underside, hair rows on each tergite; the
+  female's tapers to a point with ovipositor plates, the male's is short,
+  blunt, curled and dark at the tip.
+- **Wings**: longer than the body, smoky translucent membrane with costa,
+  L1–L5 and both cross-veins drawn in, resting flat on the abdomen with one
+  overlapping the other.
+- **Legs**: coxa, femur, tibia, five tapering tarsomeres and claws, fine
+  hairs on femur and tibia, sex comb teeth on the male's first foreleg
+  tarsomere. The tarsus bends outward to lie on the surface; the model
+  exports the femur length, the knee-to-claw reach and that reach's angle
+  off the tibia as glTF extras, and `fly.js` feeds them to the leg IK so the
+  claws land exactly on the target. Stance widened to match.
+- Colour lesson: Blender base colours are linear while the generated
+  textures are sRGB, so untextured parts need linear values (the legs first
+  came out cream).
