@@ -29,9 +29,10 @@ function wingTexture() {
   return t;
 }
 
-export function createFly() {
+export function createFly({ sex = 'female', teneral = false } = {}) {
   const group = new THREE.Group();
-  group.scale.setScalar(FLY_SCALE);
+  group.userData.fly = null;
+  group.scale.setScalar(FLY_SCALE * (sex === 'male' ? 0.86 : 1));
   const body = new THREE.Group();          // pitches on a jump
   group.add(body);
   const mat = new THREE.MeshStandardMaterial({ color: SLATE, roughness: 0.55, flatShading: true });
@@ -42,12 +43,25 @@ export function createFly() {
   // opaque: transparent objects do not show through the glass dome
   const wingMat = new THREE.MeshStandardMaterial({ map: wingTexture(), side: THREE.DoubleSide, roughness: 0.25, metalness: 0.05 });
   const mesh = (geo, m) => { const o = new THREE.Mesh(geo, m); o.castShadow = true; o.receiveShadow = false; return o; };
+  let paleness = teneral ? 1 : 0;
+  const baseCols = [[mat, new THREE.Color(SLATE)], [dark, new THREE.Color(DARK)], [legMat, new THREE.Color(LEG)], [eyeMat, new THREE.Color(EYE)]];
+  const PALE = new THREE.Color('#D9CDB2');
+  function applyPale() { for (const [m, c] of baseCols) m.color.copy(c).lerp(PALE, paleness * 0.8); abdoMat.color.copy(new THREE.Color('#FFFFFF')).lerp(PALE, paleness); }
+  if (teneral) applyPale();
 
   const thorax = mesh(new THREE.IcosahedronGeometry(0.78, 1), mat);
   thorax.scale.set(1.0, 0.85, 1.15); thorax.position.set(0, 0.95, 0.25); body.add(thorax);
   const abdoGeo = new THREE.SphereGeometry(0.7, 12, 8); abdoGeo.rotateX(Math.PI / 2);
   const abdomen = mesh(abdoGeo, abdoMat);
-  abdomen.scale.set(0.95, 0.75, 1.7); abdomen.position.set(0, 0.85, -1.35); body.add(abdomen);
+  const abdoPiv = new THREE.Group(); abdoPiv.position.set(0, 0.85, -0.55); body.add(abdoPiv);
+  abdomen.position.set(0, 0, -0.8); abdoPiv.add(abdomen);
+  if (sex === 'male') {
+    abdomen.scale.set(0.9, 0.72, 1.35);
+    const tip = mesh(new THREE.SphereGeometry(0.42, 10, 8), dark); tip.scale.set(1.2, 0.85, 1); tip.position.set(0, 0, -1.7); abdoPiv.add(tip);
+  } else {
+    abdomen.scale.set(0.98, 0.78, 1.85);
+    const tip = mesh(new THREE.ConeGeometry(0.3, 0.7, 8), mat); tip.rotation.x = Math.PI / 2; tip.position.set(0, -0.05, -2.45); abdoPiv.add(tip);
+  }
   const head = new THREE.Group(); head.position.set(0, 1.0, 1.25); body.add(head);
   head.add(mesh(new THREE.IcosahedronGeometry(0.52, 1), mat));
   for (const s of [-1, 1]) {
@@ -76,6 +90,7 @@ export function createFly() {
     const fPiv = new THREE.Group(); fPiv.rotation.z = s * 1.15; hip.add(fPiv); fPiv.add(femur);
     const knee = new THREE.Group(); knee.position.y = -femurLen; fPiv.add(knee);
     const tib = mesh(new THREE.CylinderGeometry(0.045, 0.03, tibLen, 6), legMat); tib.position.y = -tibLen / 2; knee.add(tib);
+    if (sex === 'male' && i === 0) { const comb = mesh(new THREE.BoxGeometry(0.1, 0.16, 0.06), dark); comb.position.set(0, -tibLen * 0.55, 0.05); knee.add(comb); }
     knee.rotation.z = -s * 1.55;
     const baseSwing = (i - 1) * 0.35;   // splay front legs forward, hind legs back
     hip.rotation.y = -s * baseSwing;
@@ -104,6 +119,11 @@ export function createFly() {
   let feedingOn = null, leaveTimer = 0, rejectTimer = 0;
   let groomT = 0;
   let flight = null;   // { t, dur, path }
+  let song = 0, songT = 0;            // 0..1 wing-extension song intensity (males)
+  let mount = null;                   // { target, t, dur }
+  let ovi = 0;                        // abdomen bend, 0..1
+  let surfaceY = 0, pitch = 0;
+  let hold = false;                   // frozen by the page (being mounted)
   function takeOff() {
     if (flight || jump) return;
     const pts = [{ x, z, y: 0 }];
@@ -144,9 +164,11 @@ export function createFly() {
 
   function nearestDroplet() {
     let best = null, bd = Infinity;
-    for (const d of world.droplets) { if (d.rejected || d.gone) continue; const dd = Math.hypot(d.x - x, d.z - z); if (dd < bd) { bd = dd; best = d; } }
+    const list = world.foods || world.droplets;
+    for (const d of list) { if (d.rejected || d.gone) continue; const dd = Math.hypot(d.x - x, d.z - z); if (dd < bd) { bd = dd; best = d; } }
     return best;
   }
+  let pursuit = null;   // { x, z, stopAt } or { fly, stopAt }
   function labellumPoint() {
     const p = new THREE.Vector3(); labella.getWorldPosition(p); return p;
   }
@@ -167,7 +189,18 @@ export function createFly() {
 
     // ---- decide ----
     let speed = 0;
-    if (flight) {
+    if (mount) {
+      mount.t += dtMs;
+      const tp = mount.target.position, th = mount.target.heading;
+      x = tp.x - Math.sin(th) * 0.9 * FLY_SCALE; z = tp.z - Math.cos(th) * 0.9 * FLY_SCALE; heading = th;
+      group.position.y = surfaceY + 1.1 * FLY_SCALE * (sex === 'male' ? 0.86 : 1);
+      body.rotation.x = -0.35;
+      for (const wg of wings) wg.piv.rotation.y += (wg.side * 0.5 - wg.piv.rotation.y) * 0.2;
+      mode = 'mating';
+      if (mount.t >= mount.dur) { mount = null; body.rotation.x = 0; mode = 'idle'; idleTimer = 1; }
+    } else if (hold) {
+      mode = 'mating';
+    } else if (flight) {
       flight.t += dtMs;
       const u = Math.min(1, flight.t / flight.dur);
       const p = catmull(flight.pts, u), q = catmull(flight.pts, Math.min(1, u + 0.01));
@@ -190,6 +223,14 @@ export function createFly() {
       if (u >= 1) { jump = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 0.8; idleWalking = false; }
     } else if (sm.groom > 25 && !feedingOn) {
       mode = 'grooming'; groomT += dt;
+    } else if (pursuit && !feedingOn) {
+      const tx = pursuit.fly ? pursuit.fly.position.x : pursuit.x, tz = pursuit.fly ? pursuit.fly.position.z : pursuit.z;
+      const dx = tx - x, dz = tz - z, dist = Math.hypot(dx, dz);
+      mode = pursuit.mode || 'pursuing';
+      turnToward(Math.atan2(dx, dz), dt, 3.5);
+      if (dist > (pursuit.stopAt || 4)) speed = pursuit.speed || 8; else if (pursuit.arrive) { const p = pursuit; pursuit = null; p.arrive(); }
+    } else if (feedingOn && !feedingOn.gone && hunger <= 0.03) {
+      leaveDroplet(); mode = 'idle'; idleTimer = 1.5; idleWalking = true; heading += Math.PI * 0.7;
     } else if (feedingOn) {
       mode = 'feeding';
       if (!feedingOn.gone) turnToward(Math.atan2(feedingOn.x - x, feedingOn.z - z), dt, 2.0);
@@ -248,9 +289,18 @@ export function createFly() {
       phase += dt * GAIT_HZ * (speed / 9);
       walking = Math.min(1, walking + dt * 8);
     } else walking = Math.max(0, walking - dt * 8);
+    if (w.pushOut) { const p = w.pushOut({ x, z }); x = p.x; z = p.z; }
+    if (w.heightAt && !flight && !mount) {
+      const hy = w.heightAt(x, z);
+      surfaceY += (hy - surfaceY) * Math.min(1, dtMs / 120);
+      const ahead = w.heightAt(x + Math.sin(heading) * 2, z + Math.cos(heading) * 2);
+      pitch += (Math.atan2(ahead - hy, 2) * -0.8 - pitch) * Math.min(1, dtMs / 150);
+      group.position.y = surfaceY + (jump ? group.position.y : 0);
+      body.rotation.x = pitch;
+    }
     group.position.x = x; group.position.z = z;
     group.rotation.y = heading;
-    if (flight) return;
+    if (flight || mount) return;
 
     // ---- pose ----
     const ext = Math.min(1, sm.MN9 / 40);
@@ -259,7 +309,14 @@ export function createFly() {
     labL.rotation.z += (spread - labL.rotation.z) * k; labR.rotation.z += (-spread - labR.rotation.z) * k;
     if (!jump && !flight) {
       const tw = Math.sin(phase * Math.PI * 2);
-      for (const wg of wings) wg.piv.rotation.y += (wg.side * 0.28 - wg.piv.rotation.y) * k;
+      songT += dtMs;
+      for (const wg of wings) {
+        // song: the left wing swings out ~80° and vibrates
+        const out = wg.side < 0 ? -0.28 - 1.3 * song - 0.12 * song * Math.sin(songT * 0.09) : 0.28;
+        wg.piv.rotation.y += (out - wg.piv.rotation.y) * (song > 0 ? 0.35 : k);
+      }
+      abdoPiv.rotation.x += ((ovi > 0 ? 0.55 : 0) - abdoPiv.rotation.x) * 0.08;
+      if (ovi > 0) { ovi -= dtMs / 2200; if (ovi <= 0) ovi = 0; }
       for (const L of legs) {
         const tripod = (L.index + (L.side > 0 ? 1 : 0)) % 2 === 0 ? 1 : -1;
         const sw = Math.sin(phase * Math.PI * 2) * tripod;
@@ -289,6 +346,16 @@ export function createFly() {
   return {
     group, parts, setRates, gfSpike, takeOff, update, labellumPoint,
     get flying() { return !!flight; },
+    get sex() { return sex; },
+    setSong(v) { song = Math.max(0, Math.min(1, v)); },
+    mountOn(target, dur = 20000) { mount = { target, t: 0, dur }; if (feedingOn) leaveDroplet(); },
+    get mounting() { return !!mount; },
+    set hold(v) { hold = !!v; }, get hold() { return hold; },
+    oviposit() { ovi = 1; },
+    set paleness(v) { paleness = v; applyPale(); }, get paleness() { return paleness; },
+    setPosition(nx, nz, h) { x = nx; z = nz; if (h !== undefined) heading = h; },
+    setPursuit(p) { pursuit = p; }, get pursuit() { return pursuit; },
+    stopFeeding() { if (feedingOn) { leaveDroplet(); mode = 'idle'; idleTimer = 0.5; } },
     get mode() { return mode; }, get hunger() { return hunger; }, set hunger(v) { hunger = v; },
     get position() { return { x, z }; }, get heading() { return heading; }, get feeding() { return feedingOn; },
     eat(amount) { hunger = Math.max(0, hunger - amount); },

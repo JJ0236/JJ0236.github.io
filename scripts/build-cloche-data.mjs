@@ -153,7 +153,7 @@ for (let i = 0; i < N; i++) if (!havePos[i]) missingPos++;
 console.log(`coordinates missing for ${missingPos} neurons`);
 
 // 5. labels: sugar GRNs and aDN
-const labelSugar = new Set(), labelADN = new Set();
+const labelSugar = new Set(), labelADN = new Set(), labelVpo = new Set(), labelOvi = new Set();
 for await (const line of lines(join(SRC, 'labels.csv.gz'))) {
   const c = splitCsv(line);
   const i = index.get(c[0]);
@@ -161,6 +161,8 @@ for await (const line of lines(join(SRC, 'labels.csv.gz'))) {
   const l = c[1].toLowerCase();
   if (l.includes('sugar gustatory receptor neuron')) labelSugar.add(i);
   if (l.includes('putative adn')) labelADN.add(i);
+  if (l.includes('vpodn')) labelVpo.add(i);
+  if (l.includes('ovidn') && !l.includes('not ')) labelOvi.add(i);
 }
 
 // 6. connections: sum per pair, ≥5, CSR
@@ -232,6 +234,11 @@ const groups = {
   PPL1: byType(t => t.startsWith('PPL1')),
   APL: byType(t => t === 'APL'),
   modulatory: byType((t, i) => ntType[i] === 'DA' || ntType[i] === 'SER' || ntType[i] === 'OCT'),
+  background: byType((t, i) => cls[i] === CLASS_NAMES.indexOf('sensory')),
+  // courtship and egg laying (female side)
+  JO_A: byType(t => t === 'JO-A'),                    // auditory: hears the male's song
+  vpoDN: [...labelVpo].sort((a, b) => a - b),         // vaginal plate opening: acceptance
+  oviDN: [...labelOvi].sort((a, b) => a - b),         // egg-laying command
 };
 // Mushroom-body teaching map by compartment (Aso et al. 2014 nomenclature,
 // Aso & Rubin 2016, Owald et al. 2015, Perisse et al. 2016). Reward
@@ -282,6 +289,16 @@ const meta = {
   version: 'fafb-783', neurons: N, edges: E, synapses: totalSyn, threshold: 5,
   rootIds: Object.fromEntries(Object.entries(groups).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.map(i => rootIds[i])])),
 };
+
+// type centroids, borrowed by the male build for neurons the male table has no coordinates for
+const cent = {};
+for (let i = 0; i < N; i++) { const t = ptype[i]; if (!t) continue; const c = cent[t] ||= [0, 0, 0, 0]; c[0] += pos[3 * i]; c[1] += pos[3 * i + 1]; c[2] += pos[3 * i + 2]; c[3]++; }
+const centroids = Object.fromEntries(Object.entries(cent).map(([t, c]) => [t, [Math.round(c[0] / c[3]), Math.round(c[1] / c[3]), Math.round(c[2] / c[3])]]));
+const classCent = {};
+for (let i = 0; i < N; i++) { const c = classCent[cls[i]] ||= [0, 0, 0, 0]; c[0] += pos[3 * i]; c[1] += pos[3 * i + 1]; c[2] += pos[3 * i + 2]; c[3]++; }
+// taste signatures: which cell types the sugar and bitter neurons talk to, by synapse count
+const sig = grp => { const m = {}; for (const i of grp) for (let k = offsets[i]; k < offsets[i + 1]; k++) { const t = ptype[targets[k]]; if (t) m[t] = (m[t] || 0) + Math.abs(weights[k]); } return m; };
+writeFileSync(join(SRC, 'fafb_type_centroids.json'), JSON.stringify({ bbox: Array.from(bbox), centroids, taste: { sugar: sig(groups.sugar), bitter: sig(groups.bitter) }, classCentroids: Object.fromEntries(Object.entries(classCent).map(([k, c]) => [k, [c[0] / c[3], c[1] / c[3], c[2] / c[3]]])) }));
 
 mkdirSync(OUT, { recursive: true });
 writeFileSync(join(OUT, 'brain.bin'), Buffer.from(encodeBrain({ n: N, e: E, bbox, offsets, targets, weights, pos: q, cls })));

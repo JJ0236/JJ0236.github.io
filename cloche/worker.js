@@ -43,8 +43,8 @@ self.onmessage = e => {
     brain.enablePlasticity(groups.KC, [...groups.MBON_approach, ...groups.MBON_avoid], groups.teach);
     if (m.state?.plastic) brain.setPlasticState(m.state.plastic);
     if (m.state?.odourKCs) for (const k of ODOURS) for (const i of m.state.odourKCs[k] || []) odourKCs[k].add(i);
-    sensory = [];
-    for (let i = 0; i < data.n; i++) if (data.cls[i] === 2) sensory.push(i);   // 2 = sensory, see data.js CLASS_NAMES
+    sensory = groups.background || [];
+    if (!sensory.length) for (let i = 0; i < data.n; i++) if (data.cls[i] === 2) sensory.push(i);   // 2 = sensory, see data.js CLASS_NAMES
     brain.background(sensory, m.backgroundHz ?? BACKGROUND_HZ);
     self.postMessage({ type: 'ready', n: data.n, e: data.e, changed: brain.changedEdges });
     wallOrigin = performance.now(); bioTime = 0; lastTick = wallOrigin;

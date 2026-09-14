@@ -425,3 +425,146 @@ when asked, and asked for it pushed live. Decisions and what the data forced.
 Sleep and wake (not chosen). Water (still no class). Live MBON firing as
 the valence readout: fruit barely drives the output neurons in this model
 (0.3 Hz), so the synapses themselves are the honest readout.
+
+## Revision, 2026-09-15: a windowsill, friends, and eggs
+
+Josh asked for an environment to explore, less dreary, friends "as real as
+possible, eggs and everything". Chosen when asked: a sunny kitchen
+windowsill; every fly with its own full brain; the real male connectome for
+males; the life cycle in minutes per stage.
+
+### The world
+
+A kitchen windowsill in morning light. A rectangular counter (240 × 140 mm
+walkable) under a window: sky and a blurred garden outside, warm key light
+from the window, bright soft fill, pale painted wood and a tiled splash-
+back. On it: a fruit bowl with a banana and two apple slices, an open jam
+jar with a drip on its rim, a spilled drop of juice, a folded cloth. Every
+object is a scent source and some are food:
+
+| Object | Smell | Food | Egg site |
+|---|---|---|---|
+| banana | fruit, strong | sugar on its bruised end | yes |
+| apple slices | fruit, mild | sugar on the cut face | yes |
+| jam jar drip | fruit + vinegar | sugar | no |
+| spilled juice | vinegar | sugar | no |
+
+Objects are obstacles (circles in the walking plane); flies walk on the
+counter and up onto the fruit (a height map so they visibly climb the
+banana). The dome is gone. The old chips stay: sugar, bitter, fruit,
+vinegar puffs anywhere on the counter, shadow, poke. New chip: **Add a
+fly** (male or female) while the budget allows.
+
+### Friends
+
+Each fly is a full brain in its own worker: female flies run FlyWire v783
+(`brain.bin`), males run the Janelia male CNS v1.0 (`male.bin`, CC BY
+4.0, 166,701 neurons including the nerve cord). Budget: one fly per spare
+core, `min(4, hardwareConcurrency − 1)`, at least one. Phones get one.
+When the population would exceed the budget, the oldest adult "flies out
+the window" (the window is ajar). Click a fly to select it: the brain
+window, readouts, pathway and memory panel follow the selected fly.
+
+Male brain positions: the male table has no coordinates, so each male
+neuron is drawn at the centroid of its cell type in the female map;
+neurons with no female match (mostly the nerve cord) are laid out below
+the brain in a schematic cord. Disclosed in the brain panel.
+
+### Courtship, mating, eggs, larvae, pupae
+
+Real routes wherever the wiring has them; the rest is staged and says so.
+
+- **Male notices female.** Within 20 mm and roughly facing her, the male's
+  LC10a visual neurons are driven in proportion to how centred she is
+  (real: LC10a → P1 is the female-tracking pathway). Touching her drives
+  his tarsal pheromone gustatory neurons. Readout: **P1** firing rate is
+  his courtship state.
+- **Song.** With P1 up, the readout **pIP10** (the descending song command)
+  gates a wing-extension song: one wing out, vibrating, pulses drawn as a
+  ripple. Song intensity = pIP10 rate.
+- **Female hears.** Song within 25 mm drives her **JO-A** auditory neurons
+  at a rate set by song intensity and distance. Readout: **vpoDN**
+  (vaginal plate opening) is her acceptance signal. A virgin whose vpoDN
+  fires above threshold for two seconds accepts; a mated female's
+  acceptance path is simply not driven (post-mating state is a page flag;
+  the sex-peptide route is not simulated).
+- **Mating.** Staged: he mounts, 20 s scaled, both brains keep running;
+  then she is mated.
+- **Eggs.** A mated female on an egg site: her **oviDN** neurons are driven
+  (page trigger standing in for the sex-peptide → SAG → oviDN route), and
+  when they fire she bends her abdomen and leaves an egg. About one egg a
+  minute while on fruit, up to 12 live eggs.
+- **Egg** (2 min): a 0.5 mm white ovoid with two filaments, on the fruit.
+- **Larva** (6 min, three instars): a segmented pale maggot that crawls
+  with peristalsis, grows ×3, stays on and around the fruit, burrows in
+  briefly. No brain: the larval connectome is a different animal and a
+  different dataset; staged, disclosed.
+- **Pupa** (4 min): it crawls off the fruit, darkens into a brown capsule
+  on the counter or jar, stays still.
+- **Eclosion.** A pale soft adult of random sex climbs out, wings unfold
+  over 20 s, then it gets its own brain if the budget allows (else the
+  oldest adult leaves through the window first).
+
+### Bodies
+
+Sexes differ: males are smaller with a dark blunt abdomen tip and sex
+combs on the forelegs; females larger with a pointed, striped abdomen.
+Newly eclosed adults are pale for a minute. Better proportions all round.
+Everything remains procedural in Three.js; Blender is on this machine and
+could replace the fruit and jar with nicer meshes later.
+
+### Files
+
+```
+cloche/world.js       the windowsill: geometry, lights, objects, height map,
+                      scent sources, obstacles, egg sites, picking
+cloche/flies.js       population manager: brains, budget, selection, spawn,
+                      leave, per-fly stimuli, courtship coupling
+cloche/lifecycle.js   eggs, larvae, pupae, eclosion (pure timers + meshes)
+cloche/fly.js         sexed body, song, mount, oviposit poses
+cloche/data/male.bin, male-groups.json
+scripts/build-cloche-data.mjs --dataset mcns
+```
+
+### Verification additions
+
+Male brain: format; sugar → proboscis MN; GF; sparse odour code; LC10a +
+pheromone drive → P1 fires; P1 drive → pIP10 fires. Female: JO-A drive →
+vpoDN fires; oviDN drive → fires. Budget logic and life-cycle timers in
+node.
+
+### Build notes, 2026-09-15
+
+- **Male brain** (`cloche/data/male.bin`, 33 MB raw, 21 MB gzipped;
+  `male-groups.json`): 166,700 neurons, 6,242,118 connections at ≥5
+  synapses, from the Codex bucket's `mcns/1.0` tables. Silent at rest,
+  giant fibre at 5 ms, sugar → MN9 37 Hz, bitter cancels it, fruit and
+  vinegar recruit 145 and 174 Kenyon cells with none shared, no
+  after-state, LC10a + tarsal pheromone → pIP10 19 Hz, P1 drive → pIP10
+  70 Hz. Corrections specific to the male table: Kenyon cells are
+  predicted dopaminergic there and are set cholinergic (else the modulator
+  scaling would silence learning); the 163 labellar taste neurons carry no
+  sugar/bitter label and are sorted by connectivity homology: each one's
+  downstream cell types scored against the female sugar and bitter
+  neurons' downstream types, 15 sugar, 36 bitter, 112 left unclassified.
+  The male's background hum is 0.15 Hz over its 10,966 brain sensory
+  neurons only; the cord's sensory neurons are left quiet.
+- **Male cost.** Any strong drive touches 30,000–45,000 male neurons
+  (6.2 M edges fan out further than the female's 2.7 M), so the male runs
+  at roughly 0.1–0.4× real time when busy and ~1× at rest. Ceiling and
+  adaptation do not shrink the active set; accepted and displayed.
+- **Hearing → acceptance is bridged.** Driving the female's 94 JO-A
+  neurons at any rate leaves vpoDN silent in the model. After three
+  seconds of heard song the page drives vpoDN at 40 Hz for 2.5 s and reads
+  its firing as acceptance. Egg laying is the same shape: oviDN is driven
+  on fruit and read. Both are disclosed in the What-is-real panel.
+- **Courtship in the browser** (headless run): male within 9 mm → LC10a
+  26–59 Hz, pIP10 10–20 Hz, wing song; female JO-A 40–70 Hz, vpoDN pulses
+  20–40 Hz; mating at 42 s; 20 s mount; she is mated. Egg laid on the
+  banana through oviDN 44 Hz. No console errors. The male spent the
+  courtship at 0.1× real time.
+- **Bug found and fixed:** leaving food when full dereferenced a null and
+  killed the frame loop; everything after it silently froze.
+- **Verify:** 93 checks, none failing, including the male brain and the
+  female courtship groups (hearing → vpoDN reported as soft).
+- Blender is installed but unused: fruit, jar and cloth stay procedural.

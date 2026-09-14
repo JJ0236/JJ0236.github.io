@@ -165,6 +165,50 @@ const sniffKCs = (br, set, hz = 100, ms = 1000) => { br.stimulate(set, hz); cons
   ok('resting hum is stable', per.every(x => x > 500 && x < 20000) && Math.max(...per) < 3 * Math.min(...per), `spikes/s ${per.join(' ')}`);
 }
 
+// ---- D. courtship groups in the female ---------------------------------------
+console.log('female courtship groups');
+{
+  ok('JO-A, vpoDN, oviDN present', groups.JO_A.length > 50 && groups.vpoDN.length === 2 && groups.oviDN.length >= 4, `JO-A ${groups.JO_A.length}, vpoDN ${groups.vpoDN.length}, oviDN ${groups.oviDN.length}`);
+  const br = createBrain(data, { seed: 3 }); br.stimulate(groups.oviDN, 50); run(br, 1000);
+  ok('oviDN drive fires', br.rate(groups.oviDN, 980) > 20, `${br.rate(groups.oviDN, 980).toFixed(1)} Hz`);
+  br.reset(); br.stimulate(groups.JO_A, 100); run(br, 1000);
+  soft('hearing reaches vpoDN on its own', br.rate(groups.vpoDN, 980) > 1, `vpoDN ${br.rate(groups.vpoDN, 980).toFixed(1)} Hz — the page bridges this step`);
+}
+
+// ---- E. the male brain -------------------------------------------------------
+console.log('male.bin');
+{
+  const mbuf = readFileSync(join(dataDir, 'male.bin'));
+  const md = decodeBrain(mbuf.buffer.slice(mbuf.byteOffset, mbuf.byteOffset + mbuf.byteLength));
+  const mg = JSON.parse(readFileSync(join(dataDir, 'male-groups.json'), 'utf8'));
+  const mk = () => createBrainRaw(md, { seed: 3, modulatory: mg.modulatory });
+  ok('male neuron count', md.n === 166700, String(md.n));
+  ok('male edges', md.e > 5000000 && md.offsets[md.n] === md.e, String(md.e));
+  for (const k of ['sugar', 'bitter', 'MN9', 'GF', 'LC4', 'LPLC2', 'JO', 'fruit', 'vinegar', 'KC', 'MBON_approach', 'MBON_avoid', 'PAM', 'PPL1', 'P1', 'pIP10', 'LC10a', 'tpGRN', 'background', 'reward_DAN', 'punish_DAN', 'DN_L', 'DN_R']) ok(`male group ${k}`, Array.isArray(mg[k]) && mg[k].length > 0, String(mg[k]?.length));
+  let kcDA = 0; for (const i of mg.KC) if (mg.modulatory.includes(i)) kcDA++;
+  ok('male Kenyon cells are not modulatory', kcDA === 0, String(kcDA));
+  let br = mk(); ok('male silent at rest', run(br, 500) === 0);
+  br = mk(); br.stimulate(mg.sugar, 200); run(br, 1000);
+  ok('male sugar → MN9', br.rate(mg.MN9, 980) > 15, `${br.rate(mg.MN9, 980).toFixed(1)} Hz`);
+  br = mk(); br.stimulate(mg.sugar, 200); br.stimulate(mg.bitter, 200); run(br, 1000);
+  ok('male bitter cancels sugar', br.rate(mg.MN9, 980) < 5, `${br.rate(mg.MN9, 980).toFixed(1)} Hz`);
+  br = mk(); br.stimulate(mg.LC4, 150); br.stimulate(mg.LPLC2, 150);
+  let gf = -1; const gfs = new Set(mg.GF); for (let t = 0; t < 60 && gf < 0; t++) for (const i of br.step(10)) if (gfs.has(i)) { gf = t; break; }
+  ok('male looming → giant fibre', gf >= 0 && gf <= 40, `${gf} ms`);
+  const mkc = new Set(mg.KC);
+  const sniffM = (set) => { const b2 = mk(); b2.stimulate(set, 100); const c = new Set(); let n = 0; for (let t = 0; t < 1000; t += 5) for (const i of b2.step(50)) { n++; if (mkc.has(i)) c.add(i); } b2.clearAll(); run(b2, 2000); return { kcs: c, spikes: n, tail: run(b2, 1000) }; };
+  const f = sniffM(mg.fruit), v = sniffM(mg.vinegar);
+  let ov = 0; for (const k of f.kcs) if (v.kcs.has(k)) ov++;
+  ok('male smells are sparse and distinct', f.kcs.size > 20 && f.kcs.size < 0.06 * mg.KC.length && v.kcs.size > 20 && ov < 0.15 * Math.min(f.kcs.size, v.kcs.size), `fruit ${f.kcs.size}, vinegar ${v.kcs.size}, shared ${ov}`);
+  ok('male quiet after a smell', f.tail === 0 && v.tail === 0, `${f.tail} / ${v.tail}`);
+  br = mk(); br.stimulate(mg.LC10a, 120); br.stimulate(mg.tpGRN, 60); run(br, 1000);
+  ok('seeing a female → song command (pIP10)', br.rate(mg.pIP10, 980) > 1, `pIP10 ${br.rate(mg.pIP10, 980).toFixed(1)} Hz, P1 ${br.rate(mg.P1, 980).toFixed(2)} Hz`);
+  br = mk(); br.stimulate(mg.P1, 50); run(br, 1000);
+  ok('P1 → pIP10', br.rate(mg.pIP10, 980) > 20, `${br.rate(mg.pIP10, 980).toFixed(1)} Hz`);
+  br = mk(); br.background(mg.background, 0.15); const per = []; for (let k = 0; k < 3; k++) per.push(run(br, 1000));
+  ok('male resting hum is stable', per.every(x => x > 200 && x < 20000) && Math.max(...per) < 3 * Math.min(...per), `spikes/s ${per.join(' ')}`);
+}
+
 const a = createBrain(data, { seed: 3 }); a.stimulate(groups.sugar, SUGAR_HZ);
 const b = createBrain(data, { seed: 3 }); b.stimulate(groups.sugar, SUGAR_HZ);
 ok('seeded runs are deterministic', run(a, 300) === run(b, 300));

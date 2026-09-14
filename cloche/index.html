@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloche — A Fly Brain Under Glass — joshhicks.info</title>
-  <meta name="description" content="A fruit fly under a glass dome whose brain is the FlyWire connectome: 139,255 neurons and 2.7 million connections simulated live in your browser. Feed it, shade it, poke it, puff smells at it, and watch its mushroom body learn which smells mean sugar and which mean bitter." />
-  <meta property="og:title" content="Cloche — A Fly Brain Under Glass" />
-  <meta property="og:description" content="A fruit fly under glass, run by its real connectome. 139,255 neurons simulated live in your browser. Feed it, shade it, poke it, teach it which smells mean sugar." />
+  <title>Cloche — Flies on a Windowsill — joshhicks.info</title>
+  <meta name="description" content="Fruit flies on a sunny kitchen windowsill, each running its real connectome live in your browser: the FlyWire female brain and the Janelia male brain. They taste, smell, learn, court, mate and lay eggs; the eggs hatch into larvae, pupate, and new flies climb out." />
+  <meta property="og:title" content="Cloche — Flies on a Windowsill" />
+  <meta property="og:description" content="Fruit flies on a windowsill, each running its real connectome in your browser. They taste, smell, learn, court, mate and lay eggs." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://joshhicks.info/cloche/" />
   <meta property="og:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
@@ -58,7 +58,16 @@
     .blurb p + p { margin-top: 7px; }
     .attribution { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--dim); line-height: 1.65; }
     .attribution a { color: var(--muted); }
-    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #101318; }
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #CFE3F5; }
+    .viewport-hint { color: rgba(20,30,40,0.7); background: rgba(255,255,255,0.7); }
+    .viewport-stats { color: rgba(20,30,40,0.55); }
+    .chips { background: rgba(255,255,255,0.82); border-color: rgba(0,0,0,0.12); }
+    .chips button { color: #55606E; } .chips button:hover { color: #1E2630; } .chips button.active { color: #1E2630; border-color: #8FB0E8; background: rgba(143,176,232,0.25); }
+    .chips .sep { background: rgba(0,0,0,0.12); }
+    .chips button:disabled { opacity: 0.4; cursor: default; }
+    .log { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); line-height: 1.7; margin-top: 8px; }
+    .log div:first-child { color: var(--text); }
+    .overlay { background: rgba(207,227,245,0.96); } .overlay .stage { color: #26344E; } .overlay .sub { color: #55606E; } .bar { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.12); }
     #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
     .chips { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 6px; background: rgba(16,19,24,0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 22px; padding: 6px 8px; }
     .chips button { padding: 6px 13px; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; border: 1px solid transparent; border-radius: 16px; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; display: flex; align-items: center; gap: 6px; }
@@ -126,14 +135,14 @@
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2L4 7l5 5"/></svg>
     Projects
   </a>
-  <span class="tool-header-title">CLOCHE — A FLY BRAIN UNDER GLASS</span>
+  <span class="tool-header-title">CLOCHE — FLIES ON A WINDOWSILL</span>
   <span class="tool-header-site">joshhicks.info</span>
 </header>
 
 <div class="body-wrap">
   <div class="viewport-wrap">
     <canvas id="three-canvas"></canvas>
-    <div class="viewport-hint" id="hint">Click the base to drop sugar · drag to orbit · scroll to zoom</div>
+    <div class="viewport-hint" id="hint">Click a fly to select it · click the counter to drop sugar · drag to orbit · scroll to zoom</div>
     <div class="viewport-stats" id="flyStats"></div>
     <div class="chips" id="chips">
       <button data-mode="sugar" class="active" title="Click the base to place a drop of sugar water"><span class="dot"></span>Sugar</button>
@@ -143,12 +152,15 @@
       <button data-mode="vinegar" title="Puff a vinegar smell onto the base (Or42b, Or92a receptors)"><span class="dot"></span>Vinegar</button>
       <span class="sep"></span>
       <button data-act="shadow" title="Pass a shadow over the dome (or shift-drag across the glass)">Shadow</button>
-      <button data-act="poke" title="Poke the fly (or click on it)">Poke</button>
+      <button data-act="poke" title="Poke the selected fly (or click it twice)">Poke</button>
+      <span class="sep"></span>
+      <button id="addF" title="Add a female (FlyWire brain)">+ ♀</button>
+      <button id="addM" title="Add a male (male CNS brain)">+ ♂</button>
     </div>
     <div class="overlay" id="loading">
-      <div class="stage" id="loadStage">Loading the connectome…</div>
+      <div class="stage" id="loadStage">Loading the connectomes…</div>
       <div class="bar" id="loadBar"><i></i></div>
-      <div class="sub" id="loadSub">139,255 neurons and 2.7 million connections, about 10 MB. It is cached after the first visit.</div>
+      <div class="sub" id="loadSub">Two brains: the FlyWire female (139,255 neurons, 10 MB) and the Janelia male (166,700 neurons, 21 MB). Cached after the first visit.</div>
     </div>
     <div class="no-webgl" id="noWebgl"><h2>No WebGL here</h2><p>The dome needs WebGL. Try a current desktop or mobile browser.</p></div>
   </div>
@@ -157,6 +169,7 @@
     <div class="panel">
       <div class="panel-title">Brain <span id="brainMeta">FlyWire v783</span></div>
       <canvas id="brain-canvas"></canvas>
+      <div class="ctrl-hint" id="brainNote" style="margin-top:6px"></div>
       <div class="readout" id="brainStats">
         <div><span class="k">Neurons active</span><span class="v" id="rActive">–</span></div>
         <div><span class="k">Spikes per second</span><span class="v" id="rSpikes">–</span></div>
@@ -173,6 +186,7 @@
       <div class="readout" style="margin-top:0">
         <div><span class="k">Doing</span><span class="v" id="rMode">–</span></div>
         <div><span class="k">Hunger</span><span class="v" id="rHunger">–</span></div>
+        <div><span class="k">Status</span><span class="v" id="rStatus">–</span></div>
         <div><span class="k" data-group="sugar">Sugar neurons</span><span class="v" id="rSugar">–</span></div>
         <div><span class="k" data-group="bitter">Bitter neurons</span><span class="v" id="rBitter">–</span></div>
         <div><span class="k" data-group="JO">Johnston's organ</span><span class="v" id="rJO">–</span></div>
@@ -181,7 +195,23 @@
         <div><span class="k" data-group="vinegar">Vinegar receptors</span><span class="v" id="rVinegar">–</span></div>
         <div><span class="k" data-group="KC">Kenyon cells firing</span><span class="v" id="rKC">–</span></div>
         <div><span class="k" data-group="DN_L">Descending, left / right</span><span class="v" id="rDN">–</span></div>
+        <div class="court-row"><span class="k" data-group="LC10a" title="Visual neurons that track a female">LC10a · sees her</span><span class="v" id="rLC10">–</span></div>
+        <div class="court-row"><span class="k" data-group="P1" title="The male courtship command cluster">P1 · courtship</span><span class="v" id="rP1">–</span></div>
+        <div class="court-row"><span class="k" data-group="pIP10" title="Descending song command">pIP10 · song</span><span class="v" id="rSong">–</span></div>
+        <div class="court-row"><span class="k" data-group="JO_A" title="Auditory neurons of Johnston's organ">JO-A · hears song</span><span class="v" id="rHear">–</span></div>
+        <div class="court-row"><span class="k" data-group="vpoDN" title="Vaginal plate opening neuron: acceptance">vpoDN · accepts</span><span class="v" id="rAccept">–</span></div>
+        <div class="court-row"><span class="k" data-group="oviDN" title="Egg-laying command neurons">oviDN · lays</span><span class="v" id="rOvi">–</span></div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Windowsill</div>
+      <div class="readout" style="margin-top:0">
+        <div><span class="k">Adults</span><span class="v" id="popAdults">–</span></div>
+        <div><span class="k">Brood</span><span class="v" id="popEggs">–</span></div>
+        <div><span class="k">Brains</span><span class="v" id="popBudget">–</span></div>
+      </div>
+      <div class="log" id="eventLog"></div>
     </div>
 
     <div class="panel">
@@ -197,15 +227,15 @@
     <div class="panel">
       <div class="panel-title">What is real</div>
       <div class="blurb">
-        <p><b>Real:</b> the wiring. Every proofread neuron of an adult female <i>Drosophila</i> brain, every connection of five or more synapses, the sign and strength of each one, and the integrate-and-fire dynamics from Shiu et al. The reflexes fall out of that: sugar drives MN9 and the proboscis extends, bitter cancels it, a shadow fires the giant fibre, a poke drives descending neurons. Smells go in through the real receptor neurons and come out as a sparse, smell-specific set of Kenyon cells. Learning is the fly's own rule: dopamine neurons of one mushroom-body compartment weaken the Kenyon-cell synapses onto that compartment's output neuron, reward on the avoidance side, punishment on the approach side.</p>
-        <p><b>Added to the model:</b> a little spike-frequency adaptation so driven loops settle; a brain-wide activity ceiling; the antennal lobe's local neurons forced inhibitory, as they are in every real fly, where the data left their transmitter unpredicted; and a quiet resting hum in the sensory neurons so the brain is never silent.</p>
-        <p><b>Staged:</b> the body. No muscle model. Motor and descending firing rates are smoothed onto a rigged low-poly fly. It walks when its descending neurons fire and turns toward the busier side; it heads up a smell's gradient when its mushroom body says like and away when it says avoid; the walk to a visible droplet, the flights, and the hunger clock are hand-written. The connectome decides what the fly does; the page decides how that looks.</p>
+        <p><b>Real:</b> the wiring. Females run every proofread neuron of the FlyWire female brain; males run the Janelia male central nervous system, brain and nerve cord. Every connection of five or more synapses, its sign and strength, and the integrate-and-fire dynamics from Shiu et al. Reflexes fall out of that: sugar drives MN9 and the proboscis extends, bitter cancels it, a shadow fires the giant fibre, a poke drives descending neurons. Smells arrive through the real receptor neurons as a sparse, smell-specific set of Kenyon cells, and learning is the fly's own rule: dopamine neurons of one mushroom-body compartment weaken that compartment's Kenyon-cell synapses. Courtship runs on the male's real wiring: seeing a female drives his LC10a neurons, the P1 cluster and the pIP10 song command follow; she hears through JO-A and her vpoDN acceptance neuron answers; a mated female's oviDN neurons command each egg.</p>
+        <p><b>Added to the model:</b> rate-dependent spike-frequency adaptation so driven loops settle; a slow brain-wide activity ceiling; neuromodulatory synapses scaled to a tenth; the antennal lobe's local neurons forced inhibitory where the data left their transmitter unpredicted; the male's taste neurons sorted into sugar and bitter by matching their downstream cell types to the female's; and a quiet resting hum in the sensory neurons.</p>
+        <p><b>Staged:</b> the bodies. No muscle model. Firing rates are smoothed onto rigged low-poly flies. Walking to food, the flights, the hunger clock, the mounting itself, the "mated" flag and the trigger that drives oviDN on fruit are hand-written. Eggs, larvae and pupae have no brain: the larva's connectome is a different animal. The connectomes decide what the flies do; the page decides how that looks.</p>
       </div>
     </div>
 
     <div class="panel">
       <div class="attribution">
-        Connectome: <a href="https://codex.flywire.ai/" target="_blank" rel="noopener">FlyWire</a> v783, FlyWire Consortium, Princeton University, CC BY 4.0 — Dorkenwald et al. 2024 and Schlegel et al. 2024, <i>Nature</i>. Neurotransmitters: Eckstein et al. 2024. Model: <a href="https://doi.org/10.1038/s41586-024-07763-9" target="_blank" rel="noopener">Shiu et al. 2024</a>, <i>Nature</i>, code MIT. The simulation runs entirely in your browser; nothing is sent anywhere.
+        Connectomes: <a href="https://codex.flywire.ai/" target="_blank" rel="noopener">FlyWire</a> v783 (female), FlyWire Consortium, Princeton University, CC BY 4.0 — Dorkenwald et al. 2024 and Schlegel et al. 2024, <i>Nature</i>; <a href="https://male-cns.janelia.org/" target="_blank" rel="noopener">male CNS</a> v1.0, Janelia FlyEM, CC BY 4.0. Mushroom-body map: Aso et al. 2014. Neurotransmitters: Eckstein et al. 2024. Model: <a href="https://doi.org/10.1038/s41586-024-07763-9" target="_blank" rel="noopener">Shiu et al. 2024</a>, <i>Nature</i>, code MIT. The simulation runs entirely in your browser; nothing is sent anywhere.
       </div>
     </div>
   </aside>
