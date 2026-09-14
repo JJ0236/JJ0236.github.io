@@ -90,19 +90,24 @@ for (const f of FILES) await ensure(f);
 const index = new Map();   // root id string → index
 const rootIds = [];
 const sign = [];
+const ntType = [];
+let unpredicted = 0;
 for await (const line of lines(join(SRC, 'neurons.csv.gz'))) {
   const c = line.split(',');
   const id = c[0], nt = c[2];
   index.set(id, rootIds.length);
   rootIds.push(id);
+  ntType.push(nt);
+  if (!nt) unpredicted++;
   sign.push(nt === 'GABA' || nt === 'GLUT' ? -1 : 1);
 }
 const N = rootIds.length;
-console.log(`neurons ${N}`);
+console.log(`neurons ${N} (${unpredicted} without a transmitter prediction, treated as excitatory)`);
 
 // 2. classification: class byte and sub_class for GRNs
 const cls = new Uint8Array(N).fill(CLASS_NAMES.indexOf('other'));
 const subClass = new Array(N).fill('');
+const sideOf = new Array(N).fill('');
 for await (const line of lines(join(SRC, 'classification.csv.gz'))) {
   const c = line.split(',');
   const i = index.get(c[0]);
@@ -110,6 +115,7 @@ for await (const line of lines(join(SRC, 'classification.csv.gz'))) {
   const k = CLASS_NAMES.indexOf(c[2]);
   cls[i] = k >= 0 ? k : CLASS_NAMES.indexOf('other');
   subClass[i] = c[4];
+  sideOf[i] = c[6];
 }
 
 // 3. cell types
@@ -119,6 +125,16 @@ for await (const line of lines(join(SRC, 'consolidated_cell_types.csv.gz'))) {
   const i = index.get(c[0]);
   if (i !== undefined) ptype[i] = c[1];
 }
+
+// 3b. Data correction: antennal lobe local neurons are GABAergic or
+// glutamatergic in every published account (Chou et al. 2010; Schlegel et
+// al. 2024), but most of them carry no transmitter prediction in v783 and a
+// few are predicted cholinergic. Left excitatory they form a runaway loop
+// that ignites the whole brain on any odour. Their sign is forced negative.
+const AL_LN = /^(lLN|vLN|il3LN|v2LN|l2LN)/;
+let flipped = 0;
+for (let i = 0; i < N; i++) if (AL_LN.test(ptype[i]) && sign[i] > 0) { sign[i] = -1; flipped++; }
+console.log(`antennal lobe local neurons forced inhibitory: ${flipped}`);
 
 // 4. coordinates: first row per neuron
 const pos = new Float64Array(3 * N);
@@ -206,14 +222,65 @@ const groups = {
   LPLC2: byType(t => t === 'LPLC2'),
   JO: byType(t => t.startsWith('JO-C') || t.startsWith('JO-E')),
   aDN: [...labelADN].sort((a, b) => a - b),
+  // olfaction and learning
+  fruit: byType(t => ['ORN_DM2', 'ORN_VM2', 'ORN_VM7d', 'ORN_VA6', 'ORN_DL5', 'ORN_DC1'].includes(t)),   // Or22a, Or43b, Or42a, Or82a, Or7a, Or?: fruit esters
+  vinegar: byType(t => t === 'ORN_DM1' || t === 'ORN_VA2'),    // Or42b / Or92a, vinegar
+  KC: byType(t => t.startsWith('KC')),
+  MBON_approach: byType((t, i) => /^MBON/.test(t) && (ntType[i] === 'ACH' || ntType[i] === 'GABA')),
+  MBON_avoid: byType((t, i) => /^MBON/.test(t) && ntType[i] === 'GLUT'),
+  PAM: byType(t => t.startsWith('PAM')),
+  PPL1: byType(t => t.startsWith('PPL1')),
+  APL: byType(t => t === 'APL'),
+  modulatory: byType((t, i) => ntType[i] === 'DA' || ntType[i] === 'SER' || ntType[i] === 'OCT'),
 };
+// Mushroom-body teaching map by compartment (Aso et al. 2014 nomenclature,
+// Aso & Rubin 2016, Owald et al. 2015, Perisse et al. 2016). Reward
+// dopamine neurons (PAM) share compartments with the glutamatergic,
+// avoidance-driving output neurons; punishment neurons (PPL1) share
+// compartments with the approach-driving ones. Learning depresses the
+// Kenyon-cell synapses onto the output neuron of the same compartment.
+const TEACH = {
+  PAM01: ['MBON01'],                       // γ5
+  PAM02: ['MBON01', 'MBON03', 'MBON04'],   // β'2a
+  PAM03: ['MBON02', 'MBON01'],             // β2β'2a
+  PAM04: ['MBON02'],                       // β2
+  PAM05: ['MBON03', 'MBON04'],             // β'2p
+  PAM06: ['MBON03', 'MBON04'],             // β'2m
+  PAM07: ['MBON05'],                       // γ4<γ1γ2
+  PAM08: ['MBON05'],                       // γ4
+  PAM11: ['MBON07'],                       // α1
+  PAM15: ['MBON01'],                       // γ5β'2a
+  PPL101: ['MBON11'],                      // γ1pedc
+  PPL102: ['MBON12'],                      // γ2α'1
+  PPL103: ['MBON13', 'MBON18'],            // α'2α2
+  PPL104: ['MBON14'],                      // α3
+  PPL105: ['MBON16', 'MBON17'],            // α'3
+};
+const byExactType = {};
+for (let i = 0; i < N; i++) if (ptype[i]) (byExactType[ptype[i]] ||= []).push(i);
+const teach = {};
+groups.reward_DAN = []; groups.punish_DAN = [];
+for (const [dan, mbons] of Object.entries(TEACH)) {
+  const dIdx = byExactType[dan] || [];
+  const mIdx = mbons.flatMap(m => byExactType[m] || []);
+  for (const dn of dIdx) teach[dn] = mIdx;
+  (dan.startsWith('PAM') ? groups.reward_DAN : groups.punish_DAN).push(...dIdx);
+}
+groups.teach = teach;
+console.log(`teaching map: ${Object.keys(teach).length} dopamine neurons → ${new Set(Object.values(teach).flat()).size} output neurons`);
+groups.DN_L = byType((t, i) => cls[i] === CLASS_NAMES.indexOf('descending') && sideOf[i] === 'left');
+groups.DN_R = byType((t, i) => cls[i] === CLASS_NAMES.indexOf('descending') && sideOf[i] === 'right');
+for (const k of ['DNa01', 'DNa02']) {
+  groups[k + '_L'] = groups[k].filter(i => sideOf[i] === 'left');
+  groups[k + '_R'] = groups[k].filter(i => sideOf[i] === 'right');
+}
 const shiuHit = SHIU_SUGAR.map(id => index.get(id)).filter(i => i !== undefined && groups.sugar.includes(i)).length;
 console.log(`Shiu sugar ids in our sugar group: ${shiuHit} / ${SHIU_SUGAR.length}`);
 for (const [k, v] of Object.entries(groups)) console.log(`  ${k.padEnd(6)} ${v.length}`);
 
 const meta = {
   version: 'fafb-783', neurons: N, edges: E, synapses: totalSyn, threshold: 5,
-  rootIds: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.map(i => rootIds[i])])),
+  rootIds: Object.fromEntries(Object.entries(groups).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.map(i => rootIds[i])])),
 };
 
 mkdirSync(OUT, { recursive: true });

@@ -93,8 +93,9 @@ export function createFly() {
   }
 
   // ---- state ----
-  const rates = { MN9: 0, MN6: 0, GF: 0, groom: 0, DNa01: 0, DNa02: 0 };
-  const sm = { MN9: 0, MN6: 0, groom: 0, DN: 0 };
+  const rates = { MN9: 0, MN6: 0, GF: 0, groom: 0, DNa01: 0, DNa02: 0, DN_L: 0, DN_R: 0, DNa02_L: 0, DNa02_R: 0 };
+  const sm = { MN9: 0, MN6: 0, groom: 0, DN: 0, DN_L: 0, DN_R: 0, turn: 0 };
+  let wanderNoise = 0, noiseT = 0;
   let mode = 'idle', hunger = 0.6;
   let heading = Math.random() * Math.PI * 2, x = 6, z = -4;
   let phase = 0, walking = 0;
@@ -102,6 +103,28 @@ export function createFly() {
   let jump = null, jumpCooldown = 0;
   let feedingOn = null, leaveTimer = 0, rejectTimer = 0;
   let groomT = 0;
+  let flight = null;   // { t, dur, path }
+  function takeOff() {
+    if (flight || jump) return;
+    const pts = [{ x, z, y: 0 }];
+    let hx = x, hz = z;
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * (WALK_R - 6);
+      hx = Math.cos(a) * r; hz = Math.sin(a) * r;
+      pts.push({ x: hx, z: hz, y: 14 + Math.random() * 22 });
+    }
+    let lx = hx, lz = hz; const rr = Math.hypot(lx, lz); if (rr > WALK_R - 3) { lx *= (WALK_R - 3) / rr; lz *= (WALK_R - 3) / rr; }
+    pts.push({ x: lx, z: lz, y: 0 });
+    flight = { t: 0, dur: 2600 + Math.random() * 1800, pts };
+    if (feedingOn) leaveDroplet();
+    mode = 'flying';
+  }
+  function catmull(pts, u) {
+    const n = pts.length - 1; const s = u * n; const i = Math.min(n - 1, Math.floor(s)); const f = s - i;
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n, i + 2)];
+    const c = k => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * f + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * f * f + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * f * f * f);
+    return { x: c('x'), y: c('y'), z: c('z') };
+  }
   const parts = { rostrum, labella, labL, labR, legs, wings, head, body };
 
   function setRates(r) { Object.assign(rates, r); }
@@ -134,12 +157,29 @@ export function createFly() {
     const k = 1 - Math.exp(-dtMs / 50);
     sm.MN9 += (rates.MN9 - sm.MN9) * k; sm.MN6 += (rates.MN6 - sm.MN6) * k;
     sm.groom += (rates.groom - sm.groom) * k; sm.DN += ((rates.DNa01 + rates.DNa02) / 2 - sm.DN) * k;
+    const kS = 1 - Math.exp(-dtMs / 250);
+    sm.DN_L += (rates.DN_L - sm.DN_L) * kS; sm.DN_R += (rates.DN_R - sm.DN_R) * kS;
+    // steering asymmetry: DNa02 is the best-known steering pair; the whole descending population backs it up
+    const asym = (rates.DNa02_R - rates.DNa02_L) * 0.05 + (rates.DN_R - rates.DN_L) / (rates.DN_R + rates.DN_L + 1.5);
+    sm.turn += (Math.max(-1, Math.min(1, asym)) - sm.turn) * kS;
     hunger = Math.min(1, hunger + dt / 240);
     if (jumpCooldown > 0) jumpCooldown -= dtMs;
 
     // ---- decide ----
     let speed = 0;
-    if (jump) {
+    if (flight) {
+      flight.t += dtMs;
+      const u = Math.min(1, flight.t / flight.dur);
+      const p = catmull(flight.pts, u), q = catmull(flight.pts, Math.min(1, u + 0.01));
+      const dx = q.x - p.x, dz = q.z - p.z;
+      if (Math.hypot(dx, dz) > 1e-4) heading = Math.atan2(dx, dz);
+      x = p.x; z = p.z; group.position.y = Math.max(0, p.y);
+      body.rotation.x = -0.25 * Math.sin(u * Math.PI);
+      const beat = Math.sin(flight.t * 1.1);
+      for (const wg of wings) wg.piv.rotation.y = wg.side * (0.35 + 0.75 * beat) ; 
+      for (const L of legs) { L.knee.rotation.z += (-L.side * 2.4 - L.knee.rotation.z) * 0.2; }
+      if (u >= 1) { flight = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 1.2; idleWalking = false; }
+    } else if (jump) {
       jump.t += dtMs;
       const u = Math.min(1, jump.t / jump.dur);
       x = jump.x0 + (jump.x1 - jump.x0) * u; z = jump.z0 + (jump.z1 - jump.z0) * u;
@@ -169,13 +209,33 @@ export function createFly() {
           speed = 9 * (0.5 + 0.5 * Math.min(1, sm.DN / 20));
         }
       } else {
+        // exploring: the descending population sets the pace and the turn;
+        // a learned smell pulls the heading up or down its gradient
         mode = 'idle';
+        const drive = (sm.DN_L + sm.DN_R) / 2;                // Hz, mean over the descending neurons
+        const brainPace = Math.min(1, drive / 4);
+        noiseT -= dt; if (noiseT <= 0) { noiseT = 0.6 + Math.random() * 1.4; wanderNoise = (Math.random() - 0.5) * 1.6; }
         idleTimer -= dt;
-        if (idleTimer <= 0) { idleWalking = !idleWalking; idleTimer = idleWalking ? 0.5 + Math.random() * 1.6 : 1 + Math.random() * 2.4; if (idleWalking) heading += (Math.random() - 0.5) * 1.6; }
-        if (idleWalking) {
-          speed = 6;
+        if (idleTimer <= 0) { idleWalking = !idleWalking; idleTimer = idleWalking ? 0.8 + Math.random() * 2.2 + 3 * brainPace : 0.6 + Math.random() * 2.2 * (1 - brainPace); }
+        if (idleWalking || brainPace > 0.5) {
+          speed = 2.5 + 6 * brainPace;
+          heading += (sm.turn * 2.2 + wanderNoise) * dt;
           const r = Math.hypot(x, z);
           if (r > WALK_R - 6) turnToward(Math.atan2(-x, -z), dt, 2.5);
+        }
+        if (w.smellAt && w.memory) {
+          const here = w.smellAt(x, z);
+          for (const kind of ['fruit', 'vinegar']) {
+            const bias = w.memory[kind] || 0;
+            if (Math.abs(bias) < 0.05 || here[kind] < 0.02) continue;
+            const gr = w.smellGradient(kind, x, z);
+            const gl = Math.hypot(gr.x, gr.z); if (gl < 1e-6) continue;
+            const toward = Math.atan2(gr.x, gr.z);
+            const want = bias > 0 ? toward : toward + Math.PI;
+            turnToward(want, dt, 2.5 * Math.min(1, Math.abs(bias) * 3));
+            if (!idleWalking) speed = Math.max(speed, 3);
+            mode = bias > 0 ? 'approaching smell' : 'avoiding smell';
+          }
         }
       }
     }
@@ -190,13 +250,14 @@ export function createFly() {
     } else walking = Math.max(0, walking - dt * 8);
     group.position.x = x; group.position.z = z;
     group.rotation.y = heading;
+    if (flight) return;
 
     // ---- pose ----
     const ext = Math.min(1, sm.MN9 / 40);
     rostrum.rotation.x += ((1.25 - 1.35 * ext) - rostrum.rotation.x) * k;
     const spread = 0.45 * Math.min(1, sm.MN6 / 40);
     labL.rotation.z += (spread - labL.rotation.z) * k; labR.rotation.z += (-spread - labR.rotation.z) * k;
-    if (!jump) {
+    if (!jump && !flight) {
       const tw = Math.sin(phase * Math.PI * 2);
       for (const wg of wings) wg.piv.rotation.y += (wg.side * 0.28 - wg.piv.rotation.y) * k;
       for (const L of legs) {
@@ -226,7 +287,8 @@ export function createFly() {
   }
 
   return {
-    group, parts, setRates, gfSpike, update, labellumPoint,
+    group, parts, setRates, gfSpike, takeOff, update, labellumPoint,
+    get flying() { return !!flight; },
     get mode() { return mode; }, get hunger() { return hunger; }, set hunger(v) { hunger = v; },
     get position() { return { x, z }; }, get heading() { return heading; }, get feeding() { return feedingOn; },
     eat(amount) { hunger = Math.max(0, hunger - amount); },

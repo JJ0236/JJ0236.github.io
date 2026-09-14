@@ -115,6 +115,41 @@ export function createScene(canvas) {
   function layoutDroplet(d) { d.mesh.position.set(d.x, d.radius * 0.3, d.z); d.mesh.scale.set(d.radius, d.radius * 0.42, d.radius); }
   function removeDroplet(d) { d.gone = true; scene.remove(d.mesh); const k = droplets.indexOf(d); if (k >= 0) droplets.splice(k, 1); }
 
+  // scent puffs: a faint stain on the wood and a few rising motes. Odour
+  // strength at a point falls off as a Gaussian of distance.
+  const SCENT_COLOURS = { fruit: '#C97A4A', vinegar: '#8E9F5A' };
+  const scents = [];
+  const moteGeo = new THREE.SphereGeometry(0.22, 6, 4);
+  function addScent(kind, x, z) {
+    const r = Math.hypot(x, z); if (r > WALK_R) { x *= WALK_R / r; z *= WALK_R / r; }
+    const col = new THREE.Color(SCENT_COLOURS[kind]);
+    const stain = new THREE.Mesh(new THREE.CircleGeometry(5.5, 40), new THREE.MeshStandardMaterial({ color: col.clone().lerp(new THREE.Color('#5A4632'), 0.55), roughness: 0.9 }));
+    stain.rotation.x = -Math.PI / 2; stain.position.set(x, 0.04, z); stain.receiveShadow = true;
+    const motes = [];
+    for (let i = 0; i < 9; i++) {
+      const m = new THREE.Mesh(moteGeo, new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.6 }));
+      m.userData = { a: Math.random() * Math.PI * 2, r: 1 + Math.random() * 3.5, h: Math.random() * 9, v: 1.2 + Math.random() * 1.2 };
+      motes.push(m); scene.add(m);
+    }
+    const sc = { kind, x, z, sigma: 9, strength: 1, age: 0, life: 120, stain, motes, gone: false };
+    scents.push(sc); scene.add(stain);
+    return sc;
+  }
+  function removeScent(sc) { sc.gone = true; scene.remove(sc.stain); for (const m of sc.motes) scene.remove(m); const k = scents.indexOf(sc); if (k >= 0) scents.splice(k, 1); }
+  /** Odour intensity (0..1) of each kind at a point. */
+  function smellAt(x, z) {
+    const out = { fruit: 0, vinegar: 0 };
+    for (const sc of scents) { const dd = (sc.x - x) ** 2 + (sc.z - z) ** 2; out[sc.kind] += sc.strength * Math.exp(-dd / (2 * sc.sigma * sc.sigma)); }
+    out.fruit = Math.min(1, out.fruit); out.vinegar = Math.min(1, out.vinegar);
+    return out;
+  }
+  /** Gradient (dx, dz) of a kind's intensity at a point. */
+  function smellGradient(kind, x, z) {
+    let gx = 0, gz = 0;
+    for (const sc of scents) { if (sc.kind !== kind) continue; const dx = sc.x - x, dz = sc.z - z; const w = sc.strength * Math.exp(-(dx * dx + dz * dz) / (2 * sc.sigma * sc.sigma)) / (sc.sigma * sc.sigma); gx += dx * w; gz += dz * w; }
+    return { x: gx, z: gz };
+  }
+
   // shadow sweep: an invisible occluder passes between the key light and the base
   const occluder = new THREE.Mesh(new THREE.CircleGeometry(30, 48), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
   occluder.castShadow = true; occluder.visible = false;
@@ -177,8 +212,19 @@ export function createScene(canvas) {
       if (u >= 1) { scene.remove(r.m); ripples.splice(i, 1); }
     }
     for (const d of droplets) layoutDroplet(d);
+    for (let i = scents.length - 1; i >= 0; i--) {
+      const sc = scents[i]; sc.age += dt / 1000;
+      sc.strength = Math.max(0, 1 - sc.age / sc.life);
+      if (sc.strength <= 0) { removeScent(sc); continue; }
+      for (const m of sc.motes) {
+        const u = m.userData; u.h += u.v * dt / 1000; if (u.h > 10) { u.h = 0; u.a = Math.random() * Math.PI * 2; }
+        const f = 1 - u.h / 10; m.position.set(sc.x + Math.cos(u.a + u.h * 0.4) * u.r, 0.3 + u.h, sc.z + Math.sin(u.a + u.h * 0.4) * u.r);
+        m.scale.setScalar(Math.max(0.05, f * sc.strength)); m.visible = sc.strength > 0.03;
+      }
+      sc.stain.material.opacity = 1; sc.stain.scale.setScalar(0.6 + 0.4 * sc.strength);
+    }
     renderer.render(scene, camera);
   }
   resize();
-  return { scene, camera, renderer, controls, base: disc, dome, droplets, addDroplet, removeDroplet, pick, sweepShadow, ripple, setFly, render, resize };
+  return { scene, camera, renderer, controls, base: disc, dome, droplets, addDroplet, removeDroplet, scents, addScent, removeScent, smellAt, smellGradient, pick, sweepShadow, ripple, setFly, render, resize, DOME_H };
 }

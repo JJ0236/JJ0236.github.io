@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cloche — A Fly Brain Under Glass — joshhicks.info</title>
-  <meta name="description" content="A fruit fly under a glass dome whose brain is the FlyWire connectome: 139,255 neurons and 2.7 million connections simulated live in your browser. Feed it sugar, spoil it with bitter, pass a shadow over the glass, poke it, and watch the reaction travel from sensory neurons to motor neurons." />
+  <meta name="description" content="A fruit fly under a glass dome whose brain is the FlyWire connectome: 139,255 neurons and 2.7 million connections simulated live in your browser. Feed it, shade it, poke it, puff smells at it, and watch its mushroom body learn which smells mean sugar and which mean bitter." />
   <meta property="og:title" content="Cloche — A Fly Brain Under Glass" />
-  <meta property="og:description" content="A fruit fly under glass, run by its real connectome. 139,255 neurons simulated live in your browser. Feed it, shade it, poke it." />
+  <meta property="og:description" content="A fruit fly under glass, run by its real connectome. 139,255 neurons simulated live in your browser. Feed it, shade it, poke it, teach it which smells mean sugar." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://joshhicks.info/cloche/" />
   <meta property="og:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
@@ -67,6 +67,19 @@
     .chips button .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
     .chips button[data-mode="sugar"] .dot { background: var(--sugar); }
     .chips button[data-mode="bitter"] .dot { background: var(--bitter); }
+    .chips button[data-mode="fruit"] .dot { background: #C97A4A; }
+    .chips button[data-mode="vinegar"] .dot { background: #A8B86A; }
+    .memory { margin-top: 4px; }
+    .memory .row { display: grid; grid-template-columns: 58px 1fr 52px; align-items: center; gap: 8px; margin: 6px 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; }
+    .memory .name { color: var(--text); }
+    .memory .bar { position: relative; height: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .memory .bar::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--dim); }
+    .memory .fill { position: absolute; top: 0; bottom: 0; background: var(--good); }
+    .memory .fill.neg { background: var(--bad); }
+    .memory .val { color: var(--muted); text-align: right; }
+    .memory .val.like { color: var(--good); } .memory .val.dislike { color: var(--bad); }
+    .btn-sub { width: 100%; padding: 6px; margin-top: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; cursor: pointer; }
+    .btn-sub:hover { color: var(--text); border-color: var(--ink-mid); }
     .chips .sep { width: 1px; background: var(--border); margin: 2px 2px; }
     .viewport-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 0.68rem; color: rgba(255,255,255,0.38); pointer-events: none; white-space: nowrap; z-index: 4; background: rgba(16,19,24,0.7); backdrop-filter: blur(6px); padding: 5px 13px; border-radius: 20px; transition: opacity 0.4s; }
     .viewport-hint.fade { opacity: 0; }
@@ -126,6 +139,9 @@
       <button data-mode="sugar" class="active" title="Click the base to place a drop of sugar water"><span class="dot"></span>Sugar</button>
       <button data-mode="bitter" title="Click the base, or a sugar drop, to add quinine"><span class="dot"></span>Bitter</button>
       <span class="sep"></span>
+      <button data-mode="fruit" title="Puff a fruit smell onto the base (Or22a, Or43b, Or42a, Or82a, Or7a receptors)"><span class="dot"></span>Fruit</button>
+      <button data-mode="vinegar" title="Puff a vinegar smell onto the base (Or42b, Or92a receptors)"><span class="dot"></span>Vinegar</button>
+      <span class="sep"></span>
       <button data-act="shadow" title="Pass a shadow over the dome (or shift-drag across the glass)">Shadow</button>
       <button data-act="poke" title="Poke the fly (or click on it)">Poke</button>
     </div>
@@ -161,14 +177,29 @@
         <div><span class="k" data-group="bitter">Bitter neurons</span><span class="v" id="rBitter">–</span></div>
         <div><span class="k" data-group="JO">Johnston's organ</span><span class="v" id="rJO">–</span></div>
         <div><span class="k" data-group="LPLC2">Looming detectors</span><span class="v" id="rLoom">–</span></div>
+        <div><span class="k" data-group="fruit">Fruit receptors</span><span class="v" id="rFruit">–</span></div>
+        <div><span class="k" data-group="vinegar">Vinegar receptors</span><span class="v" id="rVinegar">–</span></div>
+        <div><span class="k" data-group="KC">Kenyon cells firing</span><span class="v" id="rKC">–</span></div>
+        <div><span class="k" data-group="DN_L">Descending, left / right</span><span class="v" id="rDN">–</span></div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Memory <span id="memMeta">no synapses changed</span></div>
+      <div class="memory" id="memory">
+        <div class="row"><span class="name">Fruit</span><span class="bar"><span class="fill" id="memFruitBar"></span></span><span class="val" id="memFruitVal">unknown</span></div>
+        <div class="row"><span class="name">Vinegar</span><span class="bar"><span class="fill" id="memVinegarBar"></span></span><span class="val" id="memVinegarVal">unknown</span></div>
+      </div>
+      <div class="ctrl-hint" style="margin-top:8px">Read straight from the mushroom body: how far this smell's Kenyon-cell synapses onto avoidance neurons have been weakened by reward, against those onto approach neurons weakened by punishment. Feed it sugar while a smell is on the base and it learns to like the smell; bitter, and it learns to avoid it. Saved in this browser.</div>
+      <button class="btn-sub" id="forget">Forget everything</button>
     </div>
 
     <div class="panel">
       <div class="panel-title">What is real</div>
       <div class="blurb">
-        <p><b>Real:</b> the wiring. Every proofread neuron of an adult female <i>Drosophila</i> brain, every connection of five or more synapses, the sign and strength of each one, and the integrate-and-fire dynamics from Shiu et al., plus one small addition: a little spike-frequency adaptation, so a loop that has been driven hard settles instead of ringing forever. The reflexes fall out of that: sugar on the labellum drives MN9 and the proboscis extends, bitter cancels it, a looming shadow fires the giant fibre, a poke drives the descending neurons that answer the antennae.</p>
-        <p><b>Staged:</b> the body. There is no muscle model. Motor and descending firing rates are smoothed and mapped onto a rigged low-poly fly. Walking to a droplet is a small hand-written controller with a hunger clock. The connectome decides what the fly does; the page decides how that looks.</p>
+        <p><b>Real:</b> the wiring. Every proofread neuron of an adult female <i>Drosophila</i> brain, every connection of five or more synapses, the sign and strength of each one, and the integrate-and-fire dynamics from Shiu et al. The reflexes fall out of that: sugar drives MN9 and the proboscis extends, bitter cancels it, a shadow fires the giant fibre, a poke drives descending neurons. Smells go in through the real receptor neurons and come out as a sparse, smell-specific set of Kenyon cells. Learning is the fly's own rule: dopamine neurons of one mushroom-body compartment weaken the Kenyon-cell synapses onto that compartment's output neuron, reward on the avoidance side, punishment on the approach side.</p>
+        <p><b>Added to the model:</b> a little spike-frequency adaptation so driven loops settle; a brain-wide activity ceiling; the antennal lobe's local neurons forced inhibitory, as they are in every real fly, where the data left their transmitter unpredicted; and a quiet resting hum in the sensory neurons so the brain is never silent.</p>
+        <p><b>Staged:</b> the body. No muscle model. Motor and descending firing rates are smoothed onto a rigged low-poly fly. It walks when its descending neurons fire and turns toward the busier side; it heads up a smell's gradient when its mushroom body says like and away when it says avoid; the walk to a visible droplet, the flights, and the hunger clock are hand-written. The connectome decides what the fly does; the page decides how that looks.</p>
       </div>
     </div>
 

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { decodeBrain, CLASS_NAMES } from '../cloche/data.js';
-import { createBrain, DT, W_IN_MV, ADAPT } from '../cloche/brain.js';
+import { createBrain as createBrainRaw, DT, W_IN_MV, ADAPT, PLAST, MODULATOR_SCALE } from '../cloche/brain.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(here, '..', 'cloche', 'data');
@@ -24,6 +24,7 @@ console.log('brain.bin');
 const buf = readFileSync(join(dataDir, 'brain.bin'));
 const data = decodeBrain(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
 const groups = JSON.parse(readFileSync(join(dataDir, 'groups.json'), 'utf8'));
+const createBrain = (d, o = {}) => createBrainRaw(d, { modulatory: groups.modulatory, ...o });
 ok('neuron count', data.n === 139255, String(data.n));
 ok('edge count', data.e === 2700513, String(data.e));
 let mono = true, inRange = true, sorted = true;
@@ -39,7 +40,7 @@ ok('targets in range', inRange);
 ok('rows sorted', sorted);
 let zeroW = 0; for (let k = 0; k < data.e; k++) if (data.weights[k] === 0) zeroW++;
 ok('no zero weights', zeroW === 0, String(zeroW));
-const need = ['sugar', 'bitter', 'MN9', 'MN6', 'GF', 'DNa01', 'DNa02', 'LC4', 'LPLC2', 'JO', 'aDN', 'groom'];
+const need = ['modulatory', 'sugar', 'bitter', 'MN9', 'MN6', 'GF', 'DNa01', 'DNa02', 'LC4', 'LPLC2', 'JO', 'aDN', 'groom', 'fruit', 'vinegar', 'KC', 'MBON_approach', 'MBON_avoid', 'PAM', 'PPL1', 'APL', 'DN_L', 'DN_R', 'reward_DAN', 'punish_DAN'];
 for (const k of need) ok(`group ${k}`, Array.isArray(groups[k]) && groups[k].length > 0, String(groups[k]?.length));
 ok('MN9 is a pair', groups.MN9.length === 2);
 ok('GF is a pair', groups.GF.length === 2);
@@ -54,7 +55,7 @@ ok('sugar GRNs are excitatory', groups.sugar.every(i => excOut(i) > 0));
 
 // ---- B. dynamics -----------------------------------------------------------
 const SUGAR_HZ = 200;   // the notebook default in Shiu et al.; 100 Hz gives ~10 Hz MN9 at the ≥5 cutoff
-console.log(`dynamics (dt ${DT} ms, W_IN ${W_IN_MV} mV, adaptation ${ADAPT.jump} mV / ${ADAPT.tau} ms, sugar drive ${SUGAR_HZ} Hz)`);
+console.log(`dynamics (dt ${DT} ms, W_IN ${W_IN_MV} mV, adaptation ${ADAPT.jump} mV / ${ADAPT.tau} ms, modulators ×${MODULATOR_SCALE}, sugar drive ${SUGAR_HZ} Hz)`);
 const ms = m => Math.round(m / DT);
 const run = (brain, m) => { let c = 0; for (let t = 0; t < m; t += 5) c += brain.step(ms(5)).length; return c; };
 const W = 980;   // rate window, ms (just under the one-second ring)
@@ -113,6 +114,56 @@ brain.clearAll();
 run(brain, 1000);
 const tail = run(brain, 500);
 ok('quiet within a second of sugar ending', tail === 0 && brain.activeCount === 0, `${tail} spikes in the next 500 ms, active ${brain.activeCount}`);
+
+// ---- C. olfaction and learning --------------------------------------------
+console.log('olfaction and learning');
+const MB = [...groups.MBON_approach, ...groups.MBON_avoid];
+const kcSet = new Set(groups.KC);
+{
+  let bad = 0;
+  for (const i of groups.APL) { let pos = 0; for (let k = data.offsets[i]; k < data.offsets[i + 1]; k++) if (data.weights[k] > 0) pos++; bad += pos; }
+  ok('APL is inhibitory', bad === 0);
+  ok('teaching map present', groups.teach && Object.keys(groups.teach).length > 200 && groups.reward_DAN.length > 100 && groups.punish_DAN.length >= 10, `${Object.keys(groups.teach || {}).length} DANs, ${groups.reward_DAN?.length} reward, ${groups.punish_DAN?.length} punish`);
+}
+const sniffKCs = (br, set, hz = 100, ms = 1000) => { br.stimulate(set, hz); const c = new Set(); let spikes = 0; for (let t = 0; t < ms; t += 5) for (const i of br.step(50)) { spikes++; if (kcSet.has(i)) c.add(i); } br.stimulate(set, 0); return { kcs: c, spikes }; };
+{
+  const br = createBrain(data, { seed: 3 });
+  const f = sniffKCs(br, groups.fruit); run(br, 3000);
+  const v = sniffKCs(br, groups.vinegar); run(br, 3000);
+  const fPct = f.kcs.size / groups.KC.length * 100, vPct = v.kcs.size / groups.KC.length * 100;
+  ok('smells recruit sparse Kenyon cells', f.kcs.size >= 20 && fPct < 6 && v.kcs.size >= 20 && vPct < 6, `fruit ${f.kcs.size} (${fPct.toFixed(1)} %), vinegar ${v.kcs.size} (${vPct.toFixed(1)} %)`);
+  let ov = 0; for (const k of f.kcs) if (v.kcs.has(k)) ov++;
+  ok('two smells are distinct', ov < 0.15 * Math.min(f.kcs.size, v.kcs.size), `${ov} shared`);
+  ok('a smell does not ignite the brain', f.spikes < 60000 && v.spikes < 100000, `fruit ${f.spikes}, vinegar ${v.spikes} spikes/s`);
+  const tail = run(br, 1000);
+  ok('quiet after the smell', tail === 0, `${tail} spikes`);
+}
+{
+  const br = createBrain(data, { seed: 3 }); br.enablePlasticity(groups.KC, MB, groups.teach);
+  const v = sniffKCs(br, groups.vinegar); run(br, 5000);
+  const f = sniffKCs(br, groups.fruit); run(br, 5000);
+  br.stimulate(groups.reward_DAN, 20); br.stimulate(groups.fruit, 100); run(br, 6000); br.clearAll(); run(br, 500);
+  const fa = br.plasticSummary(groups.MBON_avoid, f.kcs), fp = br.plasticSummary(groups.MBON_approach, f.kcs);
+  const va = br.plasticSummary(groups.MBON_avoid, v.kcs), vp = br.plasticSummary(groups.MBON_approach, v.kcs);
+  ok('reward weakens the smell\'s avoidance synapses', fa < 0.7 && fp > 0.9, `fruit→avoid ${fa.toFixed(2)}, fruit→approach ${fp.toFixed(2)}`);
+  ok('the other smell is untouched', va > 0.95 && vp > 0.95, `vinegar→avoid ${va.toFixed(2)}, →approach ${vp.toFixed(2)}`);
+  const state = br.getPlasticState();
+  const br2 = createBrain(data, { seed: 3 }); br2.enablePlasticity(groups.KC, MB, groups.teach); br2.setPlasticState(state);
+  ok('learned synapses survive save and load', Math.abs(br2.plasticSummary(groups.MBON_avoid, f.kcs) - fa) < 0.002 && br2.changedEdges === state.length / 2, `${state.length / 2} synapses`);
+}
+{
+  const br = createBrain(data, { seed: 3 }); br.enablePlasticity(groups.KC, MB, groups.teach);
+  const f = sniffKCs(br, groups.fruit); run(br, 5000);
+  br.stimulate(groups.punish_DAN, 20); br.stimulate(groups.fruit, 100); run(br, 6000); br.clearAll(); run(br, 500);
+  const fa = br.plasticSummary(groups.MBON_avoid, f.kcs), fp = br.plasticSummary(groups.MBON_approach, f.kcs);
+  ok('punishment weakens the approach synapses', fp < 0.9 && fa > 0.95, `fruit→approach ${fp.toFixed(2)}, fruit→avoid ${fa.toFixed(2)}`);
+}
+{
+  const sens = []; for (let i = 0; i < data.n; i++) if (data.cls[i] === CLASS_NAMES.indexOf('sensory')) sens.push(i);
+  const br = createBrain(data, { seed: 3 }); br.background(sens, 0.3);
+  const per = []; for (let k = 0; k < 4; k++) per.push(run(br, 1000));
+  ok('resting hum is stable', per.every(x => x > 500 && x < 20000) && Math.max(...per) < 3 * Math.min(...per), `spikes/s ${per.join(' ')}`);
+}
 
 const a = createBrain(data, { seed: 3 }); a.stimulate(groups.sugar, SUGAR_HZ);
 const b = createBrain(data, { seed: 3 }); b.stimulate(groups.sugar, SUGAR_HZ);

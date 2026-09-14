@@ -333,3 +333,95 @@ Built and verified the same day. What changed against the design above:
   → droplet shrinks; bitter on the drop → MN9 0 → drop rejected, fly walks
   off; shadow → giant fibre → jump; poke → grooming DNs 65 Hz → grooming.
   No console errors. Phone layout at 400 px checked.
+
+## Revision, 2026-09-14 (evening): think, learn, and do
+
+Josh asked for the fly to think, learn and do more, chose the real options
+when asked, and asked for it pushed live. Decisions and what the data forced.
+
+### What was added
+
+- **Smells.** Two chips, Fruit and Vinegar, puff a scent onto the base: a
+  stain with rising motes, a Gaussian cloud (σ 9 mm) that fades over two
+  minutes. The fly smells through its real receptor neurons: fruit is the
+  DM2, VM2, VM7d, VA6, DL5 and DC1 glomeruli (265 ORNs), vinegar is DM1 and
+  VA2 (135). Drive is 100 Hz scaled by the cloud's intensity at the fly.
+  Each smell recruits about 2.3 % of the 5,177 Kenyon cells and the two
+  sets share one cell: a sparse, smell-specific code, as in the animal.
+- **Learning is the fly's own rule.** Kenyon-cell → output-neuron synapses
+  are depressed when the Kenyon cell fired recently (eligibility, τ 2 s)
+  and dopamine reaches that output neuron's compartment (τ 200 ms). Which
+  dopamine neurons teach which output neurons is the Aso et al. 2014
+  compartment map, written into the build by type name: PAM reward neurons
+  onto the glutamatergic avoidance-driving MBONs (01–07), PPL1 punishment
+  neurons onto the approach-driving MBONs (11–18). Sugar while a smell is
+  present drives the reward neurons at 20 Hz; bitter drives punishment.
+  Dopamine per output neuron is normalised by the number of neurons
+  teaching it, so ten PPL1 cells teach as strongly as 232 PAM cells. One
+  feeding takes a smell's avoidance synapses to ~0.4 of naive; the other
+  smell is untouched (1.00). Punishment takes approach synapses to ~0.7.
+- **Memory panel** reads the synapses directly: for the Kenyon cells each
+  smell has recruited, how far their synapses onto avoidance neurons have
+  been weakened minus how far those onto approach neurons have. Positive
+  is "likes", negative "avoids". The bias also steers the body: a liked
+  smell pulls the heading up its gradient, a disliked one pushes it away.
+- **Always-on brain.** Every sensory neuron fires at 0.3 Hz in the
+  background (a sparse Poisson sampler, O(events) per step), about 5,000
+  spikes a second and 4,000 active neurons at rest. Exploration pace comes
+  from the mean rate of the 1,305 descending neurons and turning from their
+  left–right asymmetry, with the DNa02 steering pair weighted extra; a
+  wander term keeps the fly moving when they are quiet, which at this
+  background they mostly are.
+- **Flight bursts.** Every 35–85 s, when idle, a 3–4 s Catmull-Rom loop
+  around the dome with beating wings. Body only; disclosed.
+- **Persistence.** Learned synapses (sparse list of edge and multiplier),
+  each smell's Kenyon-cell set and hunger are saved to localStorage every
+  15 s and on page hide; about 1.4 KB after one lesson. A Forget button
+  resets the mushroom body.
+
+### What the data forced
+
+- **The antennal lobe's local neurons had no transmitter prediction** (99
+  of 159 unpredicted, some predicted cholinergic) and the build treated
+  unpredicted as excitatory. That turned the first olfactory relay into a
+  runaway loop: any smell, at a tenth of the taste drive, lit 53 % of the
+  Kenyon cells and 470,000 spikes a second, identically for every odour.
+  These neurons are GABAergic or glutamatergic in every published account
+  (Chou et al. 2010), so their sign is forced negative. Ignition gone.
+  19,658 neurons overall have no prediction; only this family is corrected.
+- **Neuromodulators were fast excitation.** After a smell the central
+  complex (PFR, hΔ, PFN, FR1) rang at over 100 Hz per cell; most of them
+  use dopamine or serotonin, which act through slow receptors. Their
+  synaptic effect is scaled to a tenth. That alone cleared the after-state
+  in some seeds but not all.
+- **Adaptation is now rate-dependent.** Each spike adds 0.4 mV of
+  adaptation times (1 + a / 6 mV), so cells at 150 Hz self-limit while
+  MN9 at 35 Hz barely notices. This cleared every after-state without
+  touching the reflexes. A slow homeostatic ceiling (400 spikes per 10 ms
+  averaged over 600 ms, 3 mV per excess 100) stays as a safety net; a
+  faster, lower ceiling was tried and rejected because it silenced MN9
+  whenever a smell was present.
+- **Plasticity is on KC → MBON edges only** (21,438 of them). Delivery for
+  Kenyon-cell spikes multiplies by a per-edge Float32; everything else is
+  untouched, so the hot loop cost is one branch per spiking source.
+
+### Numbers
+
+- Verify: 56 checks. Sugar → MN9 33 Hz, bitter 0, GF 7 ms, grooming DNs
+  53 Hz; fruit 98–115 Kenyon cells, vinegar ~120, one shared; no spikes one
+  second after a smell; reward → avoidance synapses 0.40, other smell
+  1.00; punishment → approach synapses 0.70; resting hum stable at ~5,000
+  spikes a second over four seconds; learned state survives save and load.
+- Cost: rest ~0.7 s of wall per biological second in node; sugar alone
+  ~0.5; smell + sugar + reward ~3 s (14,000 active neurons). The page
+  shows the measured speed; in the headless browser it read 1.0× at rest
+  and 0.2–0.3× while learning. Never skips steps.
+- Headless end-to-end: fruit puff + sugar drop → walk → tasting → 68
+  synapses changed within 3 s → "likes" → saved 1.4 KB → survives reload →
+  flight → vinegar puff recruits Kenyon cells at 200–330 a second.
+
+### Cut
+
+Sleep and wake (not chosen). Water (still no class). Live MBON firing as
+the valence readout: fruit barely drives the output neurons in this model
+(0.3 Hz), so the synapses themselves are the honest readout.
