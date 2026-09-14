@@ -86,7 +86,7 @@ async function main() {
     onEvent(e) {
       if (e.type === 'tick') { e.fly.spikeWin = e.fly.spikeWin || []; const now = performance.now(); e.fly.spikeWin.push([now, e.t.spikes.length]); while (e.fly.spikeWin.length && now - e.fly.spikeWin[0][0] > 1000) e.fly.spikeWin.shift(); if (e.fly === pop.selected && view) view.onSpikes(e.t.spikes); }
       else if (e.type === 'spawn') note(`${e.fly.name} ${e.fly.teneral ? 'climbed out of its pupa' : 'arrived'}`);
-      else if (e.type === 'remove') note(`${e.fly.name} flew out of the window`);
+      else if (e.type === 'remove' && e.reason !== 'reset') note(`${e.fly.name} flew out of the window`);
       else if (e.type === 'mating') { note(`${e.male.name} is mating with ${e.female.name}`); say('hear', 4000); }
       else if (e.type === 'mated') note(`${e.fly.name} is now mated`);
       else if (e.type === 'egg') { note(`${e.fly.name} laid an egg`); say('egg', 3000); }
@@ -95,13 +95,33 @@ async function main() {
   });
 
   // ---- population from save or fresh
-  const roster = saved?.flies || [];
-  if (roster.length) { for (const r of roster.slice(0, maxFlies)) if (datasets[r.sex]) pop.spawn(r.sex, r.x, r.z, { state: r, silent: true }); }
-  if (!pop.flies.length) {
+  function freshPopulation() {
     pop.spawn('female', -20, 20);
     if (maxFlies >= 2 && datasets.male) pop.spawn('male', 30, -10);
   }
+  const roster = saved?.flies || [];
+  if (roster.length) { for (const r of roster.slice(0, maxFlies)) if (datasets[r.sex]) pop.spawn(r.sex, r.x, r.z, { state: r, silent: true }); }
+  if (!pop.flies.length) freshPopulation();
   lifecycle.restore(saved?.lifecycle);
+
+  // ---- start over: everything gone, a new windowsill
+  let resetArmed = 0;
+  function resetAll() {
+    for (const f of pop.flies.slice()) pop.remove(f, 'reset');
+    lifecycle.clear();
+    for (const d of world.droplets.slice()) world.removeDroplet(d);
+    for (const sc of world.scents.slice()) world.removeScent(sc);
+    try { localStorage.removeItem(SAVE_KEY); } catch {}
+    log.replaceChildren();
+    freshPopulation();
+    note('started over');
+    refreshMemory(); updateAddButtons();
+  }
+  $('reset').addEventListener('click', () => {
+    const now = performance.now();
+    if (now - resetArmed < 4000) { resetArmed = 0; $('reset').textContent = 'Start over'; resetAll(); }
+    else { resetArmed = now; $('reset').textContent = 'Click again to wipe everything'; setTimeout(() => { if (performance.now() - resetArmed >= 3900) $('reset').textContent = 'Start over'; }, 4200); }
+  });
 
   // ---- stimuli helpers on the selected fly
   function shadow(dx = 1, dz = 0.3) { const s = pop.selected; world.sweepShadow(dx, dz, s ? s.body.position.x : 0, s ? s.body.position.z : 0); pop.shadowAll(dx, dz); say('loom', 1500); }
@@ -227,7 +247,7 @@ async function main() {
   $('loading').classList.add('hide');
   updateAddButtons();
   requestAnimationFrame(frame);
-  window.cloche = { pop, world, lifecycle, datasets, shadow, poke, save, get selected() { return pop.selected; }, get view() { return view; } };
+  window.cloche = { pop, world, lifecycle, datasets, shadow, poke, save, resetAll, get selected() { return pop.selected; }, get view() { return view; } };
 }
 
 main().catch(err => { console.error(err); const s = $('loadStage'); if (s) { s.textContent = 'Something broke.'; $('loadSub').textContent = String(err.message || err); } });

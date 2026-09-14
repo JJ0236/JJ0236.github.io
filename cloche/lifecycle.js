@@ -97,5 +97,11 @@ export function createLifecycle(world, templates = {}) {
     for (const [x, z, t] of st.larvae || []) { hatch({ x, z, mesh: new THREE.Group() }); const l = larvae[larvae.length - 1]; if (l) l.t = t; }
     for (const [x, z, t] of st.pupae || []) { pupate({ x, z, mesh: new THREE.Group() }); const p = pupae[pupae.length - 1]; if (p) p.t = t; }
   }
-  return { layEgg, update, counts, state, restore, eggs, larvae, pupae };
+  function clear() {
+    for (const e of eggs) world.scene.remove(e.mesh);
+    for (const l of larvae) world.scene.remove(l.mesh);
+    for (const p of pupae) world.scene.remove(p.mesh);
+    eggs.length = 0; larvae.length = 0; pupae.length = 0;
+  }
+  return { layEgg, update, counts, state, restore, clear, eggs, larvae, pupae };
 }
