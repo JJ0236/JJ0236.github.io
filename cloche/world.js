@@ -5,6 +5,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+export async function loadGltf(url) { const g = await new GLTFLoader().loadAsync(url); return g.scene; }
 
 export const COUNTER = { x0: -125, x1: 125, z0: -68, z1: 72 };
 export const WALK = { x0: -118, x1: 118, z0: -62, z1: 66 };
@@ -163,6 +166,23 @@ export function createWorld(canvas) {
   // folded cloth
   const cloth = mesh(new THREE.BoxGeometry(44, 9, 34), new THREE.MeshStandardMaterial({ map: clothTex(), roughness: 0.9 })); cloth.position.set(-96, 4.5, -44);
   objects.push({ name: 'cloth', kind: 'cloth', mesh: cloth, height: () => 0, scents: [], food: [], eggSite: null, obstacle: { x: -96, z: -44, r: 28 } });
+  // fruit bowl (only drawn by the Blender set)
+  objects.push({ name: 'bowl', kind: 'bowl', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: 100, z: 45, strength: 0.35, sigma: 22 }], food: [], eggSite: null, obstacle: { x: 100, z: 45, r: 31 } });
+  const procedural = [counter, front, wall, win, banana, bananaStem, plate, rim, jar, jam, lid, drip, puddle, cloth, ...slicesMeshes(), ...scene.children.filter(c => c.geometry && c.geometry.type === 'TorusGeometry' && c !== rim)];
+  let setScene = null, pickMeshes = null;
+  function applySet(gltfScene) {
+    for (const m of procedural) m.visible = false;
+    setScene = gltfScene; scene.add(gltfScene);
+    pickMeshes = [];
+    gltfScene.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = !/window_glass|jar$/.test(o.name); o.receiveShadow = true;
+      if (o.material?.map) o.material.map.anisotropy = 8;
+      if (o.name === 'window_glass') { o.material.transparent = true; o.material.opacity = 0.18; o.material.transmission = 0; o.material.depthWrite = false; }
+      if (o.name === 'jar') { o.material.transparent = true; o.material.opacity = 0.35; o.material.transmission = 0.6; o.material.thickness = 1.5; o.material.roughness = 0.05; o.material.depthWrite = false; }
+      if (/^(counter|banana|plate|slice_1|slice_2|cloth|sill)$/.test(o.name)) pickMeshes.push(o);
+    });
+  }
 
   // ---- height, obstacles, food, scent
   function heightAt(x, z) { let y = 0; for (const o of objects) { const h = o.height(x, z); if (h > y) y = h; } return y; }
@@ -238,7 +258,7 @@ export function createWorld(canvas) {
     ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (flyObjects.length) { const h = ray.intersectObjects(flyObjects, true); if (h.length) { let o = h[0].object; while (o && !o.userData.fly) o = o.parent; return { hitFly: o?.userData.fly || null, hitBase: false, point: h[0].point }; } }
-    const h = ray.intersectObjects([counter, banana, plate, ...slicesMeshes()], false);
+    const h = ray.intersectObjects(pickMeshes || [counter, banana, plate, ...slicesMeshes()], false);
     if (h.length) { const p = h[0].point; if (p.x >= COUNTER.x0 && p.x <= COUNTER.x1 && p.z >= COUNTER.z0 && p.z <= COUNTER.z1) return { hitFly: null, hitBase: true, point: p }; }
     return { hitFly: null, hitBase: false, point: null };
   }
@@ -259,5 +279,5 @@ export function createWorld(canvas) {
     renderer.render(scene, camera);
   }
   resize();
-  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, render, resize, WALK };
+  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, render, resize, WALK };
 }

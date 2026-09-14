@@ -13,7 +13,7 @@ export function budget() {
   return phone ? 1 : Math.max(1, Math.min(4, cores - 1));
 }
 
-export function createPopulation({ world, lifecycle, datasets, onSelect, onEvent }) {
+export function createPopulation({ world, lifecycle, datasets, templates = {}, onSelect, onEvent }) {
   const flies = [];
   let nextId = 1, selected = null;
   const foods = [];   // droplets + food sites, as the body's controller sees them
@@ -29,7 +29,7 @@ export function createPopulation({ world, lifecycle, datasets, onSelect, onEvent
     const ds = datasets[sex];
     if (!ds) return null;
     const id = nextId++;
-    const body = createFly({ sex, teneral });
+    const body = createFly({ sex, teneral, template: templates[sex] || null });
     body.setPosition(x, z, Math.random() * 6.28);
     if (state?.hunger !== undefined) body.hunger = state.hunger; else body.hunger = teneral ? 0.7 : 0.4 + Math.random() * 0.3;
     const fly = {

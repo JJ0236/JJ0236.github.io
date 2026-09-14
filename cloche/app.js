@@ -3,7 +3,7 @@
 import { decodeBrain } from './data.js';
 import { RATE_ORDER, RATE_INDEX, SAVE_VERSION } from './groups-order.js';
 import { createBrainView } from './brainview.js';
-import { createWorld } from './world.js';
+import { createWorld, loadGltf } from './world.js';
 import { createLifecycle } from './lifecycle.js';
 import { createPopulation, budget } from './flies.js';
 
@@ -56,8 +56,13 @@ async function main() {
   } catch (err) { stage.textContent = 'Could not load the connectomes.'; $('loadSub').textContent = String(err.message || err); return; }
   stage.textContent = 'Waking the neurons…';
 
+  // Blender models: the set, the two fly bodies, the brood. The page works without them.
+  stage.textContent = 'Setting the table…';
+  const assets = {};
+  await Promise.all(Object.entries({ set: 'set.glb', flyF: 'fly_female.glb', flyM: 'fly_male.glb', egg: 'egg.glb', larva: 'larva.glb', pupa: 'pupa.glb' }).map(async ([k, f]) => { try { assets[k] = await loadGltf('./assets/' + f); } catch (e) { console.warn('cloche: model failed', f, e); } }));
   const world = createWorld($('three-canvas'));
-  const lifecycle = createLifecycle(world);
+  if (assets.set) world.applySet(assets.set);
+  const lifecycle = createLifecycle(world, { egg: assets.egg, larva: assets.larva, pupa: assets.pupa });
   const views = {};
   function viewFor(sex) { if (!views[sex]) views[sex] = createBrainView($('brain-canvas'), datasets[sex].data, datasets[sex].groups); return views[sex]; }
   let view = null;
@@ -68,7 +73,7 @@ async function main() {
   function note(text) { const d = document.createElement('div'); d.textContent = text; log.prepend(d); while (log.children.length > 8) log.lastChild.remove(); }
 
   const pop = createPopulation({
-    world, lifecycle, datasets,
+    world, lifecycle, datasets, templates: { female: assets.flyF, male: assets.flyM },
     onSelect(fly) {
       if (!fly) return;
       view = viewFor(fly.sex); view.resize();

@@ -7,7 +7,7 @@ export const STAGE_MS = { egg: 120000, larva: 360000, pupa: 240000 };
 export const MAX_EGGS = 12, MAX_LARVAE = 8, MAX_PUPAE = 6;
 const S = 2.8;   // drawn at the same scale as the flies
 
-export function createLifecycle(world) {
+export function createLifecycle(world, templates = {}) {
   const eggs = [], larvae = [], pupae = [];
   const eggGeo = new THREE.SphereGeometry(0.28, 10, 8);
   const eggMat = new THREE.MeshStandardMaterial({ color: '#F4F1E6', roughness: 0.55 });
@@ -19,8 +19,11 @@ export function createLifecycle(world) {
   function layEgg(x, z) {
     if (eggs.length >= MAX_EGGS) return null;
     const g = new THREE.Group();
-    const e = new THREE.Mesh(eggGeo, eggMat); e.scale.set(1, 0.9, 1.9); e.castShadow = true; g.add(e);
-    for (const s of [-1, 1]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), filMat); f.position.set(s * 0.12, 0.25, 0.55); f.rotation.x = -0.8; f.rotation.z = s * 0.4; g.add(f); }
+    if (templates.egg) { const m = templates.egg.clone(true); m.traverse(o => { if (o.isMesh) o.castShadow = true; }); g.add(m); }
+    else {
+      const e = new THREE.Mesh(eggGeo, eggMat); e.scale.set(1, 0.9, 1.9); e.castShadow = true; g.add(e);
+      for (const s of [-1, 1]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), filMat); f.position.set(s * 0.12, 0.25, 0.55); f.rotation.x = -0.8; f.rotation.z = s * 0.4; g.add(f); }
+    }
     g.scale.setScalar(S); g.rotation.y = Math.random() * 6.28;
     g.position.set(x, world.heightAt(x, z) + 0.25 * S, z);
     world.scene.add(g);
@@ -31,8 +34,14 @@ export function createLifecycle(world) {
     world.scene.remove(egg.mesh);
     if (larvae.length >= MAX_LARVAE) return;
     const g = new THREE.Group(); const segs = [];
-    for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), i === 0 ? larvaMat : larvaMat); m.position.z = -i * 0.3; m.castShadow = true; g.add(m); segs.push(m); }
-    const hooks = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 5), headMat); hooks.position.set(0, -0.06, 0.2); hooks.rotation.x = 1.2; g.add(hooks);
+    if (templates.larva) {
+      const m = templates.larva.clone(true); m.traverse(o => { if (o.isMesh) o.castShadow = true; }); g.add(m);
+      for (let i = 0; i < 9; i++) { const sg = m.getObjectByName('seg' + i); if (sg) segs.push(sg); }
+    }
+    if (!segs.length) {
+      for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), larvaMat); m.position.z = -i * 0.3; m.castShadow = true; g.add(m); segs.push(m); }
+      const hooks = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 5), headMat); hooks.position.set(0, -0.06, 0.2); hooks.rotation.x = 1.2; g.add(hooks);
+    }
     g.scale.setScalar(S * 0.5);
     world.scene.add(g);
     larvae.push({ x: egg.x, z: egg.z, heading: Math.random() * 6.28, t: 0, mesh: g, segs, phase: Math.random() * 6.28, home: { x: egg.x, z: egg.z }, turnT: 0 });
@@ -40,10 +49,12 @@ export function createLifecycle(world) {
   function pupate(l) {
     world.scene.remove(l.mesh);
     if (pupae.length >= MAX_PUPAE) return;
-    const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.6, 4, 10), pupaMat); m.rotation.x = Math.PI / 2; m.rotation.y = Math.random() * 6.28; m.castShadow = true;
+    let m, mat;
+    if (templates.pupa) { m = templates.pupa.clone(true); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.material = o.material.clone(); mat = o.material; } }); m.rotation.y = Math.random() * 6.28; }
+    else { mat = pupaMat.clone(); m = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.6, 4, 10), mat); m.rotation.x = Math.PI / 2; m.rotation.y = Math.random() * 6.28; m.castShadow = true; }
     m.scale.setScalar(S); m.position.set(l.x, world.heightAt(l.x, l.z) + 0.45 * S, l.z);
     world.scene.add(m);
-    pupae.push({ x: l.x, z: l.z, t: 0, mesh: m });
+    pupae.push({ x: l.x, z: l.z, t: 0, mesh: m, mat });
   }
 
   /** Advance everything; returns events: { type: 'eclose', x, z }. */
@@ -68,7 +79,7 @@ export function createLifecycle(world) {
       for (let k = 0; k < l.segs.length; k++) { const w = 0.85 + 0.25 * Math.sin(l.phase - k * 0.7); l.segs[k].scale.set(w, w, 1); }
       if (l.t >= STAGE_MS.larva) { larvae.splice(i, 1); pupate(l); }
     }
-    for (let i = pupae.length - 1; i >= 0; i--) { const p = pupae[i]; p.t += dtMs; const u = p.t / STAGE_MS.pupa; p.mesh.material = pupaMat; p.mesh.material.color.setStyle(u < 0.3 ? '#C9A46A' : u < 0.7 ? '#8C5A2B' : '#4E3418'); if (p.t >= STAGE_MS.pupa) { pupae.splice(i, 1); world.scene.remove(p.mesh); out.push({ type: 'eclose', x: p.x, z: p.z }); } }
+    for (let i = pupae.length - 1; i >= 0; i--) { const p = pupae[i]; p.t += dtMs; const u = p.t / STAGE_MS.pupa; if (p.mat) p.mat.color.setStyle(u < 0.3 ? '#C9A46A' : u < 0.7 ? '#8C5A2B' : '#4E3418'); if (p.t >= STAGE_MS.pupa) { pupae.splice(i, 1); world.scene.remove(p.mesh); out.push({ type: 'eclose', x: p.x, z: p.z }); } }
     return out;
   }
   function counts() { return { eggs: eggs.length, larvae: larvae.length, pupae: pupae.length }; }

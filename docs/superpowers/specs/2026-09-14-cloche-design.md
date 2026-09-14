@@ -568,3 +568,23 @@ node.
 - **Verify:** 93 checks, none failing, including the male brain and the
   female courtship groups (hearing → vpoDN reported as soft).
 - Blender is installed but unused: fruit, jar and cloth stay procedural.
+
+### Blender models, 2026-09-15
+
+`scripts/blender/cloche_assets.py` builds every model headlessly in
+Blender 5.1 and exports glTF into `cloche/assets/`: the set (counter,
+window, tiles, banana on the same curve world.js uses for climbing, plate
+with two apple slices, jam jar with jam, lid and drips, spilled juice, a
+cloth-simulated napkin, a fruit bowl with two oranges), a female and a
+male fly, an egg, a nine-segment larva and a pupa. Textures are generated
+with numpy and embedded, so there is no baking step; the whole build takes
+about a minute. The fly is exported as a node hierarchy whose pivot names
+(`body`, `head`, `rostrum`, `labella`, `labL/R`, `antL/R`, `abdomen`,
+`hip_/femur_/knee_{L,R}{1..3}`, `wingL/R`) are the rig contract; `fly.js`
+clones the model, records each pivot's rest rotation and animates offsets
+from it, so the same code drives the procedural fallback body. Pitfalls
+met: two flies built in one scene get suffixed node names (the first is
+removed before the second is built); meshes parented to freshly created
+empties must be built in the pivot's own frame, because Blender has not
+evaluated the empty's world matrix yet. The page loads the models in
+parallel with the brains and runs without them if any fail.
