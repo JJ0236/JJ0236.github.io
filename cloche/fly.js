@@ -131,6 +131,38 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
   }
   if (teneral) applyPale();
   const restRostrumX = rostrum.rotation.x, restHeadX = head.rotation.x, restAbdoX = abdoPiv.rotation.x;
+  // leg lengths in model units, and where each foot wants to stand relative to the root
+  const LF = template ? 1.0 : 0.95, LT = template ? 1.42 : 1.25;
+  const NOMINAL = [[1.2, 0, 1.0], [1.3, 0, 0.15], [1.15, 0, -0.8]];   // lateral, up, forward
+  for (const L of legs) {
+    L.foot = new THREE.Vector3(); L.planted = false; L.swing = null;
+    L.group = (L.index + (L.side > 0 ? 1 : 0)) % 2;
+    L.nom = new THREE.Vector3(L.side * NOMINAL[L.index][0], 0, NOMINAL[L.index][2]);
+  }
+  const _v = new THREE.Vector3(), _t = new THREE.Vector3(), _n = new THREE.Vector3(0, 1, 0), _f = new THREE.Vector3();
+  const smoothN = new THREE.Vector3(0, 1, 0);
+  let surf = { y: 0, nx: 0, ny: 1, nz: 0 };
+  let lastX = 0, lastZ = 0, velX = 0, velZ = 0;
+
+  /** Two-bone IK: put this leg's foot on `target` (world). */
+  function solveLeg(L, target) {
+    const hipP = L.hip.parent;
+    _t.copy(target); hipP.worldToLocal(_t); _t.sub(L.hip.position);
+    const s = L.side;
+    const psi = Math.atan2(-s * _t.z, s * _t.x);
+    const u = Math.max(0.3, Math.hypot(_t.x, _t.z)), v = Math.min(-0.08, _t.y);   // feet stay outboard and below the hip
+    let D = Math.hypot(u, v);
+    const dmax = (LF + LT) * 0.995, dmin = Math.abs(LF - LT) + 0.02;
+    if (D > dmax) D = dmax; if (D < dmin) D = dmin;
+    const alpha = Math.acos(Math.max(-1, Math.min(1, (LF * LF + D * D - LT * LT) / (2 * LF * D))));
+    const beta = Math.acos(Math.max(-1, Math.min(1, (LF * LF + LT * LT - D * D) / (2 * LF * LT))));
+    const phi = Math.atan2(v, u);
+    const thetaF = phi + alpha;
+    L.hip.rotation.y = psi;
+    L.fPiv.rotation.z = s * (thetaF + Math.PI / 2);
+    L.knee.rotation.z = -s * (Math.PI - beta);
+  }
+  function nominalFoot(L, out) { out.copy(L.nom); group.localToWorld(out); if (world?.surfaceAt) { const sf = world.surfaceAt(out.x, out.z, out.y + 30); out.y = sf.y; } return out; }
 
   // ---- state ----
   const rates = { MN9: 0, MN6: 0, GF: 0, groom: 0, DNa01: 0, DNa02: 0, DN_L: 0, DN_R: 0, DNa02_L: 0, DNa02_R: 0 };
@@ -236,7 +268,7 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
       const beat = Math.sin(flight.t * 1.1);
  for (const wg of wings) wg.piv.rotation.y = wg.restY + wg.side * (0.1 + 0.75 * beat);
       for (const L of legs) { L.knee.rotation.z += (L.restZ - L.side * 0.9 - L.knee.rotation.z) * 0.2; }
-      if (u >= 1) { flight = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 1.2; idleWalking = false; }
+      if (u >= 1) { flight = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 1.2; idleWalking = false; for (const L of legs) { L.planted = false; L.swing = null; } }
     } else if (jump) {
       jump.t += dtMs;
       const u = Math.min(1, jump.t / jump.dur);
@@ -245,7 +277,7 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
       group.position.y = jump.h * 4 * u * (1 - u) * FLY_SCALE / 2.8;
       body.rotation.x = -0.5 * Math.sin(u * Math.PI);
       for (const wg of wings) wg.piv.rotation.y = wg.restY + wg.side * (0.9 * Math.sin(u * Math.PI) + 0.35 * Math.sin(jump.t * 0.9));
-      if (u >= 1) { jump = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 0.8; idleWalking = false; }
+      if (u >= 1) { jump = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 0.8; idleWalking = false; for (const L of legs) { L.planted = false; L.swing = null; } }
     } else if (sm.groom > 25 && !feedingOn) {
       mode = 'grooming'; groomT += dt;
     } else if (pursuit && !feedingOn) {
@@ -307,24 +339,33 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
     }
     if (mode !== 'grooming') groomT = 0;
 
-    // ---- move ----
+    // ---- move: the real surface decides what is a wall ----
     if (speed > 0) {
-      x += Math.sin(heading) * speed * dt; z += Math.cos(heading) * speed * dt;
-      const r = Math.hypot(x, z); if (r > WALK_R) { x *= WALK_R / r; z *= WALK_R / r; }
+      const nx = x + Math.sin(heading) * speed * dt, nz = z + Math.cos(heading) * speed * dt;
+      const wk = w.walkable ? w.walkable(x, z, nx, nz, group.position.y + 30) : { ok: true };
+      if (wk.ok) { x = nx; z = nz; if (wk.s) surf = wk.s; }
+      else { heading += (Math.random() < 0.5 ? 1 : -1) * (0.9 + Math.random() * 0.8) * Math.min(1, dt * 12); speed = 0; if (pursuit && !pursuit.fly) { const p = pursuit; pursuit = null; p.arrive?.(); } }
       phase += dt * GAIT_HZ * (speed / 9);
       walking = Math.min(1, walking + dt * 8);
     } else walking = Math.max(0, walking - dt * 8);
+    velX = (x - lastX) / Math.max(dt, 1e-3); velZ = (z - lastZ) / Math.max(dt, 1e-3); lastX = x; lastZ = z;
     if (w.pushOut) { const p = w.pushOut({ x, z }); x = p.x; z = p.z; }
-    if (w.heightAt && !flight && !mount) {
-      const hy = w.heightAt(x, z);
-      surfaceY += (hy - surfaceY) * Math.min(1, dtMs / 120);
-      const ahead = w.heightAt(x + Math.sin(heading) * 2, z + Math.cos(heading) * 2);
-      pitch += (Math.atan2(ahead - hy, 2) * -0.8 - pitch) * Math.min(1, dtMs / 150);
-      group.position.y = surfaceY + (jump ? group.position.y : 0);
-      body.rotation.x = pitch;
+    if (!flight && !mount) {
+      if (w.surfaceAt) surf = w.surfaceAt(x, z, group.position.y + 30);
+      surfaceY += (surf.y - surfaceY) * Math.min(1, dtMs / 90);
+      const kN = Math.min(1, dtMs / 140);
+      smoothN.x += (surf.nx - smoothN.x) * kN; smoothN.y += (surf.ny - smoothN.y) * kN; smoothN.z += (surf.nz - smoothN.z) * kN; smoothN.normalize();
+      group.position.set(x, surfaceY + (jump ? group.position.y - surfaceY : 0), z);
+      // forward = heading projected onto the surface plane; up = the surface normal
+      _f.set(Math.sin(heading), 0, Math.cos(heading)); _f.addScaledVector(smoothN, -_f.dot(smoothN)).normalize();
+      group.up.copy(jump ? _n : smoothN);
+      group.lookAt(group.position.x + _f.x, group.position.y + _f.y, group.position.z + _f.z);
+      body.rotation.x = feedingOn ? -0.12 : 0;
+      body.position.y = feedingOn ? -0.08 : 0;
+    } else {
+      group.position.x = x; group.position.z = z;
+      group.up.copy(_n); group.rotation.set(0, heading, 0);
     }
-    group.position.x = x; group.position.z = z;
-    group.rotation.y = heading;
     if (flight || mount) return;
 
     // ---- pose ----
@@ -342,24 +383,39 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
       }
       abdoPiv.rotation.x += ((restAbdoX + (ovi > 0 ? 0.55 : 0)) - abdoPiv.rotation.x) * 0.08;
       if (ovi > 0) { ovi -= dtMs / 2200; if (ovi <= 0) ovi = 0; }
+      // ---- feet: each foot stays where it was planted until it has to step ----
+      group.updateMatrixWorld(true);
+      const scale = group.scale.x;
+      const spd = Math.hypot(velX, velZ);
+      const stepLen = (0.45 + 0.1 * Math.min(1, spd / 6)) * scale, lead = Math.min(0.45 * scale, spd * 0.1);
+      const swinging = [0, 0]; for (const L of legs) if (L.swing) swinging[L.group]++;
       for (const L of legs) {
-        const tripod = (L.index + (L.side > 0 ? 1 : 0)) % 2 === 0 ? 1 : -1;
-        const sw = Math.sin(phase * Math.PI * 2) * tripod;
-        const lift = Math.max(0, Math.cos(phase * Math.PI * 2) * tripod);
-        let hipY = L.restHipY + sw * 0.32 * walking;
-        let kneeZ = L.restZ - L.side * lift * 0.45 * walking;
-        let fz = L.restFz;
+        if (!L.planted) { nominalFoot(L, L.foot); L.planted = true; }
+        if (L.swing) {
+          L.swing.t += dtMs; const u = Math.min(1, L.swing.t / L.swing.dur);
+          L.foot.lerpVectors(L.swing.from, L.swing.to, u); L.foot.addScaledVector(smoothN, Math.sin(u * Math.PI) * 0.3 * scale);
+          if (u >= 1) { L.foot.copy(L.swing.to); L.swing = null; }
+        } else {
+          nominalFoot(L, _v);
+          const err = Math.hypot(_v.x - L.foot.x, _v.z - L.foot.z) + Math.abs(_v.y - L.foot.y) * 0.5;
+          const otherFree = swinging[1 - L.group] === 0;
+          if ((err > stepLen && otherFree) || err > 1.4 * stepLen) {
+            const to = _v.clone(); to.x += (velX / Math.max(1e-6, Math.hypot(velX, velZ) || 1)) * lead; to.z += (velZ / Math.max(1e-6, Math.hypot(velX, velZ) || 1)) * lead;
+            if (world?.surfaceAt) { const sf = world.surfaceAt(to.x, to.z, to.y + 30); to.y = sf.y; }
+            L.swing = { from: L.foot.clone(), to, t: 0, dur: 55 + 35 * (1 - Math.min(1, spd / 8)) }; swinging[L.group]++;
+          }
+        }
         if (mode === 'grooming' && L.index === 0) {
           const g = Math.sin(groomT * 2 * Math.PI * 3);
-          hipY = L.restHipY - L.side * (0.55 + 0.35 * g); fz = L.restFz - L.side * 0.6; kneeZ = L.restZ - L.side * (0.65 + 0.4 * g);
-        }
-        L.hip.rotation.y += (hipY - L.hip.rotation.y) * 0.5;
-        L.knee.rotation.z += (kneeZ - L.knee.rotation.z) * 0.5;
-        L.fPiv.rotation.z += (fz - L.fPiv.rotation.z) * 0.3;
+          L.hip.rotation.y += ((L.restHipY - L.side * (0.55 + 0.35 * g)) - L.hip.rotation.y) * 0.4;
+          L.fPiv.rotation.z += ((L.restFz - L.side * 0.6) - L.fPiv.rotation.z) * 0.4;
+          L.knee.rotation.z += ((L.restZ - L.side * (0.65 + 0.4 * g)) - L.knee.rotation.z) * 0.4;
+          L.planted = false;
+        } else solveLeg(L, L.foot);
       }
       const bob = mode === 'grooming' ? Math.sin(groomT * 2 * Math.PI * 3) * 0.12 : 0;
       head.rotation.x += (restHeadX + (mode === 'grooming' ? 0.35 : 0) + bob - head.rotation.x) * 0.3;
-      body.position.y = walking * Math.abs(tw) * 0.05;
+      body.position.y += walking * Math.abs(tw) * 0.04;
     }
   }
   function turnToward(target, dt, rate) {
@@ -378,7 +434,9 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
     set hold(v) { hold = !!v; }, get hold() { return hold; },
     oviposit() { ovi = 1; },
     set paleness(v) { paleness = v; applyPale(); }, get paleness() { return paleness; },
-    setPosition(nx, nz, h) { x = nx; z = nz; if (h !== undefined) heading = h; },
+    setPosition(nx, nz, h) { x = nx; z = nz; lastX = nx; lastZ = nz; if (h !== undefined) heading = h; for (const L of legs) { L.planted = false; L.swing = null; } },
+    get surface() { return surf; },
+    nudge(dx, dz) { x += dx; z += dz; lastX += dx; lastZ += dz; },
     setPursuit(p) { pursuit = p; }, get pursuit() { return pursuit; },
     stopFeeding() { if (feedingOn) { leaveDroplet(); mode = 'idle'; idleTimer = 0.5; } },
     get mode() { return mode; }, get hunger() { return hunger; }, set hunger(v) { hunger = v; },

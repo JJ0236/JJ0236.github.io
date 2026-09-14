@@ -24,8 +24,10 @@ export function createLifecycle(world, templates = {}) {
       const e = new THREE.Mesh(eggGeo, eggMat); e.scale.set(1, 0.9, 1.9); e.castShadow = true; g.add(e);
       for (const s of [-1, 1]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 4), filMat); f.position.set(s * 0.12, 0.25, 0.55); f.rotation.x = -0.8; f.rotation.z = s * 0.4; g.add(f); }
     }
-    g.scale.setScalar(S); g.rotation.y = Math.random() * 6.28;
-    g.position.set(x, world.heightAt(x, z) + 0.25 * S, z);
+    g.scale.setScalar(S);
+    const sf = world.surfaceAt(x, z);
+    g.position.set(x + sf.nx * 0.2 * S, sf.y + sf.ny * 0.2 * S, z + sf.nz * 0.2 * S);
+    g.up.set(sf.nx, sf.ny, sf.nz); const a = Math.random() * 6.28; g.lookAt(g.position.x + Math.sin(a), g.position.y, g.position.z + Math.cos(a));
     world.scene.add(g);
     const egg = { x, z, t: 0, mesh: g };
     eggs.push(egg); return egg;
@@ -52,7 +54,9 @@ export function createLifecycle(world, templates = {}) {
     let m, mat;
     if (templates.pupa) { m = templates.pupa.clone(true); m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.material = o.material.clone(); mat = o.material; } }); m.rotation.y = Math.random() * 6.28; }
     else { mat = pupaMat.clone(); m = new THREE.Mesh(new THREE.CapsuleGeometry(0.45, 1.6, 4, 10), mat); m.rotation.x = Math.PI / 2; m.rotation.y = Math.random() * 6.28; m.castShadow = true; }
-    m.scale.setScalar(S); m.position.set(l.x, world.heightAt(l.x, l.z) + 0.45 * S, l.z);
+    m.scale.setScalar(S);
+    const sf = world.surfaceAt(l.x, l.z); m.position.set(l.x + sf.nx * 0.45 * S, sf.y + sf.ny * 0.45 * S, l.z + sf.nz * 0.45 * S);
+    if (templates.pupa) { m.up.set(sf.nx, sf.ny, sf.nz); const a = Math.random() * 6.28; m.lookAt(m.position.x + Math.sin(a), m.position.y, m.position.z + Math.cos(a)); }
     world.scene.add(m);
     pupae.push({ x: l.x, z: l.z, t: 0, mesh: m, mat });
   }
@@ -73,9 +77,12 @@ export function createLifecycle(world, templates = {}) {
       if (u <= 0.9) { const dx = l.home.x - l.x, dz = l.home.z - l.z; if (Math.hypot(dx, dz) > 14) l.heading = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.6; }
       l.phase += dtMs * 0.004;
       const crawl = 0.5 + 0.5 * Math.sin(l.phase);
-      const p = world.pushOut({ x: l.x + Math.sin(l.heading) * speed * crawl * dtMs / 1000, z: l.z + Math.cos(l.heading) * speed * crawl * dtMs / 1000 });
-      l.x = p.x; l.z = p.z;
-      l.mesh.position.set(l.x, world.heightAt(l.x, l.z) + 0.22 * S * size, l.z); l.mesh.rotation.y = l.heading;
+      const nx = l.x + Math.sin(l.heading) * speed * crawl * dtMs / 1000, nz = l.z + Math.cos(l.heading) * speed * crawl * dtMs / 1000;
+      const wk = world.walkable(l.x, l.z, nx, nz);
+      if (wk.ok) { l.x = nx; l.z = nz; } else l.heading += 1.2;
+      const sf = world.surfaceAt(l.x, l.z);
+      l.mesh.position.set(l.x + sf.nx * 0.22 * S * size, sf.y + sf.ny * 0.22 * S * size, l.z + sf.nz * 0.22 * S * size);
+      l.mesh.up.set(sf.nx, sf.ny, sf.nz); l.mesh.lookAt(l.mesh.position.x + Math.sin(l.heading), l.mesh.position.y, l.mesh.position.z + Math.cos(l.heading));
       for (let k = 0; k < l.segs.length; k++) { const w = 0.85 + 0.25 * Math.sin(l.phase - k * 0.7); l.segs[k].scale.set(w, w, 1); }
       if (l.t >= STAGE_MS.larva) { larvae.splice(i, 1); pupate(l); }
     }

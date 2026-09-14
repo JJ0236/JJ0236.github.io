@@ -98,7 +98,7 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
     return {
       droplets: world.droplets, foods: refreshFoods(),
       smellAt: world.smellAt, smellGradient: world.smellGradient, memory: fly.memory,
-      heightAt: world.heightAt, pushOut: world.pushOut,
+      heightAt: world.heightAt, surfaceAt: world.surfaceAt, walkable: world.walkable, pushOut: world.pushOut,
       onReachDroplet(d) { stim(fly, 'sugar', 200); if (d.bitter) stim(fly, 'bitter', 200); teach(fly, d); fly.feedingOn = d; },
       onLeaveDroplet() { stim(fly, 'sugar', 0); stim(fly, 'bitter', 0); stim(fly, 'reward_DAN', 0); stim(fly, 'punish_DAN', 0); fly.feedingOn = null; },
     };
@@ -129,8 +129,19 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
       // flights
       if (now > fly.flightAt && !f && !b.flying && !b.mounting && !b.hold && b.mode !== 'grooming' && !fly.courting) { b.takeOff(); fly.flightAt = now + 45000 + Math.random() * 70000; }
     }
+    separate();
     courtship(dtMs, now);
     eggs(dtMs, now);
+  }
+  // flies do not walk through each other
+  function separate() {
+    const minD = 2.4 * FLY_SCALE;
+    for (let i = 0; i < flies.length; i++) for (let j = i + 1; j < flies.length; j++) {
+      const a = flies[i].body, b = flies[j].body;
+      if (a.flying || b.flying || a.mounting || b.mounting || a.hold || b.hold) continue;
+      const pa = a.position, pb = b.position; const dx = pb.x - pa.x, dz = pb.z - pa.z; const d = Math.hypot(dx, dz);
+      if (d > 0.01 && d < minD) { const push = (minD - d) / 2, ux = dx / d, uz = dz / d; a.nudge(-ux * push, -uz * push); b.nudge(ux * push, uz * push); }
+    }
   }
 
   function courtship(dtMs, now) {

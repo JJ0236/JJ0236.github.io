@@ -9,6 +9,21 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export async function loadGltf(url) { const g = await new GLTFLoader().loadAsync(url); return g.scene; }
 
+// Bounding-volume hierarchy so raycasts against the set's real meshes are cheap.
+let bvh = null;
+export async function loadBvh() {
+  if (bvh) return bvh;
+  try {
+    const m = await import('https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.8.3/build/index.module.js');
+    THREE.BufferGeometry.prototype.computeBoundsTree = m.computeBoundsTree;
+    THREE.BufferGeometry.prototype.disposeBoundsTree = m.disposeBoundsTree;
+    THREE.Mesh.prototype.raycast = m.acceleratedRaycast;
+    bvh = m;
+  } catch (e) { console.warn('cloche: three-mesh-bvh unavailable, using the approximate surface', e); bvh = false; }
+  return bvh;
+}
+export const MAX_SLOPE = Math.cos(THREE.MathUtils.degToRad(58));   // steeper than this is a wall
+
 export const COUNTER = { x0: -125, x1: 125, z0: -68, z1: 72 };
 export const WALK = { x0: -118, x1: 118, z0: -62, z1: 66 };
 export const DROP_R = 3.4;
@@ -169,11 +184,11 @@ export function createWorld(canvas) {
   // fruit bowl (only drawn by the Blender set)
   objects.push({ name: 'bowl', kind: 'bowl', mesh: null, height: () => 0, scents: [{ kind: 'fruit', x: 100, z: 45, strength: 0.35, sigma: 22 }], food: [], eggSite: null, obstacle: { x: 100, z: 45, r: 31 } });
   const procedural = [counter, front, wall, win, banana, bananaStem, plate, rim, jar, jam, lid, drip, puddle, cloth, ...slicesMeshes(), ...scene.children.filter(c => c.geometry && c.geometry.type === 'TorusGeometry' && c !== rim)];
-  let setScene = null, pickMeshes = null;
+  let setScene = null, pickMeshes = null, walkMeshes = null;
   function applySet(gltfScene) {
     for (const m of procedural) m.visible = false;
     setScene = gltfScene; scene.add(gltfScene);
-    pickMeshes = [];
+    pickMeshes = []; walkMeshes = [];
     gltfScene.traverse(o => {
       if (!o.isMesh) return;
       o.castShadow = !/window_glass|jar$/.test(o.name); o.receiveShadow = true;
@@ -181,7 +196,40 @@ export function createWorld(canvas) {
       if (o.name === 'window_glass') { o.material.transparent = true; o.material.opacity = 0.18; o.material.transmission = 0; o.material.depthWrite = false; }
       if (o.name === 'jar') { o.material.transparent = true; o.material.opacity = 0.35; o.material.transmission = 0.6; o.material.thickness = 1.5; o.material.roughness = 0.05; o.material.depthWrite = false; }
       if (/^(counter|banana|plate|slice_1|slice_2|cloth|sill)$/.test(o.name)) pickMeshes.push(o);
+      // everything a fly can stand on: not the wall, window, apron or glass
+      if (!/^(wall|window_glass|apron|frame_|mullion|transom)/.test(o.name)) { walkMeshes.push(o); if (o.geometry.computeBoundsTree && !o.geometry.boundsTree) o.geometry.computeBoundsTree(); }
     });
+    gltfScene.updateMatrixWorld(true);
+  }
+  // ---- the surface under a point: exact when the set is loaded, approximate otherwise
+  const downRay = new THREE.Raycaster(); downRay.firstHitOnly = true;
+  const rayOrigin = new THREE.Vector3(), rayDir = new THREE.Vector3(0, -1, 0);
+  const hitNormal = new THREE.Vector3();
+  function surfaceAt(x, z, fromY = 200) {
+    if (walkMeshes && walkMeshes.length) {
+      rayOrigin.set(x, fromY, z); downRay.set(rayOrigin, rayDir); downRay.far = fromY + 40;
+      const hits = downRay.intersectObjects(walkMeshes, false);
+      if (hits.length) {
+        const h = hits[0];
+        hitNormal.copy(h.face.normal).transformDirection(h.object.matrixWorld);
+        if (hitNormal.y < 0) hitNormal.negate();
+        return { y: h.point.y, nx: hitNormal.x, ny: hitNormal.y, nz: hitNormal.z, mesh: h.object.name };
+      }
+    }
+    const y = heightAt(x, z), e = 0.6;
+    const dx = (heightAt(x + e, z) - heightAt(x - e, z)) / (2 * e), dz = (heightAt(x, z + e) - heightAt(x, z - e)) / (2 * e);
+    const n = new THREE.Vector3(-dx, 1, -dz).normalize();
+    return { y, nx: n.x, ny: n.y, nz: n.z, mesh: null };
+  }
+  /** Can something walk from (x0,z0) to (x1,z1)? Blocked by walls (steep faces) and cliffs. */
+  function walkable(x0, z0, x1, z1, fromY = 200) {
+    if (x1 < WALK.x0 || x1 > WALK.x1 || z1 < WALK.z0 || z1 > WALK.z1) return { ok: false, reason: 'edge' };
+    for (const o of objects) { const ob = o.obstacle; if (ob && Math.hypot(x1 - ob.x, z1 - ob.z) < ob.r) return { ok: false, reason: 'object' }; }
+    const a = surfaceAt(x0, z0, fromY), b = surfaceAt(x1, z1, fromY);
+    if (b.ny < MAX_SLOPE) return { ok: false, reason: 'steep', s: b };
+    const d = Math.hypot(x1 - x0, z1 - z0) || 1e-6;
+    if (Math.abs(b.y - a.y) / d > 1.8) return { ok: false, reason: 'cliff', s: b };
+    return { ok: true, s: b };
   }
 
   // ---- height, obstacles, food, scent
@@ -217,7 +265,7 @@ export function createWorld(canvas) {
   function addScent(kind, x, z) {
     const col = new THREE.Color(SCENT_COLOURS[kind]);
     const stain = new THREE.Mesh(new THREE.CircleGeometry(5.5, 40), new THREE.MeshStandardMaterial({ color: col.clone().lerp(new THREE.Color('#EDE6D6'), 0.6), roughness: 0.9 }));
-    stain.rotation.x = -Math.PI / 2; stain.position.set(x, heightAt(x, z) + 0.05, z); stain.receiveShadow = true;
+    const sf = surfaceAt(x, z); stain.position.set(x, sf.y + 0.05, z); stain.lookAt(x + sf.nx, sf.y + 0.05 + sf.ny, z + sf.nz); stain.receiveShadow = true;
     const motes = [];
     for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(moteGeo, new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.35, roughness: 0.6 })); m.userData = { a: Math.random() * 6.28, r: 1 + Math.random() * 3.5, h: Math.random() * 9, v: 1.2 + Math.random() * 1.2 }; motes.push(m); scene.add(m); }
     const sc = { kind, x, z, sigma: 9, strength: 1, age: 0, life: 120, stain, motes, gone: false };
@@ -279,5 +327,5 @@ export function createWorld(canvas) {
     renderer.render(scene, camera);
   }
   resize();
-  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, render, resize, WALK };
+  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, surfaceAt, walkable, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, render, resize, WALK };
 }

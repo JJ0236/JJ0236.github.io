@@ -3,7 +3,7 @@
 import { decodeBrain } from './data.js';
 import { RATE_ORDER, RATE_INDEX, SAVE_VERSION } from './groups-order.js';
 import { createBrainView } from './brainview.js';
-import { createWorld, loadGltf } from './world.js';
+import { createWorld, loadGltf, loadBvh } from './world.js';
 import { createLifecycle } from './lifecycle.js';
 import { createPopulation, budget } from './flies.js';
 
@@ -59,6 +59,7 @@ async function main() {
   // Blender models: the set, the two fly bodies, the brood. The page works without them.
   stage.textContent = 'Setting the table…';
   const assets = {};
+  await loadBvh();
   await Promise.all(Object.entries({ set: 'set.glb', flyF: 'fly_female.glb', flyM: 'fly_male.glb', egg: 'egg.glb', larva: 'larva.glb', pupa: 'pupa.glb' }).map(async ([k, f]) => { try { assets[k] = await loadGltf('./assets/' + f); } catch (e) { console.warn('cloche: model failed', f, e); } }));
   const world = createWorld($('three-canvas'));
   if (assets.set) world.applySet(assets.set);

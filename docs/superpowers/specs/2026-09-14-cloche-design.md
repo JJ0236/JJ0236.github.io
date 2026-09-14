@@ -588,3 +588,34 @@ removed before the second is built); meshes parented to freshly created
 empties must be built in the pivot's own frame, because Blender has not
 evaluated the empty's world matrix yet. The page loads the models in
 parallel with the brains and runs without them if any fail.
+
+### Physical contact, 2026-09-15
+
+Josh saw the flies passing through objects. The cause was the approximate
+surface: a few hand-written height rules, circle obstacles, a body on a
+flat plane and legs that never touched anything. Replaced with the real
+geometry:
+
+- **Surface by raycast.** `world.surfaceAt(x, z)` casts straight down onto
+  the Blender meshes (all but wall, window and frame) with three-mesh-bvh
+  accelerating it to ~0.01 ms a query, returning height and normal.
+  `world.walkable(a → b)` refuses faces steeper than 58° and cliffs, so the
+  jar, the bowl, the plate rim's edge and the cloth's sides are walls found
+  from the geometry itself; the old circle obstacles stay as a cheap
+  pre-check. Droplets, scent stains, eggs, larvae and pupae all sit on the
+  surface and align to its normal.
+- **Bodies follow the surface.** Each fly's root sits on the surface point
+  and its up vector is the smoothed normal, so it tilts on the banana's
+  curve and the plate rim.
+- **Feet are planted.** Six feet live in world space; a foot stays where it
+  was put until it has drifted more than a step length from its nominal
+  spot under the body, then swings to a new surface point ahead of the
+  motion in 55–90 ms with a lift arc, tripod groups alternating. Every
+  frame a two-bone inverse-kinematics solve (hip yaw, femur, knee) reaches
+  each foot, with the knee up as in insects. Feet are clamped below the
+  hip and outboard so the solver never folds a leg upward.
+- **Flies push apart** instead of overlapping. Feeding lowers the body and
+  pitches it toward the food.
+- Cost: population update 0.1 ms a frame for two flies; the headless
+  software renderer needs over a second a frame for the 100 k-triangle set
+  with shadows, which a GPU does in a millisecond or two.
