@@ -2,7 +2,6 @@
 // driven by firing rates, and a small staged locomotion controller.
 // Forward is +z in the fly's local frame. Units are millimetres.
 import * as THREE from 'three';
-import { WALK_R } from './scene.js';
 
 export const FLY_SCALE = 2.8;   // a real fly is 3 mm; the specimen is shown larger
 
@@ -184,37 +183,23 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
   let ovi = 0;                        // abdomen bend, 0..1
   let surfaceY = 0, pitch = 0;
   let hold = false;                   // frozen by the page (being mounted)
-  function takeOff() {
-    if (flight || jump) return;
-    const pts = [{ x, z, y: 0 }];
-    let hx = x, hz = z;
-    for (let i = 0; i < 4; i++) {
-      const a = Math.random() * Math.PI * 2, r = Math.random() * (WALK_R - 6);
-      hx = Math.cos(a) * r; hz = Math.sin(a) * r;
-      pts.push({ x: hx, z: hz, y: 14 + Math.random() * 22 });
-    }
-    let lx = hx, lz = hz; const rr = Math.hypot(lx, lz); if (rr > WALK_R - 3) { lx *= (WALK_R - 3) / rr; lz *= (WALK_R - 3) / rr; }
-    pts.push({ x: lx, z: lz, y: 0 });
-    flight = { t: 0, dur: 2600 + Math.random() * 1800, pts };
+  function takeOff(target = null) {
+    if (flight || jump || mount || hold || !world?.planFlight) return false;
+    const plan = world.planFlight(x, surfaceY, z, { target });
+    if (!plan) return false;
+    flight = { t: 0, s: 0, samples: plan.samples, step: plan.step, len: plan.length, speed: 60 + Math.random() * 30 };
     if (feedingOn) leaveDroplet();
     mode = 'flying';
-  }
-  function catmull(pts, u) {
-    const n = pts.length - 1; const s = u * n; const i = Math.min(n - 1, Math.floor(s)); const f = s - i;
-    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n, i + 2)];
-    const c = k => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * f + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * f * f + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * f * f * f);
-    return { x: c('x'), y: c('y'), z: c('z') };
+    return true;
   }
   const parts = { rostrum, labella, labL, labR, legs, wings, head, body };
 
   function setRates(r) { Object.assign(rates, r); }
   function gfSpike() {
-    if (jump || jumpCooldown > 0) return;
-    const a = heading + (Math.random() - 0.5) * 2.2;
-    const dist = 10 + Math.random() * 9;
-    let tx = x + Math.sin(a) * dist, tz = z + Math.cos(a) * dist;
-    const rr = Math.hypot(tx, tz); if (rr > WALK_R - 2) { tx *= (WALK_R - 2) / rr; tz *= (WALK_R - 2) / rr; }
-    jump = { t: 0, dur: 160, x0: x, z0: z, x1: tx, z1: tz, h: 12 };
+    if (jump || flight || mount || hold || jumpCooldown > 0) return;
+    const hop = world?.planHop ? world.planHop(x, surfaceY, z, heading) : null;
+    if (!hop) return;
+    jump = { t: 0, dur: 170, x0: x, z0: z, x1: hop.x1, z1: hop.z1, y0: hop.y0, y1: hop.y1, h: hop.h };
     jumpCooldown = 700;
     if (feedingOn) leaveDroplet();
     mode = 'jumping';
@@ -261,26 +246,37 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
     } else if (hold) {
       mode = 'mating';
     } else if (flight) {
+      // follow the planned route: speed up off the surface, cruise, slow to land
       flight.t += dtMs;
-      const u = Math.min(1, flight.t / flight.dur);
-      const p = catmull(flight.pts, u), q = catmull(flight.pts, Math.min(1, u + 0.01));
-      const dx = q.x - p.x, dz = q.z - p.z;
-      if (Math.hypot(dx, dz) > 1e-4) heading = Math.atan2(dx, dz);
-      x = p.x; z = p.z; group.position.y = Math.max(0, p.y);
-      body.rotation.x = -0.25 * Math.sin(u * Math.PI);
+      const remain = flight.len - flight.s;
+      const v = flight.speed * Math.min(1, 0.3 + flight.s / 18) * Math.min(1, 0.18 + remain / 30);
+      flight.s = Math.min(flight.len, flight.s + v * dt);
+      const n = flight.samples.length, fi = flight.s / flight.step;
+      const i0 = Math.min(n - 2, Math.floor(fi)), f = Math.min(1, fi - i0);
+      const a = flight.samples[i0], b = flight.samples[i0 + 1];
+      x = a.x + (b.x - a.x) * f; z = a.z + (b.z - a.z) * f;
+      const y = a.y + (b.y - a.y) * f;
+      const tx = b.x - a.x, ty = b.y - a.y, tz = b.z - a.z, th = Math.hypot(tx, tz);
+      if (th > 0.2) turnToward(Math.atan2(tx, tz), dt, 9);
+      group.position.y = y; surfaceY = y;
+      body.rotation.x += (Math.max(-0.5, Math.min(0.5, -Math.atan2(ty, Math.max(th, 0.1)) * 0.5)) - 0.12 - body.rotation.x) * 0.15;
       const beat = Math.sin(flight.t * 1.1);
- for (const wg of wings) wg.piv.rotation.y = wg.restY + wg.side * (0.1 + 0.75 * beat);
+      for (const wg of wings) wg.piv.rotation.y = wg.restY + wg.side * (0.1 + 0.75 * beat);
       for (const L of legs) { L.knee.rotation.z += (L.restZ - L.side * 0.9 - L.knee.rotation.z) * 0.2; }
-      if (u >= 1) { flight = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 1.2; idleWalking = false; for (const L of legs) { L.planted = false; L.swing = null; } }
+      if (flight.s >= flight.len - 1e-3) {
+        const end = flight.samples[n - 1]; x = end.x; z = end.z; surfaceY = end.y; group.position.y = end.y;
+        flight = null; body.rotation.x = 0; mode = 'idle'; idleTimer = 1.2; idleWalking = false;
+        for (const L of legs) { L.planted = false; L.swing = null; }
+      }
     } else if (jump) {
       jump.t += dtMs;
       const u = Math.min(1, jump.t / jump.dur);
       x = jump.x0 + (jump.x1 - jump.x0) * u; z = jump.z0 + (jump.z1 - jump.z0) * u;
-      heading = Math.atan2(jump.x1 - jump.x0, jump.z1 - jump.z0);
-      group.position.y = jump.h * 4 * u * (1 - u) * FLY_SCALE / 2.8;
+      if (Math.hypot(jump.x1 - jump.x0, jump.z1 - jump.z0) > 0.5) heading = Math.atan2(jump.x1 - jump.x0, jump.z1 - jump.z0);
+      group.position.y = jump.y0 + (jump.y1 - jump.y0) * u + jump.h * 4 * u * (1 - u);
       body.rotation.x = -0.5 * Math.sin(u * Math.PI);
       for (const wg of wings) wg.piv.rotation.y = wg.restY + wg.side * (0.9 * Math.sin(u * Math.PI) + 0.35 * Math.sin(jump.t * 0.9));
-      if (u >= 1) { jump = null; group.position.y = 0; body.rotation.x = 0; mode = 'idle'; idleTimer = 0.8; idleWalking = false; for (const L of legs) { L.planted = false; L.swing = null; } }
+      if (u >= 1) { surfaceY = jump.y1; group.position.y = jump.y1; jump = null; body.rotation.x = 0; mode = 'idle'; idleTimer = 0.8; idleWalking = false; for (const L of legs) { L.planted = false; L.swing = null; } }
     } else if (sm.groom > 25 && !feedingOn) {
       mode = 'grooming'; groomT += dt;
     } else if (pursuit && !feedingOn) {
@@ -333,8 +329,6 @@ export function createFly({ sex = 'female', teneral = false, template = null } =
         if (idleWalking || brainPace > 0.5) {
           speed = 2.5 + 6 * brainPace;
           heading += (sm.turn * 2.2 + wanderNoise) * dt;
-          const r = Math.hypot(x, z);
-          if (r > WALK_R - 6) turnToward(Math.atan2(-x, -z), dt, 2.5);
         }
         if (w.smellAt && w.memory) {
           const here = w.smellAt(x, z);

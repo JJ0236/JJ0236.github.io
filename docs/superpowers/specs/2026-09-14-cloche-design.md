@@ -682,3 +682,36 @@ to keep draw calls near 35:
 - Colour lesson: Blender base colours are linear while the generated
   textures are sRGB, so untextured parts need linear values (the legs first
   came out cream).
+
+### Flight that respects the scene, 2026-09-15
+
+Josh: "when they are flying they just go through shit". Flights still used
+the dome's logic: random waypoints within 27 mm of the centre joined by a
+spline that ignored every object, landing wherever the spline ended; the
+escape jump was a blind arc clamped toward the centre; and idle walkers
+were steered back toward the middle whenever they strayed 27 mm out.
+
+- **Every set mesh is solid.** Each gets a BVH; `world.clearance(p)` is the
+  distance to the nearest surface, filtered by bounding spheres so it costs
+  almost nothing in open air.
+- **`planFlight`** picks a landing spot that is level for a body length,
+  outside the obstacle circles and with headroom, builds a route of
+  lift-off, two cruise waypoints and a hover above the spot, samples the
+  spline and rejects it if any sample leaves the counter, dips under the
+  topmost surface below it, or comes within the margin of any mesh. The
+  margin ramps from 2.5 mm at take-off and touchdown to 6 mm in open air.
+  The route is resampled by arc length and flown at a speed that eases in
+  and out; the body banks toward its heading and pitches with the climb.
+- **`planHop`** does the same for the giant-fibre escape: a short arc to
+  clear ground nearby, or straight up and down if nothing else is safe.
+- Soak test, stepped frame by frame: 20 flights and 20 escape jumps, no
+  sample closer than 6.7 mm (flight) or 4.9 mm (jump) to any mesh away
+  from the end points; landings on the counter, the cut orange, the spill
+  and the sugar spill. A refused take-off retries after six seconds.
+- **Two library pitfalls, both fixed:** the glTF exporter shares identical
+  index buffers between meshes (counter, apron, sill and window frames),
+  and building a BVH reorders the index in place, which silently broke the
+  counter's raycasts once the frames had trees too; each mesh now gets its
+  own index copy first. And `closestPointToPoint` in three-mesh-bvh 0.8.3
+  takes its distance thresholds squared, returning a wrong far point
+  otherwise.

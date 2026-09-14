@@ -98,7 +98,7 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
     return {
       droplets: world.droplets, foods: refreshFoods(),
       smellAt: world.smellAt, smellGradient: world.smellGradient, memory: fly.memory,
-      heightAt: world.heightAt, surfaceAt: world.surfaceAt, walkable: world.walkable, pushOut: world.pushOut, objects: world.objects,
+      heightAt: world.heightAt, surfaceAt: world.surfaceAt, walkable: world.walkable, pushOut: world.pushOut, objects: world.objects, planFlight: world.planFlight, planHop: world.planHop,
       onReachDroplet(d) { stim(fly, 'sugar', 200); if (d.bitter) stim(fly, 'bitter', 200); teach(fly, d); fly.feedingOn = d; },
       onLeaveDroplet() { stim(fly, 'sugar', 0); stim(fly, 'bitter', 0); stim(fly, 'reward_DAN', 0); stim(fly, 'punish_DAN', 0); fly.feedingOn = null; },
     };
@@ -127,7 +127,7 @@ export function createPopulation({ world, lifecycle, datasets, templates = {}, o
         if (f && !f.gone) teach(fly, f);
       }
       // flights
-      if (now > fly.flightAt && !f && !b.flying && !b.mounting && !b.hold && b.mode !== 'grooming' && !fly.courting) { b.takeOff(); fly.flightAt = now + 45000 + Math.random() * 70000; }
+      if (now > fly.flightAt && !f && !b.flying && !b.mounting && !b.hold && b.mode !== 'grooming' && !fly.courting) { fly.flightAt = b.takeOff() ? now + 45000 + Math.random() * 70000 : now + 6000; }
     }
     separate();
     courtship(dtMs, now);

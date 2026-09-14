@@ -209,10 +209,119 @@ export function createWorld(canvas) {
       if (o.name === 'window_glass') { o.material.transparent = true; o.material.opacity = 0.18; o.material.transmission = 0; o.material.depthWrite = false; }
       if (o.name === 'jar') { o.material.transparent = true; o.material.opacity = 0.35; o.material.transmission = 0.6; o.material.thickness = 1.5; o.material.roughness = 0.05; o.material.depthWrite = false; }
       if (/^(counter|banana|plate|slice_1|slice_2|cloth|sill|orange_half|orange_face|soil|sugar_spill|coffee_ring|spill)$/.test(o.name)) pickMeshes.push(o);
+      // glTF export shares identical index buffers between meshes (the counter, apron, sill and frames
+      // all have one), and building a BVH reorders the index in place, so each mesh gets its own copy
+      if (o.geometry.computeBoundsTree && !o.geometry.boundsTree) { if (o.geometry.index) o.geometry.setIndex(o.geometry.index.clone()); o.geometry.computeBoundsTree(); }
       // everything a fly can stand on: not the wall, window, apron or glass
-      if (!/^(wall|window_glass|apron|frame_|mullion|transom|curtain|curtain_rod)/.test(o.name)) { walkMeshes.push(o); if (o.geometry.computeBoundsTree && !o.geometry.boundsTree) o.geometry.computeBoundsTree(); }
+      if (!/^(wall|window_glass|apron|frame_|mullion|transom|curtain|curtain_rod)/.test(o.name)) walkMeshes.push(o);
     });
     gltfScene.updateMatrixWorld(true);
+    buildSolids();
+  }
+
+  // ---- flight: every static mesh in the set is solid, and routes keep clear of all of them
+  let solids = [];
+  function buildSolids() {
+    solids = [];
+    setScene.traverse(o => {
+      if (!o.isMesh || !o.geometry.boundsTree) return;
+      o.geometry.computeBoundingSphere();
+      const scale = o.matrixWorld.getMaxScaleOnAxis();
+      solids.push({ mesh: o, center: o.geometry.boundingSphere.center.clone().applyMatrix4(o.matrixWorld), radius: o.geometry.boundingSphere.radius * scale, inv: o.matrixWorld.clone().invert(), scale });
+    });
+  }
+  const _lp = new THREE.Vector3(), _hit = {};
+  /** Distance from p to the nearest solid surface, capped at `max` (cheap when nothing is that close). */
+  function clearance(p, max) {
+    let best = max;
+    for (const sd of solids) {
+      if (p.distanceTo(sd.center) - sd.radius >= best) continue;
+      _lp.copy(p).applyMatrix4(sd.inv);
+      const cap = best / sd.scale;
+      const r = sd.mesh.geometry.boundsTree.closestPointToPoint(_lp, _hit, 0, cap * cap);   // this version compares squared distances
+      if (r && r.distance < cap) best = r.distance * sd.scale;
+    }
+    return best;
+  }
+  const FLY_TOP = 140;
+  function inAir(p, clear) {
+    if (p.x < WALK.x0 || p.x > WALK.x1 || p.z < WALK.z0 || p.z > WALK.z1 || p.y > FLY_TOP) return false;
+    if (p.y < surfaceAt(p.x, p.z).y + clear * 0.6) return false;           // never under or inside anything
+    return clearance(p, clear) >= clear;
+  }
+  function landingSpot(x, z) {
+    if (x < WALK.x0 + 6 || x > WALK.x1 - 6 || z < WALK.z0 + 6 || z > WALK.z1 - 6) return null;
+    for (const o of objects) { const ob = o.obstacle; if (ob && Math.hypot(x - ob.x, z - ob.z) < ob.r + 3) return null; }
+    const sf = surfaceAt(x, z);
+    if (sf.ny < 0.86) return null;
+    // room to stand: the surface is level for a body length around, and nothing hangs just above
+    for (const [dx, dz] of [[4, 0], [-4, 0], [0, 4], [0, -4]]) { if (Math.abs(surfaceAt(x + dx, z + dz).y - sf.y) > 1.5) return null; }
+    if (clearance(new THREE.Vector3(x, sf.y + 6, z), 5.2) < 5.2) return null;
+    return sf;
+  }
+  function catmull(pts, u) {
+    const n = pts.length - 1, sgm = u * n, i = Math.min(n - 1, Math.floor(sgm)), f = sgm - i;
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(n, i + 2)];
+    const c = k => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * f + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * f * f + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * f * f * f);
+    return new THREE.Vector3(c('x'), c('y'), c('z'));
+  }
+  /**
+   * A collision-free flight from a standing fly to a landing spot elsewhere on the counter.
+   * Returns { samples, step, length } with samples every `step` mm along the path, or null.
+   */
+  function planFlight(sx, sy, sz, { tries = 90, minDist = 45, target = null } = {}) {
+    const CLEAR = 6, STEP = 1.5;
+    const start = new THREE.Vector3(sx, sy, sz);
+    for (let k = 0; k < tries; k++) {
+      let lx, lz;
+      if (target && k < tries / 2) { const a = Math.random() * 6.28, r = 6 + Math.random() * 18; lx = target.x + Math.cos(a) * r; lz = target.z + Math.sin(a) * r; }
+      else { lx = WALK.x0 + Math.random() * (WALK.x1 - WALK.x0); lz = WALK.z0 + Math.random() * (WALK.z1 - WALK.z0); }
+      if (!target && Math.hypot(lx - sx, lz - sz) < minDist) continue;
+      const land = landingSpot(lx, lz); if (!land) continue;
+      const L = new THREE.Vector3(lx, land.y, lz);
+      const cruise = Math.min(FLY_TOP - 10, Math.max(sy, land.y) + 30 + Math.random() * 50);
+      const lift = new THREE.Vector3(sx, sy + 12, sz), above = new THREE.Vector3(lx, land.y + 16, lz);
+      const dir = new THREE.Vector3(lx - sx, 0, lz - sz); const dist = dir.length(); dir.normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x);
+      const mids = [0.35, 0.68].map(f => new THREE.Vector3(sx + (lx - sx) * f, cruise + (Math.random() - 0.5) * 14, sz + (lz - sz) * f).addScaledVector(side, (Math.random() - 0.5) * Math.min(60, dist * 0.5)));
+      const pts = [start, lift, ...mids, above, L];
+      // the margin grows from 2.5 mm at takeoff and touchdown to the full 6 mm in open air,
+      // so a fly standing beside the mug can still rise straight up and away
+      const need = q => Math.min(CLEAR, 2.5 + Math.min(q.distanceTo(start), q.distanceTo(L)) * 0.14);
+      if (!pts.slice(1, -1).every(q => inAir(q, need(q)))) continue;
+      // sample the curve, check every point away from the two ends, resample by arc length
+      const dense = []; for (let i = 0; i <= 360; i++) dense.push(catmull(pts, i / 360));
+      let ok = true;
+      for (const q of dense) {
+        if (q.distanceTo(start) < 4 || q.distanceTo(L) < 5) { if (q.y < Math.min(sy, land.y) - 0.5) { ok = false; break; } continue; }
+        if (!inAir(q, need(q))) { ok = false; break; }
+      }
+      if (!ok) continue;
+      const cum = [0]; for (let i = 1; i < dense.length; i++) cum.push(cum[i - 1] + dense[i].distanceTo(dense[i - 1]));
+      const length = cum[cum.length - 1], samples = [];
+      for (let d = 0, j = 0; d <= length; d += STEP) { while (j < cum.length - 2 && cum[j + 1] < d) j++; const f = (d - cum[j]) / Math.max(1e-6, cum[j + 1] - cum[j]); samples.push(dense[j].clone().lerp(dense[j + 1], f)); }
+      samples.push(L.clone());
+      return { samples, step: STEP, length: STEP * (samples.length - 1) };
+    }
+    return null;
+  }
+  /** An escape hop: a short arc to clear ground nearby that passes through nothing. */
+  function planHop(sx, sy, sz, heading) {
+    for (let k = 0; k < 24; k++) {
+      const a = heading + (Math.random() - 0.5) * (k < 12 ? 2.4 : 6.28), dist = 8 + Math.random() * 12;
+      const lx = sx + Math.sin(a) * dist, lz = sz + Math.cos(a) * dist;
+      const land = landingSpot(lx, lz); if (!land) continue;
+      const h = 7 + Math.random() * 6 + Math.max(0, land.y - sy);
+      let ok = true;
+      for (let i = 1; i < 14 && ok; i++) {
+        const u = i / 14, q = new THREE.Vector3(sx + (lx - sx) * u, sy + (land.y - sy) * u + h * 4 * u * (1 - u), sz + (lz - sz) * u);
+        if (Math.hypot(q.x - sx, q.z - sz) < 3 || Math.hypot(q.x - lx, q.z - lz) < 3) continue;
+        if (!inAir(q, 3)) ok = false;
+      }
+      if (ok) return { x1: lx, z1: lz, y0: sy, y1: land.y, h };
+    }
+    const up = new THREE.Vector3(sx, sy + 6, sz);
+    return clearance(up, 3) >= 3 ? { x1: sx, z1: sz, y0: sy, y1: sy, h: 6 } : null;     // straight up and back down
   }
   // ---- the surface under a point: exact when the set is loaded, approximate otherwise
   const downRay = new THREE.Raycaster(); downRay.firstHitOnly = true;
@@ -343,5 +452,5 @@ export function createWorld(canvas) {
     renderer.render(scene, camera);
   }
   resize();
-  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, surfaceAt, walkable, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, gust, render, resize, WALK };
+  return { scene, camera, renderer, controls, objects, droplets, scents, addDroplet, removeDroplet, addScent, removeScent, smellAt, smellGradient, heightAt, surfaceAt, walkable, pushOut, foodAt, eggSiteAt, sweepShadow, ripple, pick, addFlyObject, removeFlyObject, applySet, gust, clearance, planFlight, planHop, render, resize, WALK };
 }
