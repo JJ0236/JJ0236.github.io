@@ -1,0 +1,222 @@
+#!/usr/bin/env node
+// scripts/build-cloche-data.mjs — pack the FlyWire v783 connectome into
+// cloche/data/brain.bin and cloche/data/groups.json.
+//
+//   node scripts/build-cloche-data.mjs [--src DIR]
+//
+// Source files are the public Codex exports (no login needed):
+//   https://storage.googleapis.com/flywire-data/codex/data/fafb/783/
+//     neurons.csv.gz classification.csv.gz consolidated_cell_types.csv.gz
+//     coordinates.csv.gz labels.csv.gz connections.csv.gz
+// Any file missing from --src is downloaded there first.
+//
+// Connections are summed per (pre, post) pair across neuropils; pairs with
+// fewer than 5 synapses are dropped (the Codex table already only contains
+// pairs whose total is ≥5, this just makes it explicit). Weight sign comes
+// from the presynaptic neuron's predicted neurotransmitter: GABA and
+// glutamate inhibit, everything else excites (Shiu et al. 2024).
+
+import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createGunzip } from 'node:zlib';
+import { createInterface } from 'node:readline';
+import { pipeline } from 'node:stream/promises';
+import { createWriteStream } from 'node:fs';
+import { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { encodeBrain, CLASS_NAMES } from '../cloche/data.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repo = join(here, '..');
+const args = process.argv.slice(2);
+const srcIdx = args.indexOf('--src');
+const SRC = srcIdx >= 0 ? args[srcIdx + 1]
+  : (process.env.CLOCHE_SRC || '/private/tmp/claude-501/-Users-josh-Documents-GitHub-JJ0236-github-io/c9b5ef8b-4728-45dd-b1ae-36498165b90e/scratchpad');
+const BUCKET = 'https://storage.googleapis.com/flywire-data/codex/data/fafb/783/';
+const FILES = ['neurons.csv.gz', 'classification.csv.gz', 'consolidated_cell_types.csv.gz', 'coordinates.csv.gz', 'labels.csv.gz', 'connections.csv.gz'];
+const OUT = join(repo, 'cloche', 'data');
+
+// Known ids for the groups that have no clean type column (v783 root ids).
+const MN9 = ['720575940618238523', '720575940660219265'];
+// Descending neurons that respond most strongly to Johnston's organ drive in
+// this model (DNpe014, DNp73 and DNb06 pairs, found with scripts/verify-cloche.mjs).
+// The page reads them as its grooming signal; the community "putative aDN"
+// labels are kept as a separate group but stay silent under JO drive.
+const GROOM = ['720575940628796780', '720575940619548799', '720575940629586417', '720575940655587489', '720575940629041879', '720575940637308605'];
+const MN6 = ['720575940627410451', '720575940628826128'];
+// Sugar GRNs Shiu et al. drove (v630 list, 20 of 21 survive in v783); used
+// as a sanity check on the label-derived set.
+const SHIU_SUGAR = ['720575940624963786', '720575940630233916', '720575940637568838', '720575940638202345', '720575940617000768', '720575940630797113', '720575940632889389', '720575940621754367', '720575940621502051', '720575940640649691', '720575940639332736', '720575940616885538', '720575940639198653', '720575940620900446', '720575940617937543', '720575940632425919', '720575940633143833', '720575940612670570', '720575940628853239', '720575940629176663', '720575940611875570'];
+
+async function ensure(file) {
+  const path = join(SRC, file);
+  if (existsSync(path)) return path;
+  mkdirSync(SRC, { recursive: true });
+  process.stdout.write(`downloading ${file}… `);
+  const res = await fetch(BUCKET + file);
+  if (!res.ok) throw new Error(`${file}: HTTP ${res.status}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(path));
+  console.log('done');
+  return path;
+}
+
+async function* lines(path) {
+  const rl = createInterface({ input: createReadStream(path).pipe(createGunzip()), crlfDelay: Infinity });
+  let first = true;
+  for await (const line of rl) {
+    if (first) { first = false; continue; }
+    if (line) yield line;
+  }
+}
+
+// Minimal CSV split that respects double-quoted fields (labels.csv has them).
+function splitCsv(line) {
+  const out = []; let cur = ''; let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+const t0 = Date.now();
+for (const f of FILES) await ensure(f);
+
+// 1. neurons: index and sign
+const index = new Map();   // root id string → index
+const rootIds = [];
+const sign = [];
+for await (const line of lines(join(SRC, 'neurons.csv.gz'))) {
+  const c = line.split(',');
+  const id = c[0], nt = c[2];
+  index.set(id, rootIds.length);
+  rootIds.push(id);
+  sign.push(nt === 'GABA' || nt === 'GLUT' ? -1 : 1);
+}
+const N = rootIds.length;
+console.log(`neurons ${N}`);
+
+// 2. classification: class byte and sub_class for GRNs
+const cls = new Uint8Array(N).fill(CLASS_NAMES.indexOf('other'));
+const subClass = new Array(N).fill('');
+for await (const line of lines(join(SRC, 'classification.csv.gz'))) {
+  const c = line.split(',');
+  const i = index.get(c[0]);
+  if (i === undefined) continue;
+  const k = CLASS_NAMES.indexOf(c[2]);
+  cls[i] = k >= 0 ? k : CLASS_NAMES.indexOf('other');
+  subClass[i] = c[4];
+}
+
+// 3. cell types
+const ptype = new Array(N).fill('');
+for await (const line of lines(join(SRC, 'consolidated_cell_types.csv.gz'))) {
+  const c = line.split(',');
+  const i = index.get(c[0]);
+  if (i !== undefined) ptype[i] = c[1];
+}
+
+// 4. coordinates: first row per neuron
+const pos = new Float64Array(3 * N);
+const havePos = new Uint8Array(N);
+for await (const line of lines(join(SRC, 'coordinates.csv.gz'))) {
+  const c = line.split(',');
+  const i = index.get(c[0]);
+  if (i === undefined || havePos[i]) continue;
+  const m = c[1].match(/\[\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\s*\]/);
+  if (!m) continue;
+  pos[3 * i] = +m[1]; pos[3 * i + 1] = +m[2]; pos[3 * i + 2] = +m[3];
+  havePos[i] = 1;
+}
+let missingPos = 0;
+for (let i = 0; i < N; i++) if (!havePos[i]) missingPos++;
+console.log(`coordinates missing for ${missingPos} neurons`);
+
+// 5. labels: sugar GRNs and aDN
+const labelSugar = new Set(), labelADN = new Set();
+for await (const line of lines(join(SRC, 'labels.csv.gz'))) {
+  const c = splitCsv(line);
+  const i = index.get(c[0]);
+  if (i === undefined) continue;
+  const l = c[1].toLowerCase();
+  if (l.includes('sugar gustatory receptor neuron')) labelSugar.add(i);
+  if (l.includes('putative adn')) labelADN.add(i);
+}
+
+// 6. connections: sum per pair, ≥5, CSR
+console.log('reading connections…');
+const pairs = new Map(); // pre * N + post → syn count
+let rows = 0;
+for await (const line of lines(join(SRC, 'connections.csv.gz'))) {
+  const c = line.split(',');
+  const a = index.get(c[0]), b = index.get(c[1]);
+  if (a === undefined || b === undefined) continue;
+  const key = a * N + b;
+  pairs.set(key, (pairs.get(key) || 0) + (+c[3]));
+  if (++rows % 1000000 === 0) process.stdout.write(`  ${rows / 1e6}M rows\r`);
+}
+console.log(`  ${rows} rows, ${pairs.size} pairs`);
+const outDeg = new Uint32Array(N);
+let E = 0, totalSyn = 0;
+for (const [key, syn] of pairs) { if (syn >= 5) { outDeg[Math.floor(key / N)]++; E++; totalSyn += syn; } }
+const offsets = new Uint32Array(N + 1);
+for (let i = 0; i < N; i++) offsets[i + 1] = offsets[i] + outDeg[i];
+const targets = new Uint32Array(E);
+const weights = new Int8Array(E);
+const fill = new Uint32Array(N);
+const keys = Array.from(pairs.keys()).filter(k => pairs.get(k) >= 5).sort((x, y) => x - y);
+for (const key of keys) {
+  const a = Math.floor(key / N), b = key - a * N;
+  const k = offsets[a] + fill[a]++;
+  targets[k] = b;
+  weights[k] = sign[a] * Math.min(127, pairs.get(key));
+}
+console.log(`edges ${E} (synapses ${totalSyn})`);
+
+// 7. quantise positions
+const bbox = new Float32Array([Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) {
+  const v = pos[3 * i + d];
+  if (v < bbox[d]) bbox[d] = v;
+  if (v > bbox[d + 3]) bbox[d + 3] = v;
+}
+const q = new Uint16Array(3 * N);
+for (let i = 0; i < N; i++) for (let d = 0; d < 3; d++) {
+  q[3 * i + d] = Math.round((pos[3 * i + d] - bbox[d]) / (bbox[d + 3] - bbox[d]) * 65535);
+}
+
+// 8. groups
+const byType = pred => { const r = []; for (let i = 0; i < N; i++) if (pred(ptype[i], i)) r.push(i); return r; };
+const groups = {
+  // GRNs are cholinergic; one labelled cell is predicted glutamatergic and is
+  // left out so the drive is purely excitatory as in Shiu et al.
+  sugar: [...labelSugar].filter(i => subClass[i] === 'sugar/water' && sign[i] > 0).sort((a, b) => a - b),
+  bitter: byType((t, i) => subClass[i] === 'bitter'),
+  MN9: MN9.map(id => index.get(id)).filter(i => i !== undefined),
+  groom: GROOM.map(id => index.get(id)).filter(i => i !== undefined),
+  MN6: MN6.map(id => index.get(id)).filter(i => i !== undefined),
+  GF: byType(t => t === 'DNp01'),
+  DNa01: byType(t => t === 'DNa01'),
+  DNa02: byType(t => t === 'DNa02'),
+  LC4: byType(t => t === 'LC4'),
+  LPLC2: byType(t => t === 'LPLC2'),
+  JO: byType(t => t.startsWith('JO-C') || t.startsWith('JO-E')),
+  aDN: [...labelADN].sort((a, b) => a - b),
+};
+const shiuHit = SHIU_SUGAR.map(id => index.get(id)).filter(i => i !== undefined && groups.sugar.includes(i)).length;
+console.log(`Shiu sugar ids in our sugar group: ${shiuHit} / ${SHIU_SUGAR.length}`);
+for (const [k, v] of Object.entries(groups)) console.log(`  ${k.padEnd(6)} ${v.length}`);
+
+const meta = {
+  version: 'fafb-783', neurons: N, edges: E, synapses: totalSyn, threshold: 5,
+  rootIds: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.map(i => rootIds[i])])),
+};
+
+mkdirSync(OUT, { recursive: true });
+writeFileSync(join(OUT, 'brain.bin'), Buffer.from(encodeBrain({ n: N, e: E, bbox, offsets, targets, weights, pos: q, cls })));
+writeFileSync(join(OUT, 'groups.json'), JSON.stringify({ ...groups, meta }));
+console.log(`wrote ${OUT} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
