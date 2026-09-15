@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Patch — Quilt Block Generator — joshhicks.info</title>
+  <meta name="description" content="Pick a quilt block, assign your fabrics, set the finished size, and get a laser-ready SVG of every piece with the seam allowance already added." />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <meta name="theme-color" content="#3A4A2C" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .site-content { max-width: calc(1520px + var(--sidebar-width)); }
+    .wrap { max-width: none; }
+    .layout {
+      display: grid; gap: var(--space-4); align-items: start;
+      grid-template-columns: 300px minmax(0, 1fr) 300px;
+      grid-template-areas: "left mid right";
+    }
+    .col-left { grid-area: left; } .col-mid { grid-area: mid; } .col-right { grid-area: right; }
+    @media (max-width: 1180px) {
+      .layout { grid-template-columns: 300px minmax(0,1fr); grid-template-areas: "left mid" "right mid"; }
+    }
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; grid-template-areas: "left" "right" "mid"; }
+    }
+
+    .panel {
+      background: var(--chalk); border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius); padding: var(--space-4); box-shadow: var(--shadow-xs);
+    }
+    .panel + .panel { margin-top: var(--space-4); }
+    .panel h2 {
+      font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.12em; color: var(--soil-dark);
+      margin-bottom: var(--space-3);
+    }
+    .field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); }
+    .field label { font-size: var(--text-sm); color: var(--slate-dark); }
+    .field input[type=number], .field select {
+      font-family: var(--font-mono); font-size: var(--text-sm); padding: 0.3rem 0.45rem;
+      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
+      background: var(--white); color: var(--slate-dark); width: 7.5rem;
+    }
+    .field.check { justify-content: flex-start; gap: var(--space-2); }
+    .field.check input { accent-color: var(--moss-mid); }
+    .field.check label { font-size: var(--text-sm); }
+    .hint { font-size: var(--text-xs); color: var(--slate-light); line-height: 1.5; margin-top: var(--space-2); }
+    .unit { font-family: var(--font-mono); font-size: 0.65rem; color: var(--slate-light); }
+
+    .seg { display: inline-flex; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); overflow: hidden; background: var(--white); }
+    .seg button {
+      font-family: var(--font-mono); font-size: var(--text-xs); padding: 0.3rem 0.65rem;
+      border: none; background: transparent; color: var(--slate-mid); cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+    }
+    .seg button + button { border-left: 1px solid var(--slate-subtle); }
+    .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
+
+    #blocks { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-2); }
+    .block-card {
+      display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
+      padding: var(--space-2); border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
+      background: var(--white); cursor: pointer; transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .block-card:hover { border-color: var(--soil-mid); }
+    .block-card.on { border-color: var(--moss-mid); box-shadow: 0 0 0 1px var(--moss-mid); }
+    .block-card canvas { width: 60px; height: 60px; }
+    .block-card span { font-size: 0.65rem; color: var(--slate-dark); text-align: center; line-height: 1.2; }
+
+    #grid { display: grid; gap: 2px; background: var(--slate-subtle); border: 1px solid var(--slate-subtle); }
+    .cell { padding: 0; border: none; background: var(--white); cursor: pointer; aspect-ratio: 1; }
+    .cell canvas { width: 100%; height: 100%; display: block; }
+    .cell:hover { outline: 2px solid var(--moss-mid); outline-offset: -2px; }
+
+    #fabrics { display: flex; flex-direction: column; gap: var(--space-2); }
+    .fabric { display: flex; align-items: center; gap: var(--space-2); }
+    .fabric.on .swatch { box-shadow: 0 0 0 2px var(--moss-mid); }
+    .swatch {
+      width: 32px; height: 32px; flex: none; border-radius: var(--radius-sm);
+      border: 1px solid var(--slate-subtle); cursor: pointer; background-position: center;
+    }
+    .fab-name {
+      flex: 1; min-width: 0; font-size: var(--text-sm); padding: 0.25rem 0.4rem;
+      border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--slate-dark);
+    }
+    .fab-name:hover, .fab-name:focus { border-color: var(--slate-subtle); background: var(--white); }
+    .swap { cursor: pointer; }
+
+    #preview { width: 100%; display: block; cursor: crosshair; border-radius: var(--radius-sm); }
+    #layout { width: 100%; display: block; }
+
+    #pieces { display: flex; flex-direction: column; gap: var(--space-1); max-height: 34vh; overflow-y: auto; }
+    .piece { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; gap: var(--space-2); padding: 0.2rem 0; }
+    .pc-swatch { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--slate-subtle); background-position: center; }
+    .pc-main { min-width: 0; display: flex; flex-direction: column; }
+    .pc-name { font-size: var(--text-sm); color: var(--soil-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pc-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--slate-light); }
+    .pc-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--slate-mid); }
+
+    button.primary {
+      font-family: var(--font-mono); font-size: var(--text-sm); background: var(--moss-dark);
+      color: var(--sidebar-text); border: none; border-radius: var(--radius-sm);
+      padding: 0.5rem 1.2rem; cursor: pointer; transition: background var(--transition);
+    }
+    button.primary:hover:not(:disabled) { background: var(--moss-mid); }
+    button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.ghost {
+      font-family: var(--font-mono); font-size: var(--text-xs); background: transparent;
+      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
+      padding: 0.4rem 0.7rem; color: var(--slate-dark); cursor: pointer;
+    }
+    button.ghost:hover:not(:disabled) { border-color: var(--soil-mid); color: var(--soil-dark); }
+    button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ghost.small { padding: 0.22rem 0.5rem; font-size: 0.62rem; }
+    .run-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); flex-wrap: wrap; }
+    .stat { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); }
+    .stat.bad { color: #c0524a; }
+    #pieceTotal, #unitNote { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); margin-top: var(--space-2); line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Patch</div>
+        <div class="page-subtitle">// quilt blocks, sized and cut, seam allowance included</div>
+      </div>
+
+      <div class="wrap">
+        <div class="layout">
+
+          <div class="col-left">
+            <div class="panel">
+              <h2>Block</h2>
+              <div class="field">
+                <label>Source</label>
+                <span class="seg" id="modeSeg" role="group" aria-label="block source">
+                  <button type="button" data-mode="library" aria-pressed="true">library</button>
+                  <button type="button" data-mode="custom" aria-pressed="false">custom grid</button>
+                </span>
+              </div>
+              <div id="blocks"></div>
+              <div id="gridWrap" hidden>
+                <div class="field">
+                  <label for="gridN">Grid</label>
+                  <select id="gridN">
+                    <option value="2">2 × 2</option>
+                    <option value="3" selected>3 × 3</option>
+                    <option value="4">4 × 4</option>
+                    <option value="5">5 × 5</option>
+                  </select>
+                </div>
+                <div id="grid"></div>
+                <p class="hint">Click a cell to cycle plain → half-square → quarter-square → rails → square-in-square → four patch. Shift-click to rotate it.</p>
+              </div>
+              <div id="unitNote"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Fabrics</h2>
+              <div id="fabrics"></div>
+              <p class="hint" id="paintHint"></p>
+              <button class="ghost small" id="resetFabrics">reset to block default</button>
+            </div>
+          </div>
+
+          <div class="col-mid">
+            <div class="panel">
+              <h2>Block preview</h2>
+              <canvas id="preview"></canvas>
+              <p class="hint">This is the block as it will look <em>finished</em> — the seam allowance is added to the cut pieces, not shown here.</p>
+            </div>
+
+            <div class="panel">
+              <h2>Cutting layout</h2>
+              <div class="run-row" style="margin-top:0">
+                <button class="primary" id="cut">lay out pieces</button>
+                <button class="ghost" id="download" disabled>download SVGs</button>
+                <span class="stat" id="cutStatus"></span>
+              </div>
+              <canvas id="layout" style="margin-top: var(--space-4)"></canvas>
+              <p class="hint">Each fabric is cut separately, so every fabric gets its own sheets. Red&nbsp;#ff0000 at 0.1&nbsp;pt, millimetre units.</p>
+            </div>
+          </div>
+
+          <div class="col-right">
+            <div class="panel">
+              <h2>Size</h2>
+              <div class="field">
+                <label>Units</label>
+                <span class="seg" id="unitSeg" role="group" aria-label="units">
+                  <button type="button" data-unit="in" aria-pressed="true">inches</button>
+                  <button type="button" data-unit="mm" aria-pressed="false">mm</button>
+                </span>
+              </div>
+              <div class="field"><label for="finished">Finished block <span class="unit" data-unit-label>in</span></label><input type="number" id="finished" min="1" /></div>
+              <div class="field"><label for="seam">Seam allowance <span class="unit" data-unit-label>in</span></label><input type="number" id="seam" min="0" /></div>
+              <div class="field"><label for="blocksN">How many blocks</label><input type="number" id="blocksN" min="1" max="99" value="1" /></div>
+              <div class="field check"><input type="checkbox" id="trim" checked /><label for="trim">Trim the dog ears</label></div>
+              <p class="hint">A quarter inch is the quilting standard. Offsetting the finished shape by it reproduces the usual rules — a half-square triangle comes out at finished&nbsp;+&nbsp;⅞″, a quarter-square at&nbsp;+&nbsp;1¼″ — and a laser cuts them exactly, so there is nothing to trim afterwards.</p>
+            </div>
+
+            <div class="panel">
+              <h2>Fabric &amp; cutting</h2>
+              <div class="field"><label for="sheetW">Fabric width <span class="unit" data-unit-label>in</span></label><input type="number" id="sheetW" min="2" /></div>
+              <div class="field"><label for="sheetH">Fabric height <span class="unit" data-unit-label>in</span></label><input type="number" id="sheetH" min="2" /></div>
+              <div class="field"><label for="spacing">Gap between pieces <span class="unit" data-unit-label>in</span></label><input type="number" id="spacing" min="0" /></div>
+              <div class="field check"><input type="checkbox" id="grainLock" checked /><label for="grainLock">Keep pieces on grain</label></div>
+              <div class="field check"><input type="checkbox" id="grainMarks" /><label for="grainMarks">Engrave grain arrows</label></div>
+              <p class="hint">Grain lock only rotates pieces by 180°, so nothing lands on the bias and stretches. Turning it off packs tighter but can pull a block out of square.</p>
+            </div>
+
+            <div class="panel">
+              <h2>Pieces to cut</h2>
+              <div id="pieces"></div>
+              <div id="pieceTotal"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="./app.js"></script>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>
