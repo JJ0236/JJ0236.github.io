@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arrange — SVG Nesting — joshhicks.info</title>
+  <meta name="description" content="Pack SVG parts onto sheet stock with as little waste as the geometry allows, then export a laser-ready SVG. Runs entirely in your browser." />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <meta name="theme-color" content="#3A4A2C" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .wrap { max-width: var(--content-max); }
+    .layout { display: grid; grid-template-columns: 330px 1fr; gap: var(--space-6); align-items: start; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--chalk);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-xs);
+    }
+    .panel + .panel { margin-top: var(--space-4); }
+    .panel h2 {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--soil-dark);
+      margin-bottom: var(--space-3);
+    }
+
+    .field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); }
+    .field label { font-size: var(--text-sm); color: var(--slate-dark); }
+    .field input[type=number], .field select, .field input[type=text] {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      padding: 0.3rem 0.45rem;
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm);
+      background: var(--white);
+      color: var(--slate-dark);
+      width: 8.5rem;
+    }
+    .field select { width: 9.5rem; }
+    .field.check { justify-content: flex-start; gap: var(--space-2); }
+    .field.check input { accent-color: var(--moss-mid); }
+    .hint { font-size: var(--text-xs); color: var(--slate-light); line-height: 1.5; margin-top: var(--space-2); }
+
+    .drop {
+      display: block;              /* it is a <label>; inline would collapse it */
+      border: 1.5px dashed var(--soil-light);
+      border-radius: var(--radius);
+      padding: var(--space-5, 1.25rem) var(--space-4);
+      text-align: center;
+      cursor: pointer;
+      transition: background var(--transition), border-color var(--transition);
+    }
+    .drop:hover, .drop.over { background: var(--bark-light); border-color: var(--soil-mid); }
+    .drop strong { display: block; font-size: var(--text-sm); color: var(--soil-dark); }
+    .drop span { font-size: var(--text-xs); color: var(--slate-light); }
+    .drop input { display: none; }
+
+    #parts { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+    .part {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) 3.4rem auto auto;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2);
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm);
+      background: var(--white);
+    }
+    .thumb { width: 34px; height: 34px; }
+    .part-main { min-width: 0; }
+    .part-name { font-size: var(--text-sm); font-weight: 600; color: var(--soil-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .part-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--slate-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .qty { display: flex; flex-direction: column; align-items: center; }
+    .qty span { font-family: var(--font-mono); font-size: 0.6rem; color: var(--slate-light); }
+    .qty input { width: 3.2rem; font-family: var(--font-mono); font-size: var(--text-sm); padding: 0.2rem; text-align: center; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); }
+    .rot-input { font-family: var(--font-mono); font-size: 0.62rem; padding: 0.2rem; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); background: var(--white); width: 4.9rem; }
+    .del { border: none; background: transparent; color: var(--slate-light); font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0 0.2rem; }
+    .del:hover { color: #c0524a; }
+
+    .run-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); }
+    button.primary {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      background: var(--moss-dark);
+      color: var(--sidebar-text);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 1.2rem;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    button.primary:hover:not(:disabled) { background: var(--moss-mid); }
+    button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary.running { background: #8a4a3c; }
+    button.ghost {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      background: transparent;
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.7rem;
+      color: var(--slate-dark);
+      cursor: pointer;
+    }
+    button.ghost:hover:not(:disabled) { border-color: var(--soil-mid); color: var(--soil-dark); }
+    button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .stats { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-3); }
+    .stat { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); }
+    .stat b { display: block; font-size: var(--text-lg); font-weight: 600; color: var(--soil-dark); letter-spacing: -0.01em; }
+    .stat b.bad { color: #c0524a; }
+
+    #view { width: 100%; display: block; }
+    #note {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--slate-dark);
+      background: var(--bark-light);
+      border-left: 3px solid var(--soil-mid);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-sm);
+      margin-top: var(--space-3);
+      line-height: 1.6;
+    }
+    #note.bad { border-left-color: #c0524a; color: #8a3a32; }
+    #totals { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); margin-top: var(--space-2); }
+    #empty { font-size: var(--text-sm); color: var(--slate-light); text-align: center; padding: var(--space-4) 0; }
+    .export-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Arrange</div>
+        <div class="page-subtitle">// pack parts onto sheet stock, export a laser-ready SVG</div>
+      </div>
+
+      <div class="wrap">
+        <div class="layout">
+          <div>
+            <div class="panel">
+              <h2>Parts</h2>
+              <label class="drop" id="drop">
+                <strong>Drop SVG files here</strong>
+                <span>or click to choose — closed shapes only</span>
+                <input type="file" id="file" accept=".svg,image/svg+xml" multiple />
+              </label>
+              <div id="parts"></div>
+              <div id="empty">nothing loaded yet</div>
+              <div id="totals"></div>
+            </div>
+
+            <div class="panel">
+              <h2>Sheet</h2>
+              <div class="field">
+                <label for="sheet">Stock size</label>
+                <select id="sheet">
+                  <option value="300x300">300 × 300 mm</option>
+                  <option value="600x300">600 × 300 mm</option>
+                  <option value="600x400" selected>600 × 400 mm</option>
+                  <option value="812x508">812 × 508 mm (32×20")</option>
+                  <option value="900x600">900 × 600 mm</option>
+                  <option value="1219x610">1219 × 610 mm (4×2 ft)</option>
+                  <option value="custom">custom…</option>
+                </select>
+              </div>
+              <div id="customSize" hidden>
+                <div class="field"><label for="sheetW">Width (mm)</label><input type="number" id="sheetW" value="600" min="10" max="5000" /></div>
+                <div class="field"><label for="sheetH">Height (mm)</label><input type="number" id="sheetH" value="400" min="10" max="5000" /></div>
+              </div>
+              <div class="field"><label for="margin">Edge margin (mm)</label><input type="number" id="margin" value="5" min="0" max="100" step="0.5" /></div>
+              <div class="field"><label for="spacing">Part spacing (mm)</label><input type="number" id="spacing" value="2" min="0" max="50" step="0.5" /></div>
+              <p class="hint">Spacing is the clearance held between parts — set it to at least your kerf so cuts do not run into each other.</p>
+            </div>
+
+            <div class="panel">
+              <h2>Nesting</h2>
+              <div class="field">
+                <label for="rotation">Rotation</label>
+                <select id="rotation">
+                  <option value="none">0° only</option>
+                  <option value="grain">grain (0/180)</option>
+                  <option value="quarter" selected>90° steps</option>
+                  <option value="eighth">45° steps</option>
+                  <option value="free">free (15°)</option>
+                </select>
+              </div>
+              <div class="field"><label for="budget">Time budget (s)</label><input type="number" id="budget" value="8" min="1" max="120" /></div>
+              <div class="field"><label for="seed">Seed</label><input type="number" id="seed" value="1" min="1" max="99999" /></div>
+              <div class="field check"><input type="checkbox" id="merge" /><label for="merge">Merge common lines on export</label></div>
+              <p class="hint">Grain lock keeps plywood and anything directional the right way up. Merging only does anything when parts actually touch, so it needs spacing at or near&nbsp;0.</p>
+              <div class="run-row">
+                <button class="primary" id="run" disabled>nest</button>
+                <span class="stat" id="status">idle</span>
+                <span class="stat" id="elapsed"></span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel">
+              <h2>Result</h2>
+              <div class="stats">
+                <div class="stat">sheet used<b id="density">—</b></div>
+                <div class="stat">sheets<b id="sheetCount">—</b></div>
+                <div class="stat">placed<b id="placed">—</b></div>
+              </div>
+              <canvas id="view"></canvas>
+              <div id="note" hidden></div>
+              <div class="export-row" style="margin-top: var(--space-4)">
+                <button class="ghost" id="export" disabled>download one SVG per sheet</button>
+                <button class="ghost" id="exportOne" disabled>download all sheets in one file</button>
+              </div>
+              <p class="hint">Exports use the laser convention from the rest of these tools — red&nbsp;#ff0000 cut at 0.1&nbsp;pt, millimetre units, one group per sheet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+  <script>
+    // Drag and drop straight onto the panel.
+    const drop = document.getElementById('drop');
+    const file = document.getElementById('file');
+    ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => {
+      e.preventDefault(); drop.classList.add('over');
+    }));
+    ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => {
+      e.preventDefault(); drop.classList.remove('over');
+    }));
+    drop.addEventListener('drop', e => {
+      const dropped = Array.from(e.dataTransfer?.files || []).filter(f => /\.svg$/i.test(f.name));
+      if (!dropped.length) return;
+      const dt = new DataTransfer();
+      dropped.forEach(f => dt.items.add(f));
+      file.files = dt.files;
+      file.dispatchEvent(new Event('change'));
+    });
+  </script>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>
