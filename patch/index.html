@@ -57,7 +57,12 @@
     .seg button + button { border-left: 1px solid var(--slate-subtle); }
     .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
 
-    #blocks { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-2); }
+    /* Twenty-odd blocks would otherwise run the panel off the page. */
+    #blocks {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-2);
+      max-height: 46vh; overflow-y: auto; overscroll-behavior: contain;
+      padding-right: 2px;
+    }
     .block-card {
       display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
       padding: var(--space-2); border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);

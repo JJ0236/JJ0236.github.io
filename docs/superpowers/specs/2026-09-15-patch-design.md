@@ -43,9 +43,29 @@ A block is an N×N grid of *finished* units. Each unit expands to regions, and
 each region takes a fabric. Unit types: plain, half-square, quarter-square,
 flying geese (2×1), rails, square-in-square, four patch.
 
-Library: Four Patch, Nine Patch, Half-Square Triangle, Pinwheel, Sawtooth Star,
-Ohio Star, Churn Dash, Shoofly. Plus a grid editor — click a cell to cycle its
-type, shift-click to rotate — because most traditional blocks *are* a grid.
+Unit types: plain, half-square, quarter-square, flying geese (2×1), two rails,
+three rails, square-in-square, split quarter-square, folded corner, snowball,
+nine patch, stem, four patch. A unit may be sized non-uniformly (`w`/`h` rather
+than a single scale), which is what log cabin logs and bear paw sashing need —
+they are long thin rectangles, not scaled squares. `rotateUnits` turns a group a
+quarter at a time about the block centre, so a symmetric block reads as "one
+motif, placed four ways" instead of a hand-written list of every unit.
+
+Library (23): Four Patch, Nine Patch, Half-Square Triangle, Pinwheel, Sawtooth
+Star, Ohio Star, Churn Dash, Friendship Star, Card Trick, Jacob's Ladder, Maple
+Leaf, Double Nine Patch, Hourglass, Square in a Square, Snowball, Broken Dishes,
+Bow Tie, Dutchman's Puzzle, Rail Fence, Flying Geese, Log Cabin, Bear's Paw,
+Shoofly. Plus a grid editor — click a cell to cycle its type, shift-click to
+rotate — because most traditional blocks *are* a grid.
+
+Log Cabin is not a grid of units: a centre square with logs added round it in
+turn, each as long as the side it lands on, light on two sides and dark on the
+other two. Bear's Paw is one paw motif placed four ways on a 7×7 grid.
+
+Card Trick's side units are flying geese in a *square* cell — background against
+the outer edge with its point inward, the two neighbouring cards filling the
+corners beside it. Cutting a half off a diagonal instead gives the wrong shape,
+and the block stops reading as four interlocking cards.
 
 A star's centre square and its points are collinear, so sharing a fabric between
 them reads as one plain diamond rather than a star. The default roles put a

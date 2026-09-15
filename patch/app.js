@@ -42,6 +42,7 @@ let fabrics = [
   { id: 'a', name: 'Background', color: '#EFE9DC', img: null },
   { id: 'b', name: 'Feature',    color: '#5C7A4E', img: null },
   { id: 'c', name: 'Accent',     color: '#8B6340', img: null },
+  { id: 'd', name: 'Fourth',     color: '#A8553F', img: null },   // Card Trick needs four
 ];
 const fabricById = id => fabrics.find(f => f.id === id) || fabrics[0];
 
@@ -172,7 +173,7 @@ function drawBlock(cv, block, { plain = false, size } = {}) {
     ctx.closePath();
 
     const fb = plain
-      ? { color: r.role === 'b' ? '#5C7A4E' : r.role === 'c' ? '#8B6340' : '#EFE9DC', img: null }
+      ? { color: { b: '#5C7A4E', c: '#8B6340', d: '#A8553F' }[r.role] || '#EFE9DC', img: null }
       : fabricById(fabricFor(i, r));
 
     if (fb.img && fb.img.complete && fb.img.naturalWidth) {
