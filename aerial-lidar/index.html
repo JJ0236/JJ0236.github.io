@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aerial LiDAR — joshhicks.info</title>
+  <meta name="description" content="Slide between bare-earth LiDAR and aerial imagery. The ground with the trees taken off — old roadbeds, homesteads, quarries and sinkholes that are invisible from the air." />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <meta name="theme-color" content="#3A4A2C" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <style>
+    .site-content { max-width: calc(1520px + var(--sidebar-width)); }
+
+    .stage {
+      --split: 50%;
+      position: relative;
+      width: 100%;
+      height: min(74vh, 780px);
+      min-height: 420px;
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: var(--bark-light);
+      box-shadow: var(--shadow-sm);
+      touch-action: none;
+    }
+    /* Both panes need an explicit z-index. Leaflet gives its internal panes
+       z-index 200-800; without a stacking context on each map those escape to
+       the root and the lower map's tiles paint straight over the upper map. */
+    .pane { position: absolute; inset: 0; }
+    #map-base { z-index: 1; }
+    #map-over { z-index: 2; }
+    /* The LiDAR pane sits on top, clipped to the left of the handle, and lets
+       every gesture fall through to the aerial map underneath. */
+    #map-over { clip-path: inset(0 calc(100% - var(--split)) 0 0); pointer-events: none; }
+
+    .handle {
+      position: absolute; top: 0; bottom: 0; left: 50%;
+      width: 2px; margin-left: -1px;
+      background: var(--chalk);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+      cursor: ew-resize; z-index: 500;
+    }
+    .handle::after {
+      content: '';
+      position: absolute; top: 50%; left: 50%;
+      width: 34px; height: 34px; margin: -17px 0 0 -17px;
+      border-radius: 50%;
+      background: var(--chalk);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+    }
+    .handle::before {
+      content: '\00ab\00a0\00bb';
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1; font-family: var(--font-mono); font-size: 0.8rem;
+      color: var(--soil-dark); white-space: nowrap;
+    }
+    .handle:focus-visible { outline: 3px solid var(--moss-light); outline-offset: 2px; }
+
+    .edge-label {
+      position: absolute; top: var(--space-3); z-index: 480;
+      font-family: var(--font-mono); font-size: var(--text-xs);
+      letter-spacing: 0.1em; text-transform: uppercase;
+      background: rgba(20,24,16,0.72); color: #E9E3D6;
+      padding: 0.3rem 0.6rem; border-radius: var(--radius-sm);
+      pointer-events: none; transition: opacity var(--transition);
+    }
+    .edge-label.left { left: var(--space-3); }
+    .edge-label.right { right: var(--space-3); }
+
+    .readout {
+      position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 480;
+      background: rgba(20,24,16,0.72); color: #E9E3D6;
+      border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3);
+      font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.7;
+      pointer-events: none;
+    }
+    .readout b { font-size: var(--text-base); font-weight: 600; color: #fff; display: block; }
+    .readout span { color: #A9A294; }
+
+    .zoombar { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 480; display: flex; flex-direction: column; gap: 2px; }
+    .zoombar button {
+      width: 30px; height: 30px; border: none; border-radius: var(--radius-sm);
+      background: rgba(20,24,16,0.72); color: #E9E3D6; cursor: pointer;
+      font-family: var(--font-mono); font-size: 1rem; line-height: 1;
+    }
+    .zoombar button:hover { background: rgba(20,24,16,0.9); }
+
+    .bar {
+      display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+    .ctl { display: flex; flex-direction: column; gap: 0.2rem; }
+    .ctl label {
+      font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--slate-light);
+    }
+    .ctl select, .ctl input[type=text] {
+      font-family: var(--font-mono); font-size: var(--text-sm);
+      padding: 0.35rem 0.5rem; border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm); background: var(--white); color: var(--slate-dark);
+    }
+    .search-wrap { position: relative; flex: 1 1 260px; min-width: 200px; }
+    .search-wrap input { width: 100%; }
+    #results {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 900;
+      background: var(--white); border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm); margin-top: 2px; max-height: 260px; overflow-y: auto;
+      box-shadow: var(--shadow-md);
+    }
+    #results button {
+      display: block; width: 100%; text-align: left; border: none; background: transparent;
+      padding: 0.45rem 0.6rem; font-size: var(--text-sm); color: var(--slate-dark); cursor: pointer;
+      border-bottom: 1px solid var(--slate-subtle);
+    }
+    #results button:last-child { border-bottom: none; }
+    #results button:hover { background: var(--bark-light); color: var(--soil-dark); }
+
+    .seg { display: inline-flex; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); overflow: hidden; background: var(--white); }
+    .seg button {
+      font-family: var(--font-mono); font-size: var(--text-xs); padding: 0.35rem 0.6rem;
+      border: none; background: transparent; color: var(--slate-mid); cursor: pointer;
+    }
+    .seg button + button { border-left: 1px solid var(--slate-subtle); }
+    .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
+
+    button.ghost {
+      font-family: var(--font-mono); font-size: var(--text-xs); background: transparent;
+      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
+      padding: 0.4rem 0.7rem; color: var(--slate-dark); cursor: pointer;
+    }
+    button.ghost:hover { border-color: var(--soil-mid); color: var(--soil-dark); }
+
+    #render-note, .foot {
+      font-size: var(--text-sm); color: var(--slate-mid); line-height: 1.6;
+      margin-top: var(--space-3); max-width: 80ch;
+    }
+    .leaflet-container { background: var(--bark-light); font-family: var(--font-body); }
+    .leaflet-control-attribution { font-size: 0.6rem; }
+
+    @media (max-width: 700px) { .stage { height: 64vh; } }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Aerial LiDAR</div>
+        <div class="page-subtitle">// slide the ground out from under the trees</div>
+      </div>
+
+      <div class="bar">
+        <div class="ctl search-wrap">
+          <label for="search">Find a place</label>
+          <input type="text" id="search" placeholder="Devil's Den, or an address" autocomplete="off" />
+          <div id="results" hidden></div>
+        </div>
+        <div class="ctl">
+          <label for="render">LiDAR view</label>
+          <select id="render"></select>
+        </div>
+        <div class="ctl">
+          <label for="contour">Contours</label>
+          <select id="contour"></select>
+        </div>
+        <div class="ctl">
+          <label>Elevation in</label>
+          <span class="seg" id="unitSeg" role="group" aria-label="elevation units">
+            <button type="button" data-unit="ft" aria-pressed="true">ft</button>
+            <button type="button" data-unit="m" aria-pressed="false">m</button>
+          </span>
+        </div>
+        <div class="ctl">
+          <label>&nbsp;</label>
+          <button class="ghost" id="copy">copy link</button>
+        </div>
+      </div>
+
+      <div class="stage" id="stage">
+        <div class="pane" id="map-base"></div>
+        <div class="pane" id="map-over"></div>
+        <div class="edge-label left" id="label-lidar">bare earth</div>
+        <div class="edge-label right" id="label-aerial">from the air</div>
+        <div class="handle" id="handle" tabindex="0" role="slider"
+             aria-label="Reveal LiDAR or imagery" aria-valuemin="0" aria-valuemax="100"></div>
+        <div class="readout">
+          <b id="elev">—</b>
+          <span id="coords">move over the map</span>
+        </div>
+        <div class="zoombar">
+          <button id="zoom-in" aria-label="zoom in">+</button>
+          <button id="zoom-out" aria-label="zoom out">−</button>
+        </div>
+      </div>
+
+      <p id="render-note"></p>
+      <p class="foot">The left half is <strong>bare earth</strong>: a LiDAR survey with the vegetation stripped out, so you are looking at the ground itself rather than the canopy over it. That is why old roadbeds, homesteads, quarries, railroad grades and sinkholes show up here and vanish on the aerial side. Elevation comes from the <a href="https://www.usgs.gov/3d-elevation-program" target="_blank" rel="noopener">USGS 3D Elevation Program</a> at up to one metre; coverage and detail vary by county, and the oldest surveys are coarser. Drag the handle, or focus it and use the arrow keys.</p>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script type="module" src="./app.js"></script>
+  <script src="/scripts/nav.js"></script>
+</body>
+</html>
