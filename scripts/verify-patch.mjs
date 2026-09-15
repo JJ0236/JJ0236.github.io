@@ -115,6 +115,17 @@ section('Seam allowance reproduces the traditional rules');
   ok('trimming narrows the geese base but keeps its height',
      tb.w < gb.w && near(tb.h, gb.h, 1e-9), `${tb.w / IN} x ${tb.h / IN}`);
 
+  // The default leaves the points on, so a piece matches what a pattern hands
+  // you. Trimming is opt-in.
+  const dflt = P.blockPieces(geese, 6 * IN, { seamMm: SEAM });
+  ok('points are left on by default',
+     near(P.bounds(dflt.pieces.find(x => x.count === 1).cut).w, gb.w, 1e-9));
+  ok('a square is identical either way, having no acute corners', (() => {
+    const a = P.blockPieces(B.LIBRARY['nine-patch'], 12 * IN, { seamMm: SEAM, trimPoints: true });
+    const b = P.blockPieces(B.LIBRARY['nine-patch'], 12 * IN, { seamMm: SEAM, trimPoints: false });
+    return near(P.bounds(a.pieces[0].cut).w, P.bounds(b.pieces[0].cut).w, 1e-9);
+  })());
+
   const fp = P.blockPieces(B.LIBRARY['four-patch'], 10 * IN, { seamMm: SEAM });
   ok('four patch 10in: cut squares are 5.5in', near(P.bounds(fp.pieces[0].cut).w / IN, 5.5, 1e-9));
 }

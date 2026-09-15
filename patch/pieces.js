@@ -115,10 +115,11 @@ export function bounds(poly) {
  *              own role, so a block arrives with its intended light/dark
  *              layout instead of one flat colour
  * seamMm       seam allowance, default 1/4 inch
- * trimPoints   clamp the mitre so dog ears are cut off (default true)
+ * trimPoints   clamp the mitre so dog ears are cut off (default false, which
+ *              matches what a pattern gives you: the points are left on)
  */
 export function blockPieces(block, finishedMm, {
-  fabricFor = (i, r) => r.role, seamMm = DEFAULT_SEAM, trimPoints = true,
+  fabricFor = (i, r) => r.role, seamMm = DEFAULT_SEAM, trimPoints = false,
 } = {}) {
   const scale = finishedMm / block.grid;
   const regions = blockRegions(block).map((r, i) => ({

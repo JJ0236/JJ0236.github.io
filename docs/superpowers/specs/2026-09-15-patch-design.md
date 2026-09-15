@@ -29,10 +29,13 @@ essentially always convex — squares, rectangles, right triangles, diamonds,
 trapezoids — so the offset is exact and cheap.
 
 **Dog ears.** An offset 45° corner runs out to `s/sin(22.5°)` ≈ 2.6× the seam
-allowance: a long fragile spike. Real patterns cut those points off. Clamping
-the mitre does exactly that, leaving the blunt end quilters expect. Off by
-default would match tradition; on by default is right here, because a laser cuts
-the shape exactly and there is nothing to trim afterwards.
+allowance: a long fragile spike. Clamping the mitre cuts it off. **Off by
+default** — with the points on, a piece is exactly what a pattern hands you, and
+the point is the corner you line neighbouring pieces up by when piecing.
+Trimming saves fabric and is one checkbox away.
+
+Squares are unaffected either way: a 90° mitre reaches 1.41× the allowance,
+inside the 1.6 limit, so nothing is ever cut off a right angle.
 
 **Grain.** A piece cut off-grain stretches on the bias and pulls the block out
 of square, so the cutting layout is grain-locked to 0/180° rotation.

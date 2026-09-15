@@ -28,7 +28,7 @@ const state = {
   cells: [],
   finished: 12 * INCH,
   seam: DEFAULT_SEAM,
-  trim: true,
+  trim: false,
   grainLock: true,
   blocks: 1,
   sheet: { w: 600, h: 400, margin: 5 },
