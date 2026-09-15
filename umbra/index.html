@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Umbra — Shadow Caster — joshhicks.info</title>
+  <meta name="description" content="Turn an SVG or a word into a physical object whose shadow is that art. Place the lamp, see what its size can actually resolve, and export a printable STL or a laser-cut sheet. Runs entirely in your browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --ink-dark:   #26344E;
+      --ink-mid:    #3E5478;
+      --ink-light:  #8FB0E8;
+      --bg:         #101318;
+      --bg2:        #14181F;
+      --bg3:        #1A1F29;
+      --border:     #232B3A;
+      --text:       #C4CBD8;
+      --muted:      #6E7788;
+      --dim:        #454E60;
+      --accent:     #8FB0E8;
+      --warn:       #D8A657;
+      --bad:        #D2766B;
+      --good:       #7FB88A;
+      --panel-w:    296px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .tool-header {
+      height: 48px; background: var(--ink-dark);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1.5rem; flex-shrink: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 10;
+    }
+    .tool-header-back {
+      display: flex; align-items: center; gap: 0.4rem;
+      color: #7A8296; font-size: 0.82rem; font-weight: 500;
+      text-decoration: none; transition: color 0.2s;
+    }
+    .tool-header-back:hover { color: #D0D6E2; }
+    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .tool-header-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.78rem; font-weight: 500;
+      color: var(--ink-light); letter-spacing: 0.04em;
+    }
+    .tool-header-site { font-size: 0.68rem; color: #5A6070; letter-spacing: 0.06em; }
+
+    .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+    .sidebar {
+      width: var(--panel-w); background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; flex-shrink: 0;
+      scrollbar-width: thin; scrollbar-color: #26304a transparent;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #26304a; border-radius: 2px; }
+
+    .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
+    .panel:last-child { border-bottom: none; }
+    .panel-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.64rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--muted); margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .seg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 8px; }
+    .seg button {
+      flex: 1; padding: 5px 6px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+      background: transparent; border: none; color: var(--muted);
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .seg button + button { border-left: 1px solid var(--border); }
+    .seg button.active { background: var(--ink-dark); color: var(--ink-light); }
+
+    .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .ctrl-label { font-size: 0.75rem; color: var(--text); flex: 1; white-space: nowrap; }
+    .ctrl-hint {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: var(--muted); margin-top: -3px; margin-bottom: 8px; line-height: 1.5;
+    }
+    .ctrl-input {
+      width: 78px; background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+      color: var(--text); text-align: right; outline: none; transition: border-color 0.15s;
+    }
+    .ctrl-input:focus { border-color: var(--ink-light); }
+    .ctrl-input:disabled { opacity: 0.45; }
+    select.ctrl-input { width: 128px; text-align: left; cursor: pointer; }
+    input[type=range] { accent-color: var(--ink-light); width: 100%; }
+    input[type=range]:disabled { opacity: 0.4; }
+    .range-row { margin-bottom: 10px; }
+    .range-row .ctrl-row { margin-bottom: 3px; }
+    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #A8B4C8; }
+
+    .btn {
+      width: 100%; padding: 9px;
+      background: var(--ink-dark); border: 1px solid var(--ink-mid);
+      border-radius: 6px; color: var(--ink-light);
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+      cursor: pointer; transition: background 0.15s, color 0.15s;
+    }
+    .btn:hover:not(:disabled) { background: var(--ink-mid); color: #fff; }
+    .btn:disabled { opacity: 0.35; cursor: default; }
+    .btn-sub { background: var(--bg3); border-color: var(--border); color: var(--muted); margin-top: 6px; padding: 7px; }
+    .btn-sub:hover:not(:disabled) { background: #202636; color: var(--text); }
+
+    .samples { display: flex; gap: 6px; margin-bottom: 8px; }
+    .samples button {
+      flex: 1; padding: 8px 0; background: var(--bg3);
+      border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .samples button:hover { border-color: var(--ink-mid); background: #202636; }
+    .samples button.active { border-color: var(--ink-light); }
+    .samples svg { display: block; width: 26px; height: 26px; margin: 0 auto; fill: #93A0B8; stroke: #93A0B8; }
+
+    .drop {
+      border: 1px dashed var(--border); border-radius: 6px;
+      padding: 12px 8px; margin-bottom: 8px; text-align: center; cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; color: var(--muted);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .drop:hover, .drop.over { border-color: var(--ink-light); color: var(--text); }
+    input[type=file] { display: none; }
+
+    .toggle {
+      position: relative; width: 32px; height: 17px; flex-shrink: 0;
+      background: #222B3E; border-radius: 9px; cursor: pointer;
+      transition: background 0.18s; border: none; padding: 0;
+    }
+    .toggle::after {
+      content: ''; position: absolute; top: 2px; left: 2px;
+      width: 13px; height: 13px; border-radius: 50%;
+      background: #5E6678; transition: transform 0.18s, background 0.18s;
+    }
+    .toggle.on { background: var(--ink-dark); }
+    .toggle.on::after { transform: translateX(15px); background: var(--ink-light); }
+
+    /* The readout is the point of the tool, so it gets real presence. */
+    .readout { font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; line-height: 1.9; }
+    .readout div { display: flex; justify-content: space-between; gap: 8px; }
+    .readout .k { color: var(--muted); }
+    .readout .v { color: #A8B4C8; }
+    .verdict {
+      margin-top: 9px; padding: 8px 9px; border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; line-height: 1.6;
+      border: 1px solid; background: rgba(0,0,0,0.22);
+    }
+    .verdict.sharp   { border-color: rgba(127,184,138,0.45); color: var(--good); }
+    .verdict.soft    { border-color: rgba(216,166,87,0.45);  color: var(--warn); }
+    .verdict.bad     { border-color: rgba(210,118,107,0.45); color: var(--bad); }
+    .notes {
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: var(--warn); line-height: 1.65; margin-top: 8px; white-space: pre-line;
+    }
+    .notes:empty { display: none; }
+
+    .attribution { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--dim); line-height: 1.6; }
+    .attribution a { color: var(--muted); }
+
+    .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #171B22; }
+    #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    .viewport-stats {
+      position: absolute; top: 12px; right: 14px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      color: rgba(255,255,255,0.32); text-align: right;
+      pointer-events: none; line-height: 1.6; z-index: 4; white-space: pre-line;
+    }
+    .viewport-hint {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      font-size: 0.68rem; color: rgba(255,255,255,0.3);
+      pointer-events: none; white-space: nowrap; z-index: 4;
+      background: rgba(16,19,24,0.7); backdrop-filter: blur(6px);
+      padding: 5px 13px; border-radius: 20px;
+    }
+    .view-tools { position: absolute; top: 12px; left: 12px; z-index: 5; display: flex; gap: 6px; }
+    .view-tools button {
+      padding: 6px 12px; font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px;
+      background: rgba(16,19,24,0.85); backdrop-filter: blur(6px);
+      color: var(--muted); cursor: pointer; transition: color 0.15s, border-color 0.15s;
+    }
+    .view-tools button:hover { color: var(--text); border-color: var(--ink-mid); }
+    .view-tools button.active { color: var(--ink-light); border-color: var(--ink-mid); }
+
+    .overlay {
+      position: absolute; inset: 0; z-index: 20;
+      background: rgba(16,19,24,0.75); backdrop-filter: blur(3px);
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    }
+    .overlay.show { display: flex; }
+    .overlay .stage { font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text); }
+    .overlay .stage.err { color: var(--bad); max-width: 30rem; text-align: center; line-height: 1.7; }
+
+    .no-webgl { position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; padding: 2rem; text-align: center; color: var(--muted); }
+    .no-webgl.show { display: flex; }
+    .no-webgl h2 { font-size: 0.95rem; color: var(--text); font-weight: 500; }
+    .no-webgl p { font-size: 0.78rem; max-width: 34rem; line-height: 1.6; }
+
+    @media (max-width: 860px) {
+      .body-wrap { flex-direction: column; }
+      .sidebar { width: 100%; max-height: 46%; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/projects/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 2L4 7l5 5"/>
+    </svg>
+    Projects
+  </a>
+  <span class="tool-header-title">UMBRA — SHADOW CASTER</span>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<div class="body-wrap">
+  <aside class="sidebar">
+
+    <div class="panel">
+      <div class="panel-title">Art</div>
+      <div class="samples" id="samples"></div>
+      <div class="drop" id="drop">Drop an SVG, or click to choose</div>
+      <input type="file" id="file" accept=".svg,image/svg+xml" />
+      <div class="ctrl-row">
+        <span class="ctrl-label">Or type a word</span>
+      </div>
+      <div class="ctrl-row">
+        <input class="ctrl-input" id="word" style="width:100%;text-align:left" placeholder="LIGHT" maxlength="14" />
+      </div>
+      <div class="ctrl-hint">Set in Anton — a heavy face, because thin strokes cannot survive a real lamp.</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Outline strokes</span>
+        <button class="toggle" id="t-stroke"></button>
+      </div>
+      <div class="ctrl-hint">Line art is usually strokes with no fill, which would otherwise build nothing.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Light</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Source</span>
+        <select class="ctrl-input" id="lamp"></select>
+      </div>
+      <div class="ctrl-hint" id="emitter-hint"></div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Lamp from wall</span><span class="val" id="v-lampdist"></span></div>
+        <input type="range" id="r-lampdist" min="300" max="3000" step="10" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Lamp across</span><span class="val" id="v-lampx"></span></div>
+        <input type="range" id="r-lampx" min="-900" max="900" step="5" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Lamp height</span><span class="val" id="v-lampy"></span></div>
+        <input type="range" id="r-lampy" min="-900" max="900" step="5" />
+      </div>
+      <div class="ctrl-hint">Drag the lamp in the viewport to place it.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Shadow</div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Shadow width</span><span class="val" id="v-artw"></span></div>
+        <input type="range" id="r-artw" min="80" max="1400" step="10" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Object from wall</span><span class="val" id="v-objdist"></span></div>
+        <input type="range" id="r-objdist" min="5" max="95" step="1" />
+      </div>
+      <div class="ctrl-hint">Toward the wall buys detail and costs object size — that trade is the whole design.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Object</div>
+      <div class="seg" id="seg-polarity">
+        <button data-v="negative" class="active">Cut out</button>
+        <button data-v="positive">Solid art</button>
+      </div>
+      <div class="ctrl-hint" id="polarity-hint"></div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Tilt across</span><span class="val" id="v-yaw"></span></div>
+        <input type="range" id="r-yaw" min="-75" max="75" step="1" />
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Tilt up</span><span class="val" id="v-pitch"></span></div>
+        <input type="range" id="r-pitch" min="-75" max="75" step="1" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Thickness</span>
+        <input class="ctrl-input" id="i-thick" type="number" step="0.1" min="0.4" max="60" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Plate margin</span>
+        <input class="ctrl-input" id="i-margin" type="number" step="1" min="0" max="200" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Bridge width</span>
+        <input class="ctrl-input" id="i-bridge" type="number" step="0.1" min="0" max="30" />
+      </div>
+      <div class="ctrl-hint">Bridges cannot be hidden — anything in the beam casts a shadow. These are the fewest that hold it together.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Depth</div>
+      <div class="seg" id="seg-gran">
+        <button data-v="plate" class="active">Whole</button>
+        <button data-v="islands">Islands</button>
+        <button data-v="bands">Bands</button>
+      </div>
+      <div class="range-row">
+        <div class="ctrl-row"><span class="ctrl-label">Spread</span><span class="val" id="v-spread"></span></div>
+        <input type="range" id="r-spread" min="0" max="400" step="5" />
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">Seed</span>
+        <input class="ctrl-input" id="i-seed" type="number" step="1" min="1" max="9999" />
+      </div>
+      <div class="ctrl-hint" id="depth-hint"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Will it read?</div>
+      <div class="readout" id="readout"></div>
+      <div class="verdict" id="verdict"></div>
+      <div class="notes" id="notes"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">
+        Export
+        <span class="seg" style="margin:0;width:74px">
+          <button data-u="mm" class="active" id="u-mm">mm</button>
+          <button data-u="in" id="u-in">in</button>
+        </span>
+      </div>
+      <button class="btn" id="b-stl">Download STL</button>
+      <button class="btn btn-sub" id="b-svg">Download cut file (SVG)</button>
+      <div class="ctrl-hint" id="svg-hint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel">
+      <div class="attribution">
+        Runs entirely in your browser — nothing is uploaded.<br />
+        Anton by the Anton Project Authors, SIL OFL.<br />
+        <a href="/projects/">More tools</a>
+      </div>
+    </div>
+
+  </aside>
+
+  <div class="viewport-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div class="view-tools">
+      <button id="v-room" class="active">Room</button>
+      <button id="v-wall">Wall</button>
+      <button id="v-overlay" class="active">Target</button>
+    </div>
+    <div class="viewport-stats" id="stats"></div>
+    <div class="viewport-hint" id="hint">Drag to orbit — drag the lamp to place it</div>
+    <div class="overlay" id="overlay"><div class="stage" id="stage">Building…</div></div>
+    <div class="no-webgl" id="no-webgl">
+      <h2>WebGL is unavailable</h2>
+      <p>This tool needs WebGL to show the cast shadow. Try a different browser, or enable hardware acceleration.</p>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

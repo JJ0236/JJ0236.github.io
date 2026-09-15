@@ -4,16 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Projects — Josh Hicks</title>
+  <meta name="description" content="A catalog of browser-based tools, grouped by the machine they feed — laser cutter, 3D printer, or nothing but a browser." />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
   <style>
-    .projects-wrapper {
-      max-width: var(--content-max);
-    }
-    /* Featured project banner */
+    .projects-wrapper { max-width: var(--content-max); }
+
+    /* ── Featured banner ─────────────────────────────────── */
     .featured-banner {
       background: var(--moss-dark);
       border-radius: var(--radius-lg);
@@ -44,11 +44,7 @@
       line-height: 1.7;
       max-width: 600px;
     }
-    .featured-tags {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-    }
+    .featured-tags { display: flex; flex-wrap: wrap; gap: var(--space-2); }
     .featured-tags .tag {
       background: rgba(255,255,255,0.08);
       color: var(--sidebar-muted);
@@ -66,69 +62,197 @@
       transition: color var(--transition);
     }
     .featured-link:hover { color: var(--sidebar-text); }
-    /* Projects grid */
-    .projects-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
-      gap: var(--space-4);
-    }
-    .project-card {
-      background: var(--chalk);
-      border: 1px solid var(--slate-subtle);
-      border-radius: var(--radius);
-      padding: var(--space-6);
+
+    /* ── Filter bar ──────────────────────────────────────── */
+    .cat-filter {
+      position: sticky;
+      top: 0;
+      z-index: 20;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      padding: var(--space-3) 0;
+      margin-bottom: var(--space-6);
+      background: var(--parchment);
+      border-bottom: 1px solid var(--slate-subtle);
+    }
+    .cat-filter-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--slate-light);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-right: var(--space-1);
+    }
+    .chip {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--slate-mid);
+      background: transparent;
+      border: 1px solid var(--slate-subtle);
+      border-radius: 999px;
+      padding: 0.3rem 0.7rem;
+      cursor: pointer;
+      line-height: 1.4;
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+    }
+    .chip:hover { border-color: var(--soil-mid); color: var(--soil-dark); }
+    .chip[aria-pressed="true"] {
+      background: var(--moss-dark);
+      border-color: var(--moss-dark);
+      color: var(--sidebar-text);
+    }
+    .chip:focus-visible { outline: 2px solid var(--moss-mid); outline-offset: 2px; }
+
+    /* ── Section ─────────────────────────────────────────── */
+    .cat-section { margin-bottom: var(--space-12); }
+    .cat-section[hidden] { display: none; }
+    .cat-section-head {
+      display: flex;
+      align-items: baseline;
       gap: var(--space-3);
-      box-shadow: var(--shadow-xs);
+      padding-bottom: var(--space-2);
+      border-bottom: 2px solid var(--sec-accent, var(--moss-mid));
+    }
+    .cat-section-num {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--sec-accent, var(--moss-mid));
+      font-weight: 500;
+    }
+    .cat-section-name {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--soil-dark);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+    .cat-section-count {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--slate-light);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .cat-section-sub {
+      font-size: var(--text-sm);
+      color: var(--slate-mid);
+      line-height: 1.6;
+      margin: var(--space-3) 0 var(--space-4);
+      max-width: 60ch;
+    }
+
+    /* ── Row ─────────────────────────────────────────────── */
+    .cat-row {
+      display: grid;
+      grid-template-columns: 2.75rem 1fr;
+      align-items: start;
+      gap: var(--space-3);
+      padding: var(--space-4) var(--space-3);
+      border-bottom: 1px solid var(--slate-subtle);
       text-decoration: none;
-      transition: box-shadow var(--transition), transform var(--transition), border-color var(--transition);
+      color: inherit;
+      transition: background var(--transition);
     }
-    a.project-card:hover {
-      box-shadow: var(--shadow-hover);
-      transform: translateY(-4px);
-      border-color: var(--soil-mid);
+    .cat-row[hidden] { display: none; }
+    .cat-row:hover, .cat-row:focus-visible {
+      background: var(--chalk);
+      outline: none;
     }
-    .project-card--showcase {
-      cursor: default;
-      opacity: 0.85;
+    .cat-row:focus-visible { box-shadow: inset 3px 0 0 var(--moss-mid); }
+    .cat-num {
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--slate-light);
+      padding-top: 0.15rem;
+      transition: color var(--transition);
     }
-    .project-card--showcase:hover {
-      transform: none;
-      box-shadow: var(--shadow-xs);
-      border-color: var(--slate-subtle);
+    .cat-row:hover .cat-num { color: var(--sec-accent, var(--moss-mid)); }
+    .cat-body {
+      border-left: 2px solid var(--slate-subtle);
+      padding-left: var(--space-4);
+      transition: border-color var(--transition);
+      min-width: 0;
     }
-    .project-stripe {
-      height: 4px;
-      border-radius: 2px;
-      background: var(--moss-mid);
-      margin: calc(var(--space-6) * -1) calc(var(--space-6) * -1) 0;
-      border-radius: var(--radius) var(--radius) 0 0;
+    .cat-row:hover .cat-body { border-left-color: var(--sec-accent, var(--moss-mid)); }
+    .cat-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-4);
+      flex-wrap: wrap;
     }
-    .project-stripe--soil  { background: var(--soil-mid); }
-    .project-stripe--slate { background: var(--slate-mid); }
-    .project-stripe--bark  { background: var(--soil-light); }
-    .project-name {
+    .cat-name {
       font-size: var(--text-base);
       font-weight: 600;
       color: var(--soil-dark);
-      line-height: 1.3;
+      line-height: 1.35;
     }
-    .project-desc {
+    .cat-fmt {
+      display: flex;
+      gap: var(--space-2);
+      flex-shrink: 0;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--slate-light);
+    }
+    .cat-fmt i { font-style: normal; }
+    .cat-fmt i + i::before { content: '·'; margin-right: var(--space-2); color: var(--slate-subtle); }
+    .cat-line {
+      display: block;
       font-size: var(--text-sm);
       color: var(--slate-dark);
       line-height: 1.6;
-      flex: 1;
+      margin-top: var(--space-1);
     }
-    .showcase-label {
+
+    /* Expanding long description */
+    .cat-more {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 260ms ease, opacity 200ms ease;
+    }
+    .cat-more > span { overflow: hidden; }
+    .cat-more .cat-text {
+      display: block;
+      font-size: var(--text-sm);
+      color: var(--slate-mid);
+      line-height: 1.7;
+      padding-top: var(--space-3);
+      max-width: 68ch;
+    }
+    .cat-row:hover .cat-more,
+    .cat-row:focus-visible .cat-more {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    @media (hover: none) {
+      .cat-more { grid-template-rows: 1fr; opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cat-more { transition: none; }
+    }
+
+    .cat-empty {
       font-family: var(--font-mono);
-      font-size: 0.65rem;
+      font-size: var(--text-sm);
       color: var(--slate-light);
-      letter-spacing: 0.06em;
+      padding: var(--space-8) 0;
+      text-align: center;
     }
+    .cat-empty[hidden] { display: none; }
+
     @media (max-width: 600px) {
       .featured-banner { padding: var(--space-6); }
       .featured-title { font-size: var(--text-xl); }
+      .cat-row { grid-template-columns: 2rem 1fr; gap: var(--space-2); padding: var(--space-4) 0; }
+      .cat-body { padding-left: var(--space-3); }
+      .cat-head { gap: var(--space-2); }
     }
   </style>
 </head>
@@ -197,7 +321,8 @@
       </script>
 
       <div class="projects-wrapper">
-        <!-- Featured -->
+
+        <!-- ── Featured ─────────────────────────────────── -->
         <div class="featured-banner fade-up">
           <div class="featured-label">Featured Project</div>
           <div class="featured-title">TunesInYourCity</div>
@@ -213,190 +338,286 @@
           <a href="https://open.spotify.com/user/31rclwfbe3ken4qpxspmc6etyfoa?si=c8987c2b34ee4f88" target="_blank" rel="noopener" class="featured-link">View on Spotify →</a>
         </div>
 
-        <!-- Grid -->
-        <div class="projects-grid">
-
-          <a href="/cloche/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">Cloche — Flies on a Windowsill</div>
-            <div class="project-desc">Fruit flies on a sunny kitchen windowsill, each running its real connectome live in your browser: the FlyWire female brain and the Janelia male brain, every neuron and synapse. They taste, smell, and learn which smells mean sugar. A male sees a female and his own courtship neurons make him sing; she hears, accepts, and lays eggs on the banana. Eggs hatch, larvae crawl and pupate, and new flies climb out with brains of their own.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">Connectome</span>
-              <span class="tag">Learning</span>
-              <span class="tag">Courtship</span>
-            </div>
-          </a>
-
-          <a href="/unfold/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--slate"></div>
-            <div class="project-name">Unfold — STL to Paper Net</div>
-            <div class="project-desc">Drop a low-poly STL and get a papercraft net that cuts as a single piece: it searches for an overlap-free unfolding and simplifies the model only when it has to. Glue tabs, numbered edges, m/v fold marks, and a slider that folds the flat net into the model. Laser-ready SVG with red cuts, blue scores, and green engraving.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">STL</span>
-              <span class="tag">Papercraft</span>
-              <span class="tag">Laser Cutting</span>
-            </div>
-          </a>
-
-          <a href="/crease/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">Crease — Origami Pattern Generator</div>
-            <div class="project-desc">Parametric origami tessellations — Miura-ori, Yoshimura, waterbomb and curved concentric creases — sized to your sheet and exported as a laser-ready SVG with separate cut, mountain and valley layers. Perforate valleys or score both faces with registration marks.</div>
-            <div class="tags">
-              <span class="tag">SVG</span>
-              <span class="tag">Origami</span>
-              <span class="tag">Generative</span>
-              <span class="tag">Laser Cutting</span>
-            </div>
-          </a>
-
-          <a href="/foraging/" class="project-card fade-up">
-            <div class="project-stripe"></div>
-            <div class="project-name">Fayetteville Foraging Map</div>
-            <div class="project-desc">Interactive map for edible plants in Fayetteville with seasonal filtering and plant-type search.</div>
-            <div class="tags">
-              <span class="tag">JavaScript</span>
-              <span class="tag">Leaflet</span>
-              <span class="tag">GIS</span>
-            </div>
-          </a>
-
-          <a href="/terra/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--bark"></div>
-            <div class="project-name">Terra — 3D Printable Map Generator</div>
-            <div class="project-desc">Draw an area anywhere on Earth and get a printable model of it. Pulls OpenStreetMap buildings, roads, water and greenery, drapes them over real elevation data, and exports a multicolor 3MF or STL. Runs entirely in the browser.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">MapLibre</span>
-              <span class="tag">OpenStreetMap</span>
-              <span class="tag">3MF</span>
-              <span class="tag">3D Printing</span>
-            </div>
-          </a>
-
-          <a href="/relief/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">Relief — 3D Printable Panel Generator</div>
-            <div class="project-desc">Procedurally generate relief wall panels — packed bubbles, angular shards, or both — at exact real-world dimensions. Live 3D preview, seeded so designs are reproducible, exports slicer-ready STL or 3MF. Runs entirely in the browser.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">Procedural</span>
-              <span class="tag">STL</span>
-              <span class="tag">3MF</span>
-              <span class="tag">3D Printing</span>
-            </div>
-          </a>
-
-          <a href="/imprint/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--slate"></div>
-            <div class="project-name">Imprint — Photo to Slat Relief</div>
-            <div class="project-desc">Drop in a photo and brightness becomes depth — a 3D relief panel with live preview, levels and smoothing controls. Preview it as stacked laser-cut slats and export a slicer-ready STL or 3MF. Photos never leave the browser.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">Image Processing</span>
-              <span class="tag">STL</span>
-              <span class="tag">Laser Cutting</span>
-            </div>
-          </a>
-
-          <a href="/stl-depth/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--slate"></div>
-            <div class="project-name">STL to Depth Map</div>
-            <div class="project-desc">Load any STL, orbit a 3D preview, and generate a precision 16-bit grayscale depth map. Choose projection axis, toggle orthographic or perspective, and export a full-range PNG.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">WebGL</span>
-              <span class="tag">16-bit PNG</span>
-              <span class="tag">STL</span>
-            </div>
-          </a>
-
-          <a href="/s1c3r/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">s1c3r — STL Sheet Slicer</div>
-            <div class="project-desc">Load any STL, manipulate it in 3D, and slice it into laser-cuttable sheets. Exports a tiled SVG with alignment holes and adjustable thickness settings.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">STL Parsing</span>
-              <span class="tag">SVG Export</span>
-            </div>
-          </a>
-
-          <a href="/transcript-tool/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--slate"></div>
-            <div class="project-name">Video Transcript Tool</div>
-            <div class="project-desc">Upload a video or audio file and generate a transcript entirely in the browser — no API key, no server. Powered by local Whisper inference.</div>
-            <div class="tags">
-              <span class="tag">Whisper</span>
-              <span class="tag">Local AI</span>
-              <span class="tag">Web Audio</span>
-            </div>
-          </a>
-
-          <a href="/instagram-analytics/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--bark"></div>
-            <div class="project-name">Instagram Analytics Dashboard</div>
-            <div class="project-desc">Enter any public handle and get a full analytics dashboard — post breakdowns, hashtag performance, hook pattern analysis, and cadence heatmaps.</div>
-            <div class="tags">
-              <span class="tag">Chart.js</span>
-              <span class="tag">Cloudflare Workers</span>
-              <span class="tag">Data Analysis</span>
-            </div>
-          </a>
-
-          <a href="/scissor/" class="project-card fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">Scissor Lattice Generator</div>
-            <div class="project-desc">Design expandable scissor lattices in your browser. Set coverage area, opening size, and bar shape — see a live 3D preview, then export all bars laid out flat as an SVG for laser cutting.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">SVG Export</span>
-              <span class="tag">Laser Cutting</span>
-              <span class="tag">Fabrication</span>
-            </div>
-          </a>
-
-          <a href="/woah/" class="project-card fade-up">
-            <div class="project-stripe"></div>
-            <div class="project-name">Interactive WebGL Demo</div>
-            <div class="project-desc">Experimental browser tool — a WebGL terrain box with real-time wave physics you can sculpt and ripple directly in the viewport.</div>
-            <div class="tags">
-              <span class="tag">Three.js</span>
-              <span class="tag">WebGL</span>
-              <span class="tag">Physics</span>
-            </div>
-          </a>
-
-          <div class="project-card project-card--showcase fade-up">
-            <div class="project-stripe project-stripe--soil"></div>
-            <div class="project-name">3D Printing &amp; Fabrication</div>
-            <div class="project-desc">Beginner-friendly guides, visual PDFs, and nature-themed accessories with custom support structures designed in Fusion 360 &amp; Inkscape.</div>
-            <div class="tags">
-              <span class="tag">Fusion 360</span>
-              <span class="tag">Inkscape</span>
-              <span class="tag">3D Printing</span>
-            </div>
-            <div class="showcase-label">showcase — no link</div>
-          </div>
-
-          <div class="project-card project-card--showcase fade-up">
-            <div class="project-stripe project-stripe--slate"></div>
-            <div class="project-name">Scouting / STEM Education</div>
-            <div class="project-desc">Interactive merit-badge programs and hands-on STEM lessons for scout camps — designed to work without Wi-Fi or A/V equipment.</div>
-            <div class="tags">
-              <span class="tag">Curriculum Design</span>
-              <span class="tag">STEM</span>
-              <span class="tag">3D Printing</span>
-            </div>
-            <div class="showcase-label">showcase — no link</div>
-          </div>
-
+        <!-- ── Filter ───────────────────────────────────── -->
+        <div class="cat-filter" id="cat-filter">
+          <span class="cat-filter-label">Filter</span>
+          <button class="chip" type="button" data-filter="all" aria-pressed="true">all</button>
+          <button class="chip" type="button" data-filter="laser" aria-pressed="false">laser</button>
+          <button class="chip" type="button" data-filter="print" aria-pressed="false">3d print</button>
+          <button class="chip" type="button" data-filter="threejs" aria-pressed="false">three.js</button>
+          <button class="chip" type="button" data-filter="maps" aria-pressed="false">maps</button>
+          <button class="chip" type="button" data-filter="data" aria-pressed="false">data</button>
+          <button class="chip" type="button" data-filter="sim" aria-pressed="false">simulation</button>
         </div>
+
+        <!-- ── 01 · Laser cutter ────────────────────────── -->
+        <section class="cat-section fade-up" style="--sec-accent: var(--moss-mid);">
+          <div class="cat-section-head">
+            <span class="cat-section-num">01</span>
+            <h2 class="cat-section-name">Laser cutter</h2>
+            <span class="cat-section-count" data-count>7 tools</span>
+          </div>
+          <p class="cat-section-sub">Cut, score, engrave — every one of these hands you a ready-to-run file.</p>
+
+          <a href="/crease/" class="cat-row" data-tags="laser">
+            <span class="cat-num">01</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Crease — Origami Pattern Generator</span>
+                <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">Parametric origami tessellations, sized to your sheet.</span>
+              <span class="cat-more"><span><span class="cat-text">Miura-ori, Yoshimura, waterbomb and curved concentric creases, exported as a laser-ready SVG with separate cut, mountain and valley layers. Perforate the valleys or score both faces, with registration marks either way.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/unfold/" class="cat-row" data-tags="laser threejs">
+            <span class="cat-num">02</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Unfold — STL to Paper Net</span>
+                <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">A low-poly STL flattened into a net that cuts as one piece.</span>
+              <span class="cat-more"><span><span class="cat-text">Searches for an overlap-free unfolding and simplifies the model only when it has to. Glue tabs, numbered edges and m/v fold marks, plus a slider that folds the flat net back into the model. Exports with red cuts, blue scores and green engraving.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/scissor/" class="cat-row" data-tags="laser threejs">
+            <span class="cat-num">03</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Scissor Lattice Generator</span>
+                <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">Expandable scissor lattices, every bar laid out flat.</span>
+              <span class="cat-more"><span><span class="cat-text">Set coverage area, opening size and bar shape, watch a live 3D preview of the lattice expanding, then export all the bars nested flat on the sheet.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/s1c3r/" class="cat-row" data-tags="laser threejs">
+            <span class="cat-num">04</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">s1c3r — STL Sheet Slicer</span>
+                <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">Any STL sliced into a stack of cuttable sheets.</span>
+              <span class="cat-more"><span><span class="cat-text">Load a model, orient it in 3D, and slice it along any axis. Exports a tiled SVG with alignment holes and adjustable material thickness so the stack glues up square.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/umbra/" class="cat-row" data-tags="laser print threejs">
+            <span class="cat-num">05</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Umbra — Shadow Caster</span>
+                <span class="cat-fmt"><i>SVG</i><i>STL</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">An object whose shadow is the art you fed it.</span>
+              <span class="cat-more"><span><span class="cat-text">Give it an SVG or just a word and it builds the physical thing that casts that image. Place the lamp, see what its size can actually resolve, and export either a printable STL or a laser-cut sheet. Runs entirely in your browser.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/lazar/" class="cat-row" data-tags="laser">
+            <span class="cat-num">06</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">LAZAR — Laser Image Prep</span>
+                <span class="cat-fmt"><i>PNG</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">Photographs dithered down to something an engraver can burn.</span>
+              <span class="cat-more"><span><span class="cat-text">Image preparation for laser engraving, with a set of dithering algorithms to compare side by side. Tune contrast and threshold against the material you are actually burning before you commit the sheet.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/stl-depth/" class="cat-row" data-tags="laser threejs">
+            <span class="cat-num">07</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">STL to Depth Map</span>
+                <span class="cat-fmt"><i>PNG</i></span>
+              </span>
+              <span class="cat-line">Any STL, orbited in 3D, exported as a 16-bit grayscale depth map.</span>
+              <span class="cat-more"><span><span class="cat-text">Load a model, pick the projection axis, toggle orthographic or perspective, and export a full-range PNG. The 3D counterpart to LAZAR — where that preps a photo for engraving, this preps a model.</span></span></span>
+            </span>
+          </a>
+        </section>
+
+        <!-- ── 02 · 3D printer ──────────────────────────── -->
+        <section class="cat-section fade-up" style="--sec-accent: var(--soil-mid);">
+          <div class="cat-section-head">
+            <span class="cat-section-num">02</span>
+            <h2 class="cat-section-name">3D printer</h2>
+            <span class="cat-section-count" data-count>3 tools</span>
+          </div>
+          <p class="cat-section-sub">Draw it, generate it, or photograph it — out comes a slicer-ready STL or 3MF.</p>
+
+          <a href="/terra/" class="cat-row" data-tags="print threejs maps">
+            <span class="cat-num">08</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Terra — 3D Printable Map Generator</span>
+                <span class="cat-fmt"><i>STL</i><i>3MF</i></span>
+              </span>
+              <span class="cat-line">Draw a box anywhere on Earth and print what is inside it.</span>
+              <span class="cat-more"><span><span class="cat-text">Pulls OpenStreetMap buildings, roads, water and greenery, drapes them over real elevation data, and exports a multicolor 3MF or a plain STL. Runs entirely in the browser.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/relief/" class="cat-row" data-tags="print threejs">
+            <span class="cat-num">09</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Relief — 3D Printable Panel Generator</span>
+                <span class="cat-fmt"><i>STL</i><i>3MF</i></span>
+              </span>
+              <span class="cat-line">Procedural relief wall panels at exact real-world dimensions.</span>
+              <span class="cat-more"><span><span class="cat-text">Packed bubbles, angular shards, or both at once, with a live 3D preview. Every design is seeded, so a panel you liked six months ago comes back identical.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/imprint/" class="cat-row" data-tags="print laser threejs">
+            <span class="cat-num">10</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Imprint — Photo to Slat Relief</span>
+                <span class="cat-fmt"><i>STL</i><i>3MF</i><i>Laser</i></span>
+              </span>
+              <span class="cat-line">Drop in a photo and its brightness becomes depth.</span>
+              <span class="cat-more"><span><span class="cat-text">A relief panel with live preview and levels and smoothing controls. Preview it as stacked laser-cut slats instead of a solid print, then export whichever one you want to make. Photos never leave the browser.</span></span></span>
+            </span>
+          </a>
+        </section>
+
+        <!-- ── 03 · Simulation ──────────────────────────── -->
+        <section class="cat-section fade-up" style="--sec-accent: var(--slate-mid);">
+          <div class="cat-section-head">
+            <span class="cat-section-num">03</span>
+            <h2 class="cat-section-name">Simulation</h2>
+            <span class="cat-section-count" data-count>2 tools</span>
+          </div>
+          <p class="cat-section-sub">Things that run and keep running. Nothing to export — open it and watch.</p>
+
+          <a href="/cloche/" class="cat-row" data-tags="sim threejs">
+            <span class="cat-num">11</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Cloche — Flies on a Windowsill</span>
+                <span class="cat-fmt"><i>Live</i></span>
+              </span>
+              <span class="cat-line">Real fruit-fly connectomes, running live in your browser.</span>
+              <span class="cat-more"><span><span class="cat-text">Flies on a sunny kitchen windowsill, each one running its actual connectome — the FlyWire female brain and the Janelia male brain, every neuron and synapse. They taste, smell, and learn which smells mean sugar. A male sees a female and his own courtship neurons make him sing; she hears, accepts, and lays eggs on the banana. Eggs hatch, larvae crawl and pupate, and new flies climb out with brains of their own.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/woah/" class="cat-row" data-tags="sim threejs">
+            <span class="cat-num">12</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">WebGL Wave Tank</span>
+                <span class="cat-fmt"><i>Live</i></span>
+              </span>
+              <span class="cat-line">A terrain box with real-time wave physics you can sculpt.</span>
+              <span class="cat-more"><span><span class="cat-text">Push the ground around and ripple the water directly in the viewport. An experiment in doing fluid response fast enough to feel like a material rather than a render.</span></span></span>
+            </span>
+          </a>
+        </section>
+
+        <!-- ── 04 · Data & media ────────────────────────── -->
+        <section class="cat-section fade-up" style="--sec-accent: var(--soil-light);">
+          <div class="cat-section-head">
+            <span class="cat-section-num">04</span>
+            <h2 class="cat-section-name">Data &amp; media</h2>
+            <span class="cat-section-count" data-count>3 tools</span>
+          </div>
+          <p class="cat-section-sub">Files and public data in, something readable out.</p>
+
+          <a href="/foraging/" class="cat-row" data-tags="data maps">
+            <span class="cat-num">13</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Fayetteville Foraging Map</span>
+                <span class="cat-fmt"><i>Map</i></span>
+              </span>
+              <span class="cat-line">Edible plants around Fayetteville, filtered by what is in season.</span>
+              <span class="cat-more"><span><span class="cat-text">An interactive map with seasonal filtering and search by plant type, so the question "what can I pick this week" has an answer you can walk to.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/transcript-tool/" class="cat-row" data-tags="data">
+            <span class="cat-num">14</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Video Transcript Tool</span>
+                <span class="cat-fmt"><i>Text</i></span>
+              </span>
+              <span class="cat-line">Video or audio in, transcript out — no API key, no server.</span>
+              <span class="cat-more"><span><span class="cat-text">Whisper inference running locally in the browser tab. The file never leaves your machine, which matters more than the convenience does.</span></span></span>
+            </span>
+          </a>
+
+          <a href="/instagram-analytics/" class="cat-row" data-tags="data">
+            <span class="cat-num">15</span>
+            <span class="cat-body">
+              <span class="cat-head">
+                <span class="cat-name">Instagram Analytics Dashboard</span>
+                <span class="cat-fmt"><i>Dashboard</i></span>
+              </span>
+              <span class="cat-line">Any public handle, broken down into a full dashboard.</span>
+              <span class="cat-more"><span><span class="cat-text">Post breakdowns, hashtag performance, hook pattern analysis and cadence heatmaps — enough to tell whether an account is actually working or just posting.</span></span></span>
+            </span>
+          </a>
+        </section>
+
+        <p class="cat-empty" id="cat-empty" hidden>nothing matches that filter.</p>
+
       </div>
     </main>
   </div>
+
+  <script>
+  (function () {
+    const bar      = document.getElementById('cat-filter');
+    const empty    = document.getElementById('cat-empty');
+    const chips    = Array.from(bar.querySelectorAll('.chip'));
+    const sections = Array.from(document.querySelectorAll('.cat-section'));
+
+    function apply(filter) {
+      let total = 0;
+
+      sections.forEach(section => {
+        const rows = Array.from(section.querySelectorAll('.cat-row'));
+        let shown = 0;
+
+        rows.forEach(row => {
+          const match = filter === 'all' ||
+            row.dataset.tags.split(' ').includes(filter);
+          row.hidden = !match;
+          if (match) shown++;
+        });
+
+        section.hidden = shown === 0;
+        // A section revealed by the filter may never have tripped the scroll-in
+        // observer, which would leave it unhidden but still at opacity 0.
+        if (shown > 0) section.classList.add('visible');
+        section.querySelector('[data-count]').textContent =
+          shown + (shown === 1 ? ' tool' : ' tools');
+        total += shown;
+      });
+
+      empty.hidden = total > 0;
+    }
+
+    chips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        chips.forEach(c => c.setAttribute('aria-pressed', String(c === chip)));
+        apply(chip.dataset.filter);
+      });
+    });
+  })();
+  </script>
+
   <script src="/scripts/nav.js"></script>
 </body>
 </html>
