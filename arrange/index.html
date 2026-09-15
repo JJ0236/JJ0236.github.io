@@ -10,9 +10,34 @@
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
   <style>
-    .wrap { max-width: var(--content-max); }
-    .layout { display: grid; grid-template-columns: 330px 1fr; gap: var(--space-6); align-items: start; }
-    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    /* A layout tool earns a wider column than the 960px reading measure. */
+    .site-content { max-width: calc(1520px + var(--sidebar-width)); }
+    .wrap { max-width: none; }
+
+    .layout {
+      display: grid;
+      gap: var(--space-4);
+      align-items: start;
+      grid-template-columns: 300px minmax(0, 1fr) 300px;
+      grid-template-areas: "parts view settings";
+    }
+    .col-parts    { grid-area: parts; }
+    .col-view     { grid-area: view; }
+    .col-settings { grid-area: settings; }
+
+    /* Settings tuck under the parts list before the preview gives up width. */
+    @media (max-width: 1180px) {
+      .layout {
+        grid-template-columns: 300px minmax(0, 1fr);
+        grid-template-areas: "parts view" "settings view";
+      }
+    }
+    @media (max-width: 860px) {
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-areas: "parts" "settings" "view";
+      }
+    }
 
     .panel {
       background: var(--chalk);
@@ -47,6 +72,28 @@
     .field select { width: 9.5rem; }
     .field.check { justify-content: flex-start; gap: var(--space-2); }
     .field.check input { accent-color: var(--moss-mid); }
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--slate-subtle);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      background: var(--white);
+    }
+    .seg button {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      padding: 0.3rem 0.7rem;
+      border: none;
+      background: transparent;
+      color: var(--slate-mid);
+      cursor: pointer;
+      transition: background var(--transition), color var(--transition);
+    }
+    .seg button + button { border-left: 1px solid var(--slate-subtle); }
+    .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
+    .seg button:focus-visible { outline: 2px solid var(--moss-mid); outline-offset: -2px; }
+    .unit { font-family: var(--font-mono); font-size: 0.65rem; color: var(--slate-light); }
+
     .hint { font-size: var(--text-xs); color: var(--slate-light); line-height: 1.5; margin-top: var(--space-2); }
 
     .drop {
@@ -63,25 +110,41 @@
     .drop span { font-size: var(--text-xs); color: var(--slate-light); }
     .drop input { display: none; }
 
-    #parts { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+    /* A long parts list should not push the whole page down. */
+    #parts {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+      max-height: 54vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    /* Two rows: name and delete up top, then the numbers. One line could not
+       hold the dimensions without truncating them to "120×…". */
     .part {
       display: grid;
-      grid-template-columns: 34px minmax(0, 1fr) 3.4rem auto auto;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      grid-template-areas: "thumb name  del" "thumb meta  meta" "thumb ctrls ctrls";
       align-items: center;
-      gap: var(--space-2);
+      gap: var(--space-1) var(--space-2);
       padding: var(--space-2);
       border: 1px solid var(--slate-subtle);
       border-radius: var(--radius-sm);
       background: var(--white);
     }
+    .thumb   { grid-area: thumb; align-self: start; }
+    .part-name { grid-area: name; }
+    .del     { grid-area: del; justify-self: end; }
+    .part-meta { grid-area: meta; }
+    .part-ctrls { grid-area: ctrls; display: flex; align-items: center; gap: var(--space-2); }
     .thumb { width: 34px; height: 34px; }
-    .part-main { min-width: 0; }
     .part-name { font-size: var(--text-sm); font-weight: 600; color: var(--soil-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .part-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--slate-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .qty { display: flex; flex-direction: column; align-items: center; }
+    .part-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--slate-light); white-space: nowrap; }
+    .qty { display: flex; align-items: center; gap: 0.25rem; }
     .qty span { font-family: var(--font-mono); font-size: 0.6rem; color: var(--slate-light); }
-    .qty input { width: 3.2rem; font-family: var(--font-mono); font-size: var(--text-sm); padding: 0.2rem; text-align: center; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); }
-    .rot-input { font-family: var(--font-mono); font-size: 0.62rem; padding: 0.2rem; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); background: var(--white); width: 4.9rem; }
+    .qty input { width: 2.6rem; font-family: var(--font-mono); font-size: var(--text-sm); padding: 0.2rem; text-align: center; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); }
+    .rot-input { font-family: var(--font-mono); font-size: 0.62rem; padding: 0.2rem; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); background: var(--white); flex: 1; min-width: 0; }
     .del { border: none; background: transparent; color: var(--slate-light); font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0 0.2rem; }
     .del:hover { color: #c0524a; }
 
@@ -156,7 +219,7 @@
 
       <div class="wrap">
         <div class="layout">
-          <div>
+          <div class="col-parts">
             <div class="panel">
               <h2>Parts</h2>
               <label class="drop" id="drop">
@@ -171,27 +234,46 @@
                 <button class="ghost small" id="clear" hidden>clear all</button>
               </div>
             </div>
+          </div>
 
+          <div class="col-view">
+            <div class="panel">
+              <h2>Result</h2>
+              <div class="stats">
+                <div class="stat">sheet used<b id="density">—</b></div>
+                <div class="stat">sheets<b id="sheetCount">—</b></div>
+                <div class="stat">placed<b id="placed">—</b></div>
+              </div>
+              <canvas id="view"></canvas>
+              <div id="note" hidden></div>
+              <div class="export-row" style="margin-top: var(--space-4)">
+                <button class="ghost" id="export" disabled>download one SVG per sheet</button>
+                <button class="ghost" id="exportOne" disabled>download all sheets in one file</button>
+              </div>
+              <p class="hint">Exports use the laser convention from the rest of these tools — red&nbsp;#ff0000 cut at 0.1&nbsp;pt, millimetre units, one group per sheet.</p>
+            </div>
+          </div>
+
+          <div class="col-settings">
             <div class="panel">
               <h2>Sheet</h2>
               <div class="field">
+                <label for="unit-mm">Units</label>
+                <span class="seg" id="unitSeg" role="group" aria-label="units">
+                  <button type="button" id="unit-mm" data-unit="mm" aria-pressed="true">mm</button>
+                  <button type="button" id="unit-in" data-unit="in" aria-pressed="false">inches</button>
+                </span>
+              </div>
+              <div class="field">
                 <label for="sheet">Stock size</label>
-                <select id="sheet">
-                  <option value="300x300">300 × 300 mm</option>
-                  <option value="600x300">600 × 300 mm</option>
-                  <option value="600x400" selected>600 × 400 mm</option>
-                  <option value="812x508">812 × 508 mm (32×20")</option>
-                  <option value="900x600">900 × 600 mm</option>
-                  <option value="1219x610">1219 × 610 mm (4×2 ft)</option>
-                  <option value="custom">custom…</option>
-                </select>
+                <select id="sheet"></select>
               </div>
               <div id="customSize" hidden>
-                <div class="field"><label for="sheetW">Width (mm)</label><input type="number" id="sheetW" value="600" min="10" max="5000" /></div>
-                <div class="field"><label for="sheetH">Height (mm)</label><input type="number" id="sheetH" value="400" min="10" max="5000" /></div>
+                <div class="field"><label for="sheetW">Width <span class="unit" data-unit-label>mm</span></label><input type="number" id="sheetW" min="0.4" max="5000" /></div>
+                <div class="field"><label for="sheetH">Height <span class="unit" data-unit-label>mm</span></label><input type="number" id="sheetH" min="0.4" max="5000" /></div>
               </div>
-              <div class="field"><label for="margin">Edge margin (mm)</label><input type="number" id="margin" value="5" min="0" max="100" step="0.5" /></div>
-              <div class="field"><label for="spacing">Part spacing (mm)</label><input type="number" id="spacing" value="2" min="0" max="50" step="0.5" /></div>
+              <div class="field"><label for="margin">Edge margin <span class="unit" data-unit-label>mm</span></label><input type="number" id="margin" min="0" max="100" /></div>
+              <div class="field"><label for="spacing">Part spacing <span class="unit" data-unit-label>mm</span></label><input type="number" id="spacing" min="0" max="50" /></div>
               <p class="hint">Spacing is the clearance held between parts — set it to at least your kerf so cuts do not run into each other.</p>
             </div>
 
@@ -216,24 +298,6 @@
                 <span class="stat" id="status">idle</span>
                 <span class="stat" id="elapsed"></span>
               </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="panel">
-              <h2>Result</h2>
-              <div class="stats">
-                <div class="stat">sheet used<b id="density">—</b></div>
-                <div class="stat">sheets<b id="sheetCount">—</b></div>
-                <div class="stat">placed<b id="placed">—</b></div>
-              </div>
-              <canvas id="view"></canvas>
-              <div id="note" hidden></div>
-              <div class="export-row" style="margin-top: var(--space-4)">
-                <button class="ghost" id="export" disabled>download one SVG per sheet</button>
-                <button class="ghost" id="exportOne" disabled>download all sheets in one file</button>
-              </div>
-              <p class="hint">Exports use the laser convention from the rest of these tools — red&nbsp;#ff0000 cut at 0.1&nbsp;pt, millimetre units, one group per sheet.</p>
             </div>
           </div>
         </div>

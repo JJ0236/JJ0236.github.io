@@ -9,15 +9,36 @@ const parts = [];              // { id, name, outer, holes, qty, rotation, area 
 let worker = null, running = false, startedAt = 0, timer = null;
 let result = null;             // { sheets: [[ [ring,...] ]], placed, unplaced }
 
-const SHEETS = {
-  '300x300':   [300, 300],
-  '600x300':   [600, 300],
-  '600x400':   [600, 400],
-  '812x508':   [812, 508],
-  '900x600':   [900, 600],
-  '1219x610':  [1219, 610],
-  'custom':    null,
+// ── Units ───────────────────────────────────────────────────────────
+//
+// Everything internal — part geometry, sheet, margin, spacing — is millimetres.
+// The unit setting only changes what is shown and what is typed, so switching
+// it never moves a part or rescales a sheet.
+
+const UNITS = {
+  mm: { per: 1,    dp: 1, step: 0.5,  areaLabel: 'cm²', areaPer: 100 },
+  in: { per: 25.4, dp: 3, step: 0.05, areaLabel: 'in²', areaPer: 645.16 },
 };
+let unit = 'mm';
+const U = () => UNITS[unit];
+const toDisp = mm => mm / U().per;
+const fromDisp = v => v * U().per;
+const fmt = (mm, dp = U().dp) => {
+  const v = toDisp(mm);
+  return (Math.round(v * 10 ** dp) / 10 ** dp).toString();
+};
+
+// Stock presets are physical sizes; only their labels change with the unit.
+// Imperial stock is stored at its exact metric equivalent, so a 32×20" bed
+// reads as 32×20 in and not 31.97.
+const PRESETS = [
+  [300, 300], [600, 300], [600, 400],
+  [812.8, 508, '32×20 in'], [900, 600], [1219.2, 609.6, '4×2 ft'],
+];
+
+// Settings live here in mm, not in the input values.
+const settings = { w: 600, h: 400, margin: 5, spacing: 2, preset: '600x400' };
+// Preset keys are built from the same numbers, so they round-trip exactly.
 
 const ringArea = r => {
   let a = 0;
@@ -55,19 +76,19 @@ function renderParts() {
     row.className = 'part';
     row.innerHTML = `
       <canvas class="thumb" width="72" height="72"></canvas>
-      <div class="part-main">
-        <div class="part-name" title="${p.name}">${p.name}</div>
-        <div class="part-meta">${b.w.toFixed(0)}×${b.h.toFixed(0)}mm${p.holes.length ? ` · ${p.holes.length}h` : ''}</div>
-      </div>
-      <label class="qty"><span>qty</span><input type="number" min="1" max="999" value="${p.qty}" data-i="${i}" class="qty-input"></label>
-      <select class="rot-input" data-i="${i}" title="rotation for this part">
+      <div class="part-name" title="${p.name}">${p.name}</div>
+      <button class="del" data-i="${i}" title="remove" aria-label="remove ${p.name}">×</button>
+      <div class="part-meta">${fmt(b.w, unit === 'mm' ? 0 : 2)}×${fmt(b.h, unit === 'mm' ? 0 : 2)}${unit}${p.holes.length ? ` · ${p.holes.length}h` : ''}</div>
+      <div class="part-ctrls">
+        <label class="qty"><span>×</span><input type="number" min="1" max="999" value="${p.qty}" data-i="${i}" class="qty-input"></label>
+        <select class="rot-input" data-i="${i}" title="rotation for this part">
         <option value="">global</option>
         <option value="none">0° only</option>
         <option value="grain">grain (0/180)</option>
         <option value="quarter">90° steps</option>
-        <option value="free">free</option>
-      </select>
-      <button class="del" data-i="${i}" title="remove" aria-label="remove ${p.name}">×</button>`;
+          <option value="free">free</option>
+        </select>
+      </div>`;
     list.appendChild(row);
     row.querySelector('.rot-input').value = p.rotation;
     thumb(row.querySelector('.thumb'), p);
@@ -117,26 +138,90 @@ function updateTotals() {
   const n = parts.reduce((s, p) => s + p.qty, 0);
   const a = parts.reduce((s, p) => s + p.area * p.qty, 0);
   $('totals').textContent = parts.length
-    ? `${n} part${n === 1 ? '' : 's'} · ${(a / 100).toFixed(1)} cm² of material`
+    ? `${n} part${n === 1 ? '' : 's'} · ${(a / U().areaPer).toFixed(1)} ${U().areaLabel} of material`
     : '';
 }
 
 // ── Sheet settings ──────────────────────────────────────────────────
 
 function sheetSpec() {
-  const preset = $('sheet').value;
-  const [w, h] = preset === 'custom'
-    ? [+$('sheetW').value || 300, +$('sheetH').value || 300]
-    : SHEETS[preset];
-  return { w, h, margin: Math.max(0, +$('margin').value || 0) };
+  return { w: settings.w, h: settings.h, margin: settings.margin };
+}
+
+function buildPresets() {
+  const sel = $('sheet');
+  sel.innerHTML = '';
+  for (const [w, h, note] of PRESETS) {
+    const o = document.createElement('option');
+    o.value = `${w}x${h}`;
+    const dp = unit === 'mm' ? 0 : 2;
+    // Drop the note once the label already says the same thing, so inches do
+    // not read "32 × 20 in (32×20 in)".
+    const useful = note && !(unit === 'in' && note.endsWith(' in'));
+    o.textContent = `${fmt(w, dp)} × ${fmt(h, dp)} ${unit}` + (useful ? ` (${note})` : '');
+    sel.appendChild(o);
+  }
+  const c = document.createElement('option');
+  c.value = 'custom';
+  c.textContent = 'custom…';
+  sel.appendChild(c);
+  sel.value = settings.preset;
+}
+
+// Push the mm-valued settings into the inputs, in whatever unit is showing.
+function syncInputs() {
+  const u = U();
+  for (const el of document.querySelectorAll('[data-unit-label]')) el.textContent = unit;
+  for (const [id, mm] of [['sheetW', settings.w], ['sheetH', settings.h],
+                          ['margin', settings.margin], ['spacing', settings.spacing]]) {
+    const el = $(id);
+    el.step = u.step;
+    el.value = fmt(mm);
+  }
+  $('customSize').hidden = settings.preset !== 'custom';
 }
 
 $('sheet').onchange = () => {
-  const custom = $('sheet').value === 'custom';
-  $('customSize').hidden = !custom;
-  if (!custom) { const [w, h] = SHEETS[$('sheet').value]; $('sheetW').value = w; $('sheetH').value = h; }
+  settings.preset = $('sheet').value;
+  if (settings.preset !== 'custom') {
+    const [w, h] = settings.preset.split('x').map(Number);
+    settings.w = w; settings.h = h;
+  }
+  syncInputs();
   draw();
 };
+
+const readField = (id, key, min, max) => {
+  $(id).oninput = () => {
+    const mm = fromDisp(parseFloat($(id).value));
+    if (!Number.isFinite(mm)) return;
+    settings[key] = Math.min(max, Math.max(min, mm));
+    // Typing a custom width while a preset is selected means a custom sheet.
+    if ((key === 'w' || key === 'h') && settings.preset !== 'custom') {
+      settings.preset = 'custom';
+      $('sheet').value = 'custom';
+      $('customSize').hidden = false;
+    }
+    draw();
+  };
+};
+readField('sheetW', 'w', 10, 5000);
+readField('sheetH', 'h', 10, 5000);
+readField('margin', 'margin', 0, 100);
+readField('spacing', 'spacing', 0, 50);
+
+for (const b of document.querySelectorAll('#unitSeg button')) {
+  b.onclick = () => {
+    if (unit === b.dataset.unit) return;
+    unit = b.dataset.unit;
+    for (const o of document.querySelectorAll('#unitSeg button'))
+      o.setAttribute('aria-pressed', String(o === b));
+    buildPresets();
+    syncInputs();
+    renderParts();     // part dimensions are shown in the active unit
+    draw();            // so are the sheet labels
+  };
+}
 
 // ── Running ─────────────────────────────────────────────────────────
 
@@ -226,7 +311,7 @@ function startRun() {
     items,
     sheet: sheetSpec(),
     opts: {
-      spacing: Math.max(0, +$('spacing').value || 0),
+      spacing: settings.spacing,
       rotation: $('rotation').value,
       timeMs: Math.round((+$('budget').value || 8) * 1000),
       seed: Math.max(1, +$('seed').value || 1),
@@ -322,7 +407,7 @@ function draw() {
 
     ctx.fillStyle = '#8C919A';
     ctx.font = '11px "IBM Plex Mono", monospace';
-    ctx.fillText(`sheet ${i + 1} · ${sh.w}×${sh.h}mm`, cx, cy + 11);
+    ctx.fillText(`sheet ${i + 1} · ${fmt(sh.w, unit === 'mm' ? 0 : 2)}×${fmt(sh.h, unit === 'mm' ? 0 : 2)}${unit}`, cx, cy + 11);
   }
 }
 
@@ -347,5 +432,6 @@ $('exportOne').onclick = () => {
 };
 
 addEventListener('resize', () => draw());
-$('sheetW').oninput = $('sheetH').oninput = $('margin').oninput = () => draw();
+buildPresets();
+syncInputs();
 draw();
