@@ -46,6 +46,7 @@ function renderParts() {
   const list = $('parts');
   list.innerHTML = '';
   $('empty').hidden = parts.length > 0;
+  $('clear').hidden = parts.length === 0;
   $('run').disabled = parts.length === 0;
 
   parts.forEach((p, i) => {
@@ -162,6 +163,24 @@ function note(msg, bad = false) {
   el.hidden = false;
   el.classList.toggle('bad', bad);
 }
+
+$('clear').onclick = () => {
+  if (running) stopRun();
+  parts.length = 0;
+  // The preview and the export buttons describe a nest of parts that are gone.
+  result = null;
+  renderParts();
+  draw();
+  $('export').disabled = true;
+  $('exportOne').disabled = true;
+  $('density').textContent = '—';
+  $('sheetCount').textContent = '—';
+  $('placed').textContent = '—';
+  $('placed').classList.remove('bad');
+  $('status').textContent = 'idle';
+  $('elapsed').textContent = '';
+  $('note').hidden = true;
+};
 
 $('run').onclick = () => (running ? stopRun() : startRun());
 

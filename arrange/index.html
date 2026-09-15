@@ -131,7 +131,17 @@
       line-height: 1.6;
     }
     #note.bad { border-left-color: #c0524a; color: #8a3a32; }
-    #totals { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); margin-top: var(--space-2); }
+    .totals-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-top: var(--space-3);
+      min-height: 1.5rem;
+    }
+    #totals { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); }
+    button.ghost.small { padding: 0.25rem 0.55rem; font-size: 0.65rem; }
+    button.ghost.small:hover { border-color: #c0524a; color: #c0524a; }
     #empty { font-size: var(--text-sm); color: var(--slate-light); text-align: center; padding: var(--space-4) 0; }
     .export-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
   </style>
@@ -156,7 +166,10 @@
               </label>
               <div id="parts"></div>
               <div id="empty">nothing loaded yet</div>
-              <div id="totals"></div>
+              <div class="totals-row">
+                <span id="totals"></span>
+                <button class="ghost small" id="clear" hidden>clear all</button>
+              </div>
             </div>
 
             <div class="panel">
