@@ -19,15 +19,14 @@ are named for the machine, plainly, with a subtitle that explains the payoff.
 
 | # | Section | Tools |
 |---|---------|-------|
-| 01 | Laser cutter | Crease, Unfold, Scissor, s1c3r, Umbra, LAZAR, STL→Depth |
+| 01 | Laser cutter | Crease, Unfold, Scissor, s1c3r, LAZAR, STL→Depth |
 | 02 | 3D printer | Terra, Relief, Imprint |
 | 03 | Simulation | Cloche, WebGL Wave Tank |
 | 04 | Data & media | Foraging Map, Transcript Tool, Instagram Analytics |
 
 Dual-output tools live in one section only, but carry both tags so the filter
-still finds them: **Umbra** (laser SVG + STL) sits under Laser cutter with a
-`print` tag; **Imprint** (STL/3MF + laser slats) sits under 3D printer with a
-`laser` tag.
+still finds them: **Imprint** (STL/3MF + laser slats) sits under 3D printer with
+a `laser` tag, so the `laser` filter still turns it up.
 
 **STL→Depth** is placed under Laser cutter, paired with LAZAR: LAZAR preps
 photos for engraving, STL→Depth preps 3D models for engraving.
@@ -56,7 +55,7 @@ and crawlable with JS disabled.
 
 ## Inventory changes
 
-- **Added:** LAZAR, Umbra (requires committing the untracked `umbra/` dir)
+- **Added:** LAZAR
 - **Renamed:** "Interactive WebGL Demo" → "WebGL Wave Tank" (the old name said
   nothing about what it is)
 - **Moved off Projects:** "3D Printing & Fabrication" and "Scouting / STEM" —
@@ -64,3 +63,9 @@ and crawlable with JS disabled.
   at the bottom of `/experience/`, alongside TunesInYourCity
 - **Kept:** TunesInYourCity featured banner at the top of Projects
 - **Unchanged:** the hidden SHA-256 gate on the "o" in "Projects"
+
+## Addendum, same day
+
+Umbra was listed briefly, then deleted from the site and the repo at Josh's
+request. Part numbers were resequenced 01–14 rather than left with a gap at 05
+— the stable-number rule covers filtering, not removal.

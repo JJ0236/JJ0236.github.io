@@ -76,7 +76,7 @@ in the stats corner, since score length is what determines laser time.
 ## Files
 
 ```
-crease/index.html    layout and styles, following umbra/imprint conventions
+crease/index.html    layout and styles, following imprint conventions
 crease/patterns.js   pure pattern generators + shared helpers (no DOM)
 crease/export.js     SVG string builder, dash conversion, mirroring, merging
 crease/app.js        panel generation, preview, download wiring
