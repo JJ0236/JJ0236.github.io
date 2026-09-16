@@ -112,6 +112,10 @@ Source of truth remains `~/Documents/deena/Helicopter Site/`, untouched.
 ## Update, 2026-09-16
 
 Vendorville moved to its own domain at vendor-ville.com, so its chip is now
-Live alongside Aviatrix. The screenshot was retaken from the live site: the
+Live alongside Aviatrix, and the grid was reordered to lead with the two live
+sites: Aviatrix, Vendorville, then Kennel Club and GRT. The original order led
+with Kennel Club as the closest structural analogue for a shelter-type
+prospect; leading with proof-of-live is a different argument for a general
+audience, and the grid is two columns so the live pair fills the top row. The screenshot was retaken from the live site: the
 sample expert profile card in the hero has been replaced with an early-access
 signup card, so the alt text was rewritten to match what is actually shown.
