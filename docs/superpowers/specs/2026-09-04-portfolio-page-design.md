@@ -37,7 +37,7 @@ Four entries, in this fixed order:
 | 1 | NWA Kennel Club | nwakennelclub.vercel.app | Preview build | Structurally the same site a shelter needs — member org, events calendar, join/volunteer CTAs, animal photography |
 | 2 | Aviatrix Charters | aviatrixcharters.com | Live | Polish piece, live on its own domain |
 | 3 | GRT Rubber Technologies | grtrubba.vercel.app | Preview build | Serious corporate client, multi-plant manufacturer |
-| 4 | Vendorville | vendorville-site.vercel.app | Preview build | An application, not a brochure — accounts, dashboard, billing |
+| 4 | Vendorville | vendor-ville.com | Live | An application, not a brochure — accounts, dashboard, billing |
 
 Role line on all four: **Design & build**. Confirmed by Josh 2026-09-04.
 
@@ -108,3 +108,10 @@ Source of truth remains `~/Documents/deena/Helicopter Site/`, untouched.
 - `Portfolio` shows active styling on `/portfolio/`, not on other pages
 - Home grid still fills the viewport without scrolling
 - No remaining references to `testflight`
+
+## Update, 2026-09-16
+
+Vendorville moved to its own domain at vendor-ville.com, so its chip is now
+Live alongside Aviatrix. The screenshot was retaken from the live site: the
+sample expert profile card in the hero has been replaced with an early-access
+signup card, so the alt text was rewritten to match what is actually shown.
