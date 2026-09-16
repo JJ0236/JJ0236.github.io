@@ -5,6 +5,10 @@ import { toSVG } from './export.js';
 import { bounds } from './geom.js';
 
 const $ = id => document.getElementById(id);
+
+// Canvases cannot inherit CSS, so they read the same tokens the stylesheet
+// uses and redraw when the theme changes.
+const ink = name => (window.siteTheme ? siteTheme.colour(name) : '');
 const parts = [];              // { id, name, outer, holes, qty, rotation, area }
 let worker = null, running = false, startedAt = 0, timer = null;
 let result = null;             // { sheets: [[ [ring,...] ]], placed, unplaced }
@@ -73,12 +77,12 @@ function renderParts() {
   parts.forEach((p, i) => {
     const b = bounds(p.outer);
     const row = document.createElement('div');
-    row.className = 'part';
+    row.className = 'part spec';
     row.innerHTML = `
       <canvas class="thumb" width="72" height="72"></canvas>
-      <div class="part-name" title="${p.name}">${p.name}</div>
+      <div class="spec-name" title="${p.name}">${p.name}</div>
       <button class="del" data-i="${i}" title="remove" aria-label="remove ${p.name}">×</button>
-      <div class="part-meta">${fmt(b.w, unit === 'mm' ? 0 : 2)}×${fmt(b.h, unit === 'mm' ? 0 : 2)}${unit}${p.holes.length ? ` · ${p.holes.length}h` : ''}</div>
+      <em class="spec-note">${fmt(b.w, unit === 'mm' ? 0 : 2)} × ${fmt(b.h, unit === 'mm' ? 0 : 2)} ${unit}${p.holes.length ? `, ${p.holes.length} hole${p.holes.length > 1 ? 's' : ''}` : ''}</em>
       <div class="part-ctrls">
         <label class="qty"><span>×</span><input type="number" min="1" max="999" value="${p.qty}" data-i="${i}" class="qty-input"></label>
         <select class="rot-input" data-i="${i}" title="rotation for this part">
@@ -120,10 +124,10 @@ function thumb(cv, p) {
   ctx.beginPath();
   trace(ctx, p.outer);
   for (const h of p.holes) trace(ctx, h);
-  ctx.fillStyle = '#E8DFCE';
+  ctx.fillStyle = ink('--canvas-fill');
   ctx.fill('evenodd');
   ctx.lineWidth = 1 / s;
-  ctx.strokeStyle = '#8B6340';
+  ctx.strokeStyle = ink('--canvas-stroke');
   ctx.stroke();
   ctx.restore();
 }
@@ -258,9 +262,9 @@ $('clear').onclick = () => {
   draw();
   $('export').disabled = true;
   $('exportOne').disabled = true;
-  $('density').textContent = '—';
-  $('sheetCount').textContent = '—';
-  $('placed').textContent = '—';
+  $('density').textContent = '–';
+  $('sheetCount').textContent = '–';
+  $('placed').textContent = '–';
   $('placed').classList.remove('bad');
   $('status').textContent = 'idle';
   $('elapsed').textContent = '';
@@ -340,7 +344,7 @@ function stats(m) {
   const used = m.sheets.flat().flat().length ? m.sheets.reduce((s, sheetRings) =>
     s + sheetRings.reduce((t, rings) => t + ringArea(rings[0]) - rings.slice(1).reduce((u, h) => u + ringArea(h), 0), 0), 0) : 0;
   const total = m.sheets.length * sh.w * sh.h;
-  $('density').textContent = total ? `${((used / total) * 100).toFixed(1)}%` : '—';
+  $('density').textContent = total ? `${((used / total) * 100).toFixed(1)}%` : '–';
   $('sheetCount').textContent = String(m.sheets.length);
   $('placed').textContent = `${m.placed}/${m.total}`;
   $('placed').classList.toggle('bad', !!m.unplaced);
@@ -377,15 +381,15 @@ function draw() {
     ctx.save();
     ctx.translate(cx, cy + 18);
 
-    ctx.fillStyle = '#F8F4EE';
+    ctx.fillStyle = ink('--canvas-sheet');
     ctx.fillRect(0, 0, cellW, cellH);
-    ctx.strokeStyle = '#C8CAD0';
+    ctx.strokeStyle = ink('--canvas-grid');
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, cellW - 1, cellH - 1);
 
     if (sh.margin > 0) {
       ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = '#DCD5C6';
+      ctx.strokeStyle = ink('--canvas-grid');
       ctx.strokeRect(sh.margin * scale, sh.margin * scale,
                      (sh.w - 2 * sh.margin) * scale, (sh.h - 2 * sh.margin) * scale);
       ctx.setLineDash([]);
@@ -396,17 +400,17 @@ function draw() {
       ctx.scale(scale, scale);
       ctx.beginPath();
       for (const r of rings) trace(ctx, r);
-      ctx.fillStyle = '#E3E8D8';
+      ctx.fillStyle = ink('--canvas-fill');
       ctx.fill('evenodd');
       ctx.lineWidth = 0.9 / scale;
-      ctx.strokeStyle = '#5C7A4E';
+      ctx.strokeStyle = ink('--canvas-stroke');
       ctx.stroke();
       ctx.restore();
     }
     ctx.restore();
 
-    ctx.fillStyle = '#8C919A';
-    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.fillStyle = ink('--canvas-ink');
+    ctx.font = '500 11px "Public Sans", system-ui, sans-serif';
     ctx.fillText(`sheet ${i + 1} · ${fmt(sh.w, unit === 'mm' ? 0 : 2)}×${fmt(sh.h, unit === 'mm' ? 0 : 2)}${unit}`, cx, cy + 11);
   }
 }
@@ -432,6 +436,8 @@ $('exportOne').onclick = () => {
 };
 
 addEventListener('resize', () => draw());
+// Redraw both canvases when the theme flips.
+if (window.siteTheme) siteTheme.onChange(() => { renderParts(); draw(); });
 buildPresets();
 syncInputs();
 draw();

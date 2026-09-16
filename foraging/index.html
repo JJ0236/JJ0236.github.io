@@ -5,8 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Fayetteville Food Foraging Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <style>
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
+    body {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-top: 48px;
+    }
+
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
     :root {
       --green-dark: #3A4A2C;
       --green-mid: #5C7A4E;
@@ -14,29 +25,24 @@
       --green-pale: #EAF0E2;
       --orange: #8B6340;
       --orange-light: #FFF4E8;
-      --brown: #8B6340;
-      --bg: #F0EBE0;
-      --panel: #F8F4EE;
-      --panel-2: #EDE8DC;
-      --border: #C8CAD0;
-      --text: #3C4148;
-      --muted: #5A6068;
-      --shadow: 0 4px 16px rgba(60,65,72,0.12);
-      --radius: 12px;
+      --panel: var(--surface);
+      --panel-2: var(--raised);
+      --border: var(--hair);
+      --text: var(--ink);
+      --muted: var(--ink-soft);
+      --shadow: var(--shadow-sm);
     }
+
+    /* Pale tints need a dark sibling, or a selected row vanishes. */
+    :root[data-theme='dark'] {
+      --green-pale: #2B361C;
+      --orange-light: #3D2A14;
+    }
+
+
+    
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      font-family: 'Space Grotesk', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      padding-top: 48px;
-    }
 
     /* Header */
     header {
@@ -134,7 +140,7 @@
       height: 20px;
       left: 3px;
       bottom: 3px;
-      background: #F8F4EE;
+      background: var(--surface);
       border-radius: 50%;
       transition: 0.3s;
     }
@@ -159,7 +165,7 @@
     .season-badge {
       display: inline-block;
       background: var(--orange);
-      color: #F8F4EE;
+      color: var(--surface);
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 0.75rem;
@@ -357,7 +363,7 @@
     .loading-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(240,235,224,0.95);
+      background: color-mix(in srgb, var(--bg) 95%, transparent);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -398,7 +404,7 @@
       border-radius: 24px;
       font-size: 0.9rem;
       font-weight: 600;
-      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-family: var(--font-body);
       letter-spacing: 0.2px;
       box-shadow: var(--shadow);
       cursor: pointer;
@@ -478,6 +484,7 @@
       header h1 { font-size: 1.1rem; }
       .legend { bottom: 80px; right: 10px; }
     }
+  
   </style>
 
   <!-- Tool header styles -->
@@ -515,6 +522,8 @@
       letter-spacing: 0.06em;
     }
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 <header class="tool-header">

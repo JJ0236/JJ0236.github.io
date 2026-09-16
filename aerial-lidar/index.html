@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Aerial LiDAR — joshhicks.info</title>
-  <meta name="description" content="Slide between bare-earth LiDAR and aerial imagery. The ground with the trees taken off — old roadbeds, homesteads, quarries and sinkholes that are invisible from the air." />
+  <title>Aerial LiDAR · joshhicks.info</title>
+  <meta name="description" content="Slide between bare-earth LiDAR and aerial imagery. The ground with the trees taken off: old roadbeds, homesteads, quarries and sinkholes that are invisible from the air." />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
   <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
   <style>
     .site-content { max-width: calc(1520px + var(--sidebar-width)); }
 
@@ -19,10 +20,10 @@
       width: 100%;
       height: min(74vh, 780px);
       min-height: 420px;
-      border: 1px solid var(--slate-subtle);
+      border: 1px solid var(--edge);
       border-radius: var(--radius);
       overflow: hidden;
-      background: var(--bark-light);
+      background: var(--raised);
       box-shadow: var(--shadow-sm);
       touch-action: none;
     }
@@ -39,7 +40,7 @@
     .handle {
       position: absolute; top: 0; bottom: 0; left: 50%;
       width: 2px; margin-left: -1px;
-      background: var(--chalk);
+      background: var(--surface);
       box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
       cursor: ew-resize; z-index: 500;
     }
@@ -48,7 +49,7 @@
       position: absolute; top: 50%; left: 50%;
       width: 34px; height: 34px; margin: -17px 0 0 -17px;
       border-radius: 50%;
-      background: var(--chalk);
+      background: var(--surface);
       box-shadow: 0 1px 6px rgba(0,0,0,0.4);
     }
     .handle::before {
@@ -56,7 +57,7 @@
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       z-index: 1; font-family: var(--font-mono); font-size: 0.8rem;
-      color: var(--soil-dark); white-space: nowrap;
+      color: var(--head); white-space: nowrap;
     }
     .handle:focus-visible { outline: 3px solid var(--moss-light); outline-offset: 2px; }
 
@@ -96,52 +97,53 @@
     .ctl { display: flex; flex-direction: column; gap: 0.2rem; }
     .ctl label {
       font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.1em;
-      text-transform: uppercase; color: var(--slate-light);
+      text-transform: uppercase; color: var(--ink-faint);
     }
     .ctl select, .ctl input[type=text] {
       font-family: var(--font-mono); font-size: var(--text-sm);
-      padding: 0.35rem 0.5rem; border: 1px solid var(--slate-subtle);
-      border-radius: var(--radius-sm); background: var(--white); color: var(--slate-dark);
+      padding: 0.35rem 0.5rem; border: 1px solid var(--edge);
+      border-radius: var(--radius-sm); background: var(--field-bg); color: var(--ink);
     }
     .search-wrap { position: relative; flex: 1 1 260px; min-width: 200px; }
     .search-wrap input { width: 100%; }
     #results {
       position: absolute; top: 100%; left: 0; right: 0; z-index: 900;
-      background: var(--white); border: 1px solid var(--slate-subtle);
+      background: var(--field-bg); border: 1px solid var(--edge);
       border-radius: var(--radius-sm); margin-top: 2px; max-height: 260px; overflow-y: auto;
       box-shadow: var(--shadow-md);
     }
     #results button {
       display: block; width: 100%; text-align: left; border: none; background: transparent;
-      padding: 0.45rem 0.6rem; font-size: var(--text-sm); color: var(--slate-dark); cursor: pointer;
-      border-bottom: 1px solid var(--slate-subtle);
+      padding: 0.45rem 0.6rem; font-size: var(--text-sm); color: var(--ink); cursor: pointer;
+      border-bottom: 1px solid var(--edge);
     }
     #results button:last-child { border-bottom: none; }
-    #results button:hover { background: var(--bark-light); color: var(--soil-dark); }
+    #results button:hover { background: var(--raised); color: var(--head); }
 
-    .seg { display: inline-flex; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); overflow: hidden; background: var(--white); }
+    .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: var(--radius-sm); overflow: hidden; background: var(--field-bg); }
     .seg button {
       font-family: var(--font-mono); font-size: var(--text-xs); padding: 0.35rem 0.6rem;
-      border: none; background: transparent; color: var(--slate-mid); cursor: pointer;
+      border: none; background: transparent; color: var(--ink-soft); cursor: pointer;
     }
-    .seg button + button { border-left: 1px solid var(--slate-subtle); }
-    .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
+    .seg button + button { border-left: 1px solid var(--edge); }
+    .seg button[aria-pressed="true"] { background: var(--accent); color: var(--nav-ink); }
 
     button.ghost {
       font-family: var(--font-mono); font-size: var(--text-xs); background: transparent;
-      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
-      padding: 0.4rem 0.7rem; color: var(--slate-dark); cursor: pointer;
+      border: 1px solid var(--edge); border-radius: var(--radius-sm);
+      padding: 0.4rem 0.7rem; color: var(--ink); cursor: pointer;
     }
-    button.ghost:hover { border-color: var(--soil-mid); color: var(--soil-dark); }
+    button.ghost:hover { border-color: var(--rule); color: var(--head); }
 
     #render-note, .foot {
-      font-size: var(--text-sm); color: var(--slate-mid); line-height: 1.6;
+      font-size: var(--text-sm); color: var(--ink-soft); line-height: 1.6;
       margin-top: var(--space-3); max-width: 80ch;
     }
-    .leaflet-container { background: var(--bark-light); font-family: var(--font-body); }
+    .leaflet-container { background: var(--raised); font-family: var(--font-body); }
     .leaflet-control-attribution { font-size: 0.6rem; }
 
     @media (max-width: 700px) { .stage { height: 64vh; } }
+  
   </style>
 </head>
 <body>

@@ -3,70 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scissor Lattice Generator — joshhicks.info</title>
+  <title>Scissor Lattice Generator · joshhicks.info</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --moss-dark:   #3A4A2C;
-      --moss-mid:    #5A7040;
-      --moss-light:  #8FAF6E;
-      --soil-dark:   #5C3D1E;
-      --chalk:       #F8F4EE;
-      --bg:          #141810;
-      --bg2:         #191E12;
-      --border:      #252E1A;
-      --text:        #D4CDB8;
-      --muted:       #7A7560;
-      --accent:      #8FAF6E;
-      --panel-w:     264px;
-    }
-
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Space Grotesk', system-ui, sans-serif;
       height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
+    :root {
+      --bg2: var(--surface);
+      --border: var(--hair);
+      --text: var(--ink);
+      --muted: var(--ink-soft);
+      --panel-w: 264px;
+    }
+
+
     /* ── Tool header ────────────────────────────────────── */
-    .tool-header {
-      height: 48px;
-      background: var(--moss-dark);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 1.5rem;
-      flex-shrink: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      z-index: 10;
-    }
-    .tool-header-back {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      color: #8A8070;
-      font-size: 0.82rem;
-      font-weight: 500;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    .tool-header-back:hover { color: #D9D0C1; }
-    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
-    .tool-header-title {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.78rem;
-      font-weight: 500;
-      color: var(--moss-light);
-      letter-spacing: 0.04em;
-    }
-    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
 
     /* ── Body layout ────────────────────────────────────── */
     .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
@@ -90,7 +50,7 @@
     .panel { padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
     .panel:last-child { border-bottom: none; }
     .panel-title {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.64rem;
       font-weight: 500;
       text-transform: uppercase;
@@ -110,7 +70,7 @@
     .seg button {
       flex: 1;
       padding: 5px 6px;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.7rem;
       background: transparent;
       border: none;
@@ -120,7 +80,7 @@
     }
     .seg button + button { border-left: 1px solid var(--border); }
     .seg button.active {
-      background: var(--moss-dark);
+      background: var(--accent);
       color: var(--moss-light);
     }
 
@@ -139,7 +99,7 @@
       white-space: nowrap;
     }
     .ctrl-hint {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.62rem;
       color: var(--muted);
       margin-top: -4px;
@@ -151,7 +111,7 @@
       border: 1px solid var(--border);
       border-radius: 5px;
       padding: 4px 7px;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.75rem;
       color: var(--text);
       text-align: right;
@@ -167,11 +127,11 @@
     .export-btn {
       width: 100%;
       padding: 9px;
-      background: var(--moss-dark);
+      background: var(--accent);
       border: 1px solid var(--moss-mid);
       border-radius: 6px;
       color: var(--moss-light);
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.74rem;
       font-weight: 500;
       cursor: pointer;
@@ -183,7 +143,7 @@
 
     /* Info strip */
     .info-strip {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.65rem;
       color: var(--muted);
       line-height: 1.7;
@@ -220,14 +180,17 @@
       position: absolute;
       top: 10px;
       right: 14px;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.62rem;
       color: rgba(255,255,255,0.25);
       text-align: right;
       pointer-events: none;
       line-height: 1.6;
     }
+  
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 
@@ -289,7 +252,7 @@
       <div class="ctrl-hint" style="margin-bottom:8px">← drag viewport to expand/contract</div>
       <input type="range" id="inp-expansion" min="5" max="95" step="0.5" value="50"
         style="width:100%;accent-color:var(--moss-light);cursor:pointer;margin-bottom:6px;" />
-      <div class="ctrl-hint" id="expansion-hint">50% — symmetric</div>
+      <div class="ctrl-hint" id="expansion-hint">50%, symmetric</div>
     </div>
 
     <div class="panel">

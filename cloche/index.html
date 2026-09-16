@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloche — Flies on a Windowsill — joshhicks.info</title>
+  <title>Cloche · Flies on a Windowsill · joshhicks.info</title>
   <meta name="description" content="Fruit flies on a sunny kitchen windowsill, each running its real connectome live in your browser: the FlyWire female brain and the Janelia male brain. They taste, smell, learn, court, mate and lay eggs; the eggs hatch into larvae, pupate, and new flies climb out." />
-  <meta property="og:title" content="Cloche — Flies on a Windowsill" />
+  <meta property="og:title" content="Cloche · Flies on a Windowsill" />
   <meta property="og:description" content="Fruit flies on a windowsill, each running its real connectome in your browser. They taste, smell, learn, court, mate and lay eggs." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://joshhicks.info/cloche/" />
@@ -15,34 +15,46 @@
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --ink-dark: #26344E; --ink-mid: #3E5478; --ink-light: #8FB0E8;
-      --bg: #101318; --bg2: #14181F; --bg3: #1A1F29; --border: #232B3A;
-      --text: #C4CBD8; --muted: #6E7788; --dim: #454E60;
-      --warn: #D8A657; --bad: #D2766B; --good: #7FB88A;
-      --sugar: #D8A657; --bitter: #8A9A5A; --panel-w: 300px;
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
+    body {
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
-    body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    .tool-header { height: 48px; background: var(--ink-dark); display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 10; }
-    .tool-header-back { display: flex; align-items: center; gap: 0.4rem; color: #7A8296; font-size: 0.82rem; font-weight: 500; text-decoration: none; transition: color 0.2s; }
-    .tool-header-back:hover { color: #D0D6E2; }
-    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
-    .tool-header-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem; font-weight: 500; color: var(--ink-light); letter-spacing: 0.04em; }
-    .tool-header-site { font-size: 0.68rem; color: #5A6070; letter-spacing: 0.06em; }
+
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
+    :root {
+      --ink-mid: var(--ink-soft);
+      --ink-light: var(--ink-faint);
+      --bg2: var(--surface);
+      --bg3: var(--raised);
+      --border: var(--hair);
+      --text: var(--ink);
+      --muted: var(--ink-soft);
+      --dim: var(--ink-faint);
+      --warn: #B07A2E;
+      --bad: var(--danger);
+      --good: var(--moss-mid);
+      --sugar: #D8A657;
+      --bitter: #8A9A5A;
+      --panel-w: 300px;
+    }
+
+
     .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
     .sidebar { width: var(--panel-w); background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; scrollbar-width: thin; scrollbar-color: #26304a transparent; }
     .sidebar::-webkit-scrollbar { width: 4px; } .sidebar::-webkit-scrollbar-thumb { background: #26304a; border-radius: 2px; }
     .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
     .panel:last-child { border-bottom: none; }
-    .panel-title { font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .panel-title { font-family: var(--font-ui); font-size: 0.64rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
     .panel-title span { text-transform: none; letter-spacing: 0; color: var(--dim); }
     #brain-canvas { display: block; width: 100%; aspect-ratio: 1 / 1; border-radius: 8px; background: radial-gradient(circle at 50% 45%, #141a26 0%, #0c0f15 70%); border: 1px solid var(--border); cursor: grab; touch-action: none; }
     #brain-canvas:active { cursor: grabbing; }
-    .readout { font-family: 'IBM Plex Mono', monospace; font-size: 0.66rem; line-height: 1.95; margin-top: 8px; }
+    .readout { font-family: var(--font-ui); font-size: 0.66rem; line-height: 1.95; margin-top: 8px; }
     .readout div { display: flex; justify-content: space-between; gap: 8px; }
     .readout .k { color: var(--muted); }
     .readout .k[data-group] { cursor: pointer; border-bottom: 1px dotted var(--dim); }
@@ -51,12 +63,12 @@
     .readout .v.hot { color: var(--warn); }
     .readout .v.fire { color: var(--bad); }
     .readout .v.slow { color: var(--warn); }
-    .pathway { margin-top: 9px; padding: 8px 9px; border-radius: 6px; font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; line-height: 1.6; border: 1px solid var(--border); background: rgba(0,0,0,0.22); color: var(--muted); min-height: 44px; }
+    .pathway { margin-top: 9px; padding: 8px 9px; border-radius: 6px; font-family: var(--font-ui); font-size: 0.64rem; line-height: 1.6; border: 1px solid var(--border); background: rgba(0,0,0,0.22); color: var(--muted); min-height: 44px; }
     .pathway.live { border-color: rgba(143,176,232,0.4); color: var(--text); }
-    .blurb { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); line-height: 1.6; }
+    .blurb { font-family: var(--font-ui); font-size: 0.62rem; color: var(--muted); line-height: 1.6; }
     .blurb b { color: var(--text); font-weight: 500; }
     .blurb p + p { margin-top: 7px; }
-    .attribution { font-family: 'IBM Plex Mono', monospace; font-size: 0.58rem; color: var(--dim); line-height: 1.65; }
+    .attribution { font-family: var(--font-ui); font-size: 0.58rem; color: var(--dim); line-height: 1.65; }
     .attribution a { color: var(--muted); }
     .viewport-wrap { flex: 1; position: relative; overflow: hidden; background: #CFE3F5; }
     .viewport-hint { color: rgba(20,30,40,0.7); background: rgba(255,255,255,0.7); }
@@ -65,12 +77,12 @@
     .chips button { color: #55606E; } .chips button:hover { color: #1E2630; } .chips button.active { color: #1E2630; border-color: #8FB0E8; background: rgba(143,176,232,0.25); }
     .chips .sep { background: rgba(0,0,0,0.12); }
     .chips button:disabled { opacity: 0.4; cursor: default; }
-    .log { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); line-height: 1.7; margin-top: 8px; }
+    .log { font-family: var(--font-ui); font-size: 0.62rem; color: var(--muted); line-height: 1.7; margin-top: 8px; }
     .log div:first-child { color: var(--text); }
     .overlay { background: rgba(207,227,245,0.96); } .overlay .stage { color: #26344E; } .overlay .sub { color: #55606E; } .bar { background: rgba(0,0,0,0.08); border-color: rgba(0,0,0,0.12); }
     #three-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
     .chips { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 6px; background: rgba(16,19,24,0.85); backdrop-filter: blur(6px); border: 1px solid var(--border); border-radius: 22px; padding: 6px 8px; }
-    .chips button { padding: 6px 13px; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; border: 1px solid transparent; border-radius: 16px; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; display: flex; align-items: center; gap: 6px; }
+    .chips button { padding: 6px 13px; font-family: var(--font-ui); font-size: 0.68rem; border: 1px solid transparent; border-radius: 16px; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; display: flex; align-items: center; gap: 6px; }
     .chips button:hover { color: var(--text); }
     .chips button.active { color: var(--text); border-color: var(--ink-mid); background: rgba(38,52,78,0.5); }
     .chips button .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -79,7 +91,7 @@
     .chips button[data-mode="fruit"] .dot { background: #C97A4A; }
     .chips button[data-mode="vinegar"] .dot { background: #A8B86A; }
     .memory { margin-top: 4px; }
-    .memory .row { display: grid; grid-template-columns: 58px 1fr 52px; align-items: center; gap: 8px; margin: 6px 0; font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; }
+    .memory .row { display: grid; grid-template-columns: 58px 1fr 52px; align-items: center; gap: 8px; margin: 6px 0; font-family: var(--font-ui); font-size: 0.64rem; }
     .memory .name { color: var(--text); }
     .memory .bar { position: relative; height: 8px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
     .memory .bar::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--dim); }
@@ -87,16 +99,16 @@
     .memory .fill.neg { background: var(--bad); }
     .memory .val { color: var(--muted); text-align: right; }
     .memory .val.like { color: var(--good); } .memory .val.dislike { color: var(--bad); }
-    .btn-sub { width: 100%; padding: 6px; margin-top: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; font-size: 0.64rem; cursor: pointer; }
+    .btn-sub { width: 100%; padding: 6px; margin-top: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: var(--font-ui); font-size: 0.64rem; cursor: pointer; }
     .btn-sub:hover { color: var(--text); border-color: var(--ink-mid); }
     .chips .sep { width: 1px; background: var(--border); margin: 2px 2px; }
     .viewport-hint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 0.68rem; color: rgba(255,255,255,0.38); pointer-events: none; white-space: nowrap; z-index: 4; background: rgba(16,19,24,0.7); backdrop-filter: blur(6px); padding: 5px 13px; border-radius: 20px; transition: opacity 0.4s; }
     .viewport-hint.fade { opacity: 0; }
-    .viewport-stats { position: absolute; top: 12px; right: 14px; font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: rgba(255,255,255,0.32); text-align: right; pointer-events: none; line-height: 1.6; z-index: 4; white-space: pre-line; }
+    .viewport-stats { position: absolute; top: 12px; right: 14px; font-family: var(--font-ui); font-size: 0.62rem; color: rgba(255,255,255,0.32); text-align: right; pointer-events: none; line-height: 1.6; z-index: 4; white-space: pre-line; }
     .overlay { position: absolute; inset: 0; z-index: 20; background: rgba(16,19,24,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity 0.5s; }
     .overlay.hide { opacity: 0; pointer-events: none; }
-    .overlay .stage { font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; color: var(--text); }
-    .overlay .sub { font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem; color: var(--muted); max-width: 30rem; text-align: center; line-height: 1.6; padding: 0 1rem; }
+    .overlay .stage { font-family: var(--font-ui); font-size: 0.74rem; color: var(--text); }
+    .overlay .sub { font-family: var(--font-ui); font-size: 0.62rem; color: var(--muted); max-width: 30rem; text-align: center; line-height: 1.6; padding: 0 1rem; }
     .bar { width: 240px; max-width: 70vw; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; border: 1px solid var(--border); }
     .bar i { display: block; height: 100%; width: 0%; background: var(--ink-light); transition: width 0.15s; }
     .bar.pulse i { width: 40%; animation: slide 1.1s ease-in-out infinite alternate; }
@@ -114,10 +126,9 @@
       .viewport-hint { display: none; }
       .viewport-stats { display: none; }
       .chips button { padding: 6px 10px; }
-      .tool-header { padding: 0 0.9rem; }
-      .tool-header-title { font-size: 0.62rem; }
-      .tool-header-site { display: none; }
+
     }
+  
   </style>
   <script type="importmap">
   {
@@ -127,6 +138,8 @@
     }
   }
   </script>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 
@@ -135,7 +148,7 @@
     <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2L4 7l5 5"/></svg>
     Projects
   </a>
-  <span class="tool-header-title">CLOCHE — FLIES ON A WINDOWSILL</span>
+  <span class="tool-header-title">CLOCHE: FLIES ON A WINDOWSILL</span>
   <span class="tool-header-site">joshhicks.info</span>
 </header>
 
@@ -238,7 +251,7 @@
 
     <div class="panel">
       <div class="attribution">
-        Connectomes: <a href="https://codex.flywire.ai/" target="_blank" rel="noopener">FlyWire</a> v783 (female), FlyWire Consortium, Princeton University, CC BY 4.0 — Dorkenwald et al. 2024 and Schlegel et al. 2024, <i>Nature</i>; <a href="https://male-cns.janelia.org/" target="_blank" rel="noopener">male CNS</a> v1.0, Janelia FlyEM, CC BY 4.0. Mushroom-body map: Aso et al. 2014. Neurotransmitters: Eckstein et al. 2024. Model: <a href="https://doi.org/10.1038/s41586-024-07763-9" target="_blank" rel="noopener">Shiu et al. 2024</a>, <i>Nature</i>, code MIT. The simulation runs entirely in your browser; nothing is sent anywhere.
+        Connectomes: <a href="https://codex.flywire.ai/" target="_blank" rel="noopener">FlyWire</a> v783 (female), FlyWire Consortium, Princeton University, CC BY 4.0. Dorkenwald et al. 2024 and Schlegel et al. 2024, <i>Nature</i>; <a href="https://male-cns.janelia.org/" target="_blank" rel="noopener">male CNS</a> v1.0, Janelia FlyEM, CC BY 4.0. Mushroom-body map: Aso et al. 2014. Neurotransmitters: Eckstein et al. 2024. Model: <a href="https://doi.org/10.1038/s41586-024-07763-9" target="_blank" rel="noopener">Shiu et al. 2024</a>, <i>Nature</i>, code MIT. The simulation runs entirely in your browser; nothing is sent anywhere.
       </div>
     </div>
   </aside>

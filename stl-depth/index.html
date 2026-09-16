@@ -3,17 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>STL to Depth Map — joshhicks.info</title>
+  <title>STL to Depth Map · joshhicks.info</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
     body {
-      background: #141810;
-      color: #D4CDB8;
-      font-family: 'Space Grotesk', system-ui, sans-serif;
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -21,29 +16,6 @@
     }
 
     /* ── Tool header ─────────────────────────────────────── */
-    .tool-header {
-      height: 48px;
-      background: #3A4A2C;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 1.5rem;
-      flex-shrink: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .tool-header-back {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      color: #8A8070;
-      font-size: 0.82rem;
-      font-weight: 500;
-      text-decoration: none;
-      transition: color 0.2s;
-    }
-    .tool-header-back:hover { color: #D9D0C1; }
-    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
-    .tool-header-site { font-size: 0.68rem; color: #6B6055; letter-spacing: 0.06em; }
 
     /* ── Body layout ─────────────────────────────────────── */
     .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
@@ -70,7 +42,7 @@
       letter-spacing: 0.1em;
       color: #4E5A40;
       margin-bottom: 10px;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
     }
 
     /* Dropzone */
@@ -87,7 +59,7 @@
     #dropzone p { font-size: 0.76rem; color: #4E5A40; line-height: 1.5; }
     #dropzone strong { color: #8A8070; }
     #file-input { display: none; }
-    #file-name { margin-top: 8px; font-size: 0.71rem; color: #8FAF6E; text-align: center; word-break: break-all; display: none; font-family: 'IBM Plex Mono', monospace; }
+    #file-name { margin-top: 8px; font-size: 0.71rem; color: #8FAF6E; text-align: center; word-break: break-all; display: none; font-family: var(--font-ui); }
 
     /* Slider labels */
     label.ctrl-label {
@@ -98,7 +70,7 @@
       color: #8A8070;
       margin-bottom: 5px;
     }
-    label.ctrl-label span { color: #C8BEA8; font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem; }
+    label.ctrl-label span { color: #C8BEA8; font-family: var(--font-ui); font-size: 0.7rem; }
     input[type=range] {
       width: 100%;
       margin-bottom: 12px;
@@ -122,9 +94,9 @@
       transition: background 0.12s, border-color 0.12s, color 0.12s;
       text-align: center;
       line-height: 1.3;
-      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-family: var(--font-body);
     }
-    .grid-btn .sub { display: block; font-size: 0.58rem; color: #4E5A40; margin-top: 1px; font-family: 'IBM Plex Mono', monospace; }
+    .grid-btn .sub { display: block; font-size: 0.58rem; color: #4E5A40; margin-top: 1px; font-family: var(--font-ui); }
     .grid-btn:hover { background: #252D18; border-color: #384A25; color: #B8AD9A; }
     .grid-btn:hover .sub { color: #6A7A58; }
     .grid-btn.active { background: #233018; border-color: #5C7A4E; color: #8FAF6E; }
@@ -169,7 +141,7 @@
       flex: 1; background: none; border: none;
       color: #4E5A40; font-size: 0.69rem; padding: 6px 2px;
       cursor: pointer; transition: background 0.12s, color 0.12s;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
     }
     .seg-control button.active { background: #233018; color: #8FAF6E; }
 
@@ -180,7 +152,7 @@
       color: #8FAF6E; font-size: 0.8rem; font-weight: 600;
       border-radius: 7px; cursor: pointer;
       transition: background 0.15s; letter-spacing: 0.03em;
-      font-family: 'Space Grotesk', system-ui, sans-serif;
+      font-family: var(--font-body);
     }
     #export-btn:hover { background: #2A3D1E; }
     #export-btn:disabled { opacity: 0.3; cursor: not-allowed; }
@@ -209,7 +181,7 @@
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
     }
     .panel-label.left  { color: #8FAF6E; border-right: 1px solid #252E1A; }
     .panel-label.right { color: #4E5A40; }
@@ -248,7 +220,7 @@
       pointer-events: none;
       white-space: nowrap;
       z-index: 3;
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
     }
 
     #empty-state {
@@ -259,8 +231,11 @@
       pointer-events: none; z-index: 1;
     }
     #empty-state svg { color: #252E1A; }
-    #empty-state p { font-size: 0.83rem; color: #3A4A2C; }
+    #empty-state p { font-size: 0.83rem; color: var(--accent); }
+  
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 

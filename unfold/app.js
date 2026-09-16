@@ -404,7 +404,7 @@ function renderReadouts() {
     <div><span class="k">pieces</span><span class="v">${s.islands}${state.onePiece && s.tries ? ` · ${s.tries} tries` : ''}</span></div>
     ${state.onePiece ? `<div><span class="k">net</span><span class="v ${fitsSheet ? '' : 'warn'}">${s.netW.toFixed(0)} × ${s.netH.toFixed(0)} mm${fitsSheet ? '' : ' · over sheet'}</span></div>` : `<div><span class="k">sheets</span><span class="v">${s.sheets}</span></div>`}
     <div><span class="k">tabs</span><span class="v">${s.tabs}${s.noTab ? ` · ${s.noTab} edges without` : ''}</span></div>
-    <div><span class="k">overlaps</span><span class="v ${overlaps ? 'warn' : ''}">${overlaps ? `${overlaps} — do not cut` : 'none (faces, tabs, labels)'}</span></div>
+    <div><span class="k">overlaps</span><span class="v ${overlaps ? 'warn' : ''}">${overlaps ? `${overlaps}, do not cut` : 'none (faces, tabs, labels)'}</span></div>
     <div><span class="k">mountain scores</span><span class="v m">${fmt(mnt)}</span></div>
     <div><span class="k">valley scores</span><span class="v vv">${fmt(val)}</span></div>
     <div><span class="k">cut length</span><span class="v">${fmt(cut)}</span></div>`;

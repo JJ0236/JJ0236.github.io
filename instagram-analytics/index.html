@@ -3,30 +3,30 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Instagram Analytics — Josh's Corner</title>
+  <title>Instagram Analytics · Josh's Corner</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <style>
-    :root {
-      --bg: #F0EBE0;
-      --surface: #F8F4EE;
-      --surface-2: #EDE8DC;
-      --border: #C8CAD0;
-      --text: #3C4148;
-      --muted: #5A6068;
-      --accent: #3A4A2C;
-      --accent-mid: #5C7A4E;
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
     body {
-      font-family: 'Space Grotesk', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
       min-height: 100vh;
       padding-top: 48px;
     }
+
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
+    :root {
+      --surface-2: var(--raised);
+      --border: var(--hair);
+      --text: var(--ink);
+      --muted: var(--ink-soft);
+      --accent-mid: var(--rule);
+    }
+
+
+    
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     /* ── IG Gradient ───────────────────────────────── */
     .ig-text {
@@ -224,7 +224,7 @@
     }
     .badge-image    { background: #DCE8F0; color: #3A6080; }
     .badge-reel     { background: #EAE0F0; color: #6A3A80; }
-    .badge-carousel { background: #F0EAD8; color: #8B6340; }
+    .badge-carousel { background: #F0EAD8; color: var(--rule); }
     .badge-hook     { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
 
     /* ── Tags ──────────────────────────────────────── */
@@ -261,6 +261,7 @@
       .page { padding: 16px; }
       .search-wrap { padding: 44px 16px 16px; }
     }
+  
   </style>
 
   <!-- Tool header styles -->
@@ -298,6 +299,8 @@
       letter-spacing: 0.06em;
     }
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 <header class="tool-header">
@@ -313,7 +316,7 @@
 <!-- ── Search ───────────────────────────────────────── -->
 <div class="search-wrap">
   <h1 class="ig-text">Instagram Analytics</h1>
-  <p class="sub">Enter any public handle to generate a dashboard — runs entirely on your site, no third-party API or key needed.</p>
+  <p class="sub">Enter any public handle to generate a dashboard that runs entirely on your site, no third-party API or key needed.</p>
   <div class="search-row">
     <input id="handleInput" type="text" placeholder="@username or username" maxlength="60" autocomplete="off"/>
     <button id="analyzeBtn">Analyze</button>
@@ -418,7 +421,7 @@
     <div class="tag-grid" id="tag-pills"></div>
   </div>
   <div class="card" id="content-gaps-card" style="display:none; margin-top:20px;">
-    <h3>Content Gaps — Underexplored High-Performers</h3>
+    <h3>Content Gaps: Underexplored High-Performers</h3>
     <div class="tag-grid" id="content-gaps-pills"></div>
   </div>
 </div>
@@ -472,7 +475,7 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <div id="page-timing" class="page">
   <div class="notice">
-    Charts show <strong>your historical posting frequency</strong> by day and hour — useful for understanding your own pattern and identifying gaps.
+    Charts show <strong>your historical posting frequency</strong> by day and hour, useful for understanding your own pattern and identifying gaps.
   </div>
   <div class="charts-grid">
     <div class="card">

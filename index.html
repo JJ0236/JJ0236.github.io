@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Josh Hicks — Information Systems</title>
+  <title>Josh Hicks · Information Systems</title>
   <link rel="canonical" href="https://joshhicks.info/" />
   <meta name="description" content="Josh Hicks designs and builds websites for Northwest Arkansas businesses and organizations. Information Systems at the University of Arkansas." />
   <meta property="og:site_name" content="Josh Hicks" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://joshhicks.info/" />
-  <meta property="og:title" content="Josh Hicks — Web Design &amp; Development" />
+  <meta property="og:title" content="Josh Hicks · Web Design &amp; Development" />
   <meta property="og:description" content="Josh Hicks designs and builds websites for Northwest Arkansas businesses and organizations. Information Systems at the University of Arkansas." />
   <meta property="og:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
   <meta property="og:image:secure_url" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
   <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Josh Hicks — web design and development for Northwest Arkansas, shown with four client websites." />
+  <meta property="og:image:alt" content="Josh Hicks · web design and development for Northwest Arkansas, shown with four client websites." />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Josh Hicks — Web Design &amp; Development" />
+  <meta name="twitter:title" content="Josh Hicks · Web Design &amp; Development" />
   <meta name="twitter:description" content="Josh Hicks designs and builds websites for Northwest Arkansas businesses and organizations. Information Systems at the University of Arkansas." />
   <meta name="twitter:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
@@ -26,6 +26,7 @@
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
   <style>
     .hub-intro {
       margin-bottom: var(--space-5);
@@ -34,14 +35,14 @@
     .hub-intro .name {
       font-size: var(--text-3xl);
       font-weight: 700;
-      color: var(--soil-dark);
+      color: var(--head);
       letter-spacing: -0.03em;
       line-height: 1.1;
     }
     .hub-intro .role {
       font-family: var(--font-mono);
       font-size: var(--text-sm);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       margin-top: var(--space-2);
     }
     /* Fill viewport */
@@ -64,8 +65,8 @@
     }
     .hub-card { height: 100%; }
     .hub-card {
-      background: var(--chalk);
-      border: 1px solid var(--slate-subtle);
+      background: var(--surface);
+      border: 1px solid var(--edge);
       border-radius: var(--radius);
       padding: var(--space-6);
       text-decoration: none;
@@ -78,7 +79,7 @@
     .hub-card:hover {
       box-shadow: var(--shadow-hover);
       transform: translateY(-4px);
-      border-color: var(--soil-mid);
+      border-color: var(--rule);
     }
     .hub-card-icon {
       width: 36px;
@@ -86,7 +87,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bark-light);
+      background: var(--raised);
       border-radius: var(--radius-sm);
       color: var(--moss-dark);
     }
@@ -97,12 +98,12 @@
     .hub-card-title {
       font-size: var(--text-lg);
       font-weight: 600;
-      color: var(--soil-dark);
+      color: var(--head);
       line-height: 1.2;
     }
     .hub-card-desc {
       font-size: var(--text-sm);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       line-height: 1.5;
       flex: 1;
     }
@@ -164,7 +165,7 @@
             </svg>
           </div>
           <div class="hub-card-title">Portfolio</div>
-          <div class="hub-card-desc">Websites I design and build for Northwest Arkansas businesses and organizations — a kennel club, an aviation charter, an industrial manufacturer, and a retail marketplace.</div>
+          <div class="hub-card-desc">Websites I design and build for Northwest Arkansas businesses and organizations: a kennel club, an aviation charter, an industrial manufacturer, and a retail marketplace.</div>
           <div class="hub-card-arrow">See client work →</div>
         </a>
         <a href="/about/" class="hub-card fade-up">
@@ -187,7 +188,7 @@
             </svg>
           </div>
           <div class="hub-card-title">Experience</div>
-          <div class="hub-card-desc">Makerspace assistant, maker lab generalist, Geek Squad agent, IT intern — hands-on work across hardware, software, and education.</div>
+          <div class="hub-card-desc">Makerspace assistant, maker lab generalist, Geek Squad agent, IT intern: hands-on work across hardware, software, and education.</div>
           <div class="hub-card-arrow">See my history →</div>
         </a>
         <a href="/projects/" class="hub-card fade-up">
@@ -200,7 +201,7 @@
             </svg>
           </div>
           <div class="hub-card-title">Projects</div>
-          <div class="hub-card-desc">Interactive maps, browser-based AI tools, laser-cutter utilities, and more — built with plain JS and a lot of curiosity.</div>
+          <div class="hub-card-desc">Interactive maps, browser-based AI tools, laser-cutter utilities, and more, built with plain JS and a lot of curiosity.</div>
           <div class="hub-card-arrow">View all projects →</div>
         </a>
         <a href="/contact/" class="hub-card fade-up">
@@ -211,7 +212,7 @@
             </svg>
           </div>
           <div class="hub-card-title">Contact</div>
-          <div class="hub-card-desc">Email, LinkedIn, or GitHub — reach out however works best.</div>
+          <div class="hub-card-desc">Email, LinkedIn, or GitHub: reach out however works best.</div>
           <div class="hub-card-arrow">Get in touch →</div>
         </a>
       </div>

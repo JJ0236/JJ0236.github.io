@@ -4,33 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Video Transcript Tool - Josh's Corner</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
     :root {
-      --bg: #F0EBE0;
-      --card: #F8F4EE;
-      --ink: #3C4148;
-      --muted: #5A6068;
-      --border: #C8CAD0;
-      --accent: #5C7A4E;
-      --accent-hover: #3A4A2C;
-      --success: #3A4A2C;
-      --error: #8c1d18;
+      --card: var(--surface);
+      --muted: var(--ink-soft);
+      --border: var(--hair);
+      --accent-hover: var(--moss-mid);
+      --success: var(--moss-mid);
+      --error: var(--danger);
     }
+
+
+    
 
     * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--ink);
-      font-family: 'Space Grotesk', system-ui, sans-serif;
-      min-height: 100vh;
-      padding: 24px;
-      display: flex;
-      justify-content: center;
-      padding-top: 48px;
-    }
 
     .wrap {
       width: 100%;
@@ -186,8 +175,8 @@
 
     .status.info {
       background: #EEF0E8;
-      color: #3C4148;
-      border-color: #C8CAD0;
+      color: var(--ink);
+      border-color: var(--edge);
     }
 
     .footnote {
@@ -215,6 +204,7 @@
       .panel { padding: 18px; }
       .wrap { margin: 56px 0 18px; }
     }
+  
   </style>
 
   <!-- Tool header styles -->
@@ -252,6 +242,8 @@
       letter-spacing: 0.06em;
     }
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 <header class="tool-header">

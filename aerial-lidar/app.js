@@ -162,7 +162,7 @@ let elevTimer = null, elevSeq = 0, lastElev = null, lastPoint = null;
 function showReadout(m, pt) {
   lastElev = m; lastPoint = pt;
   $('elev').textContent = formatElevation(m, unit);
-  $('coords').textContent = pt ? `${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}` : '—';
+  $('coords').textContent = pt ? `${pt.lat.toFixed(5)}, ${pt.lng.toFixed(5)}` : '–';
 }
 
 base.on('mousemove', e => {

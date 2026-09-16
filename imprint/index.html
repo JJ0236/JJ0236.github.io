@@ -3,59 +3,34 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Imprint — Photo to Slat Relief — joshhicks.info</title>
-  <meta name="description" content="Turn any photo into a 3D relief panel — brightness becomes depth. Preview it as stacked laser-cut slats and export a slicer-ready STL or 3MF. Runs entirely in your browser." />
+  <title>Imprint · Photo to Slat Relief · joshhicks.info</title>
+  <meta name="description" content="Turn any photo into a 3D relief panel: brightness becomes depth. Preview it as stacked laser-cut slats and export a slicer-ready STL or 3MF. Runs entirely in your browser." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --ink-dark:   #26344E;
-      --ink-mid:    #3E5478;
-      --ink-light:  #8FB0E8;
-      --bg:         #101318;
-      --bg2:        #14181F;
-      --bg3:        #1A1F29;
-      --border:     #232B3A;
-      --text:       #C4CBD8;
-      --muted:      #6E7788;
-      --dim:        #454E60;
-      --accent:     #8FB0E8;
-      --panel-w:    286px;
-    }
-
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Space Grotesk', system-ui, sans-serif;
       height: 100dvh;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
-    .tool-header {
-      height: 48px;
-      background: var(--ink-dark);
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 1.5rem; flex-shrink: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.06); z-index: 10;
+    /* Variables belonging to this tool. The generic ones point at the
+       shared semantic layer so they follow the theme. */
+    :root {
+      --ink-dark: var(--ink);
+      --ink-mid: var(--ink-soft);
+      --ink-light: var(--ink-faint);
+      --bg2: var(--surface);
+      --bg3: var(--raised);
+      --border: var(--hair);
+      --text: var(--ink);
+      --muted: var(--ink-soft);
+      --dim: var(--ink-faint);
+      --panel-w: 286px;
     }
-    .tool-header-back {
-      display: flex; align-items: center; gap: 0.4rem;
-      color: #7A8296; font-size: 0.82rem; font-weight: 500;
-      text-decoration: none; transition: color 0.2s;
-    }
-    .tool-header-back:hover { color: #D0D6E2; }
-    .tool-header-back svg { width: 14px; height: 14px; flex-shrink: 0; }
-    .tool-header-title {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 0.78rem; font-weight: 500;
-      color: var(--ink-light); letter-spacing: 0.04em;
-    }
-    .tool-header-site { font-size: 0.68rem; color: #5A6070; letter-spacing: 0.06em; }
+
 
     .body-wrap { display: flex; flex: 1; overflow: hidden; min-height: 0; }
 
@@ -73,7 +48,7 @@
     .panel { padding: 14px 14px 12px; border-bottom: 1px solid var(--border); }
     .panel:last-child { border-bottom: none; }
     .panel-title {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.64rem; font-weight: 500;
       text-transform: uppercase; letter-spacing: 0.1em;
       color: var(--muted); margin-bottom: 10px;
@@ -85,7 +60,7 @@
     }
     .seg button {
       flex: 1; padding: 5px 6px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+      font-family: var(--font-ui); font-size: 0.7rem;
       background: transparent; border: none; color: var(--muted);
       cursor: pointer; transition: background 0.15s, color 0.15s;
     }
@@ -98,14 +73,14 @@
     }
     .ctrl-label { font-size: 0.75rem; color: var(--text); flex: 1; white-space: nowrap; }
     .ctrl-hint {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      font-family: var(--font-ui); font-size: 0.62rem;
       color: var(--muted); margin-top: -3px; margin-bottom: 8px; line-height: 1.5;
     }
     .ctrl-input {
       width: 78px; background: rgba(0,0,0,0.3);
       border: 1px solid var(--border); border-radius: 5px;
       padding: 4px 7px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem;
+      font-family: var(--font-ui); font-size: 0.75rem;
       color: var(--text); text-align: right; outline: none;
       transition: border-color 0.15s;
     }
@@ -114,13 +89,13 @@
     input[type=range] { accent-color: var(--ink-light); width: 100%; }
     .range-row { margin-bottom: 10px; }
     .range-row .ctrl-row { margin-bottom: 3px; }
-    .val { font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem; color: #A8B4C8; }
+    .val { font-family: var(--font-ui); font-size: 0.72rem; color: #A8B4C8; }
 
     .btn {
       width: 100%; padding: 9px;
       background: var(--ink-dark); border: 1px solid var(--ink-mid);
       border-radius: 6px; color: var(--ink-light);
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.74rem; font-weight: 500;
+      font-family: var(--font-ui); font-size: 0.74rem; font-weight: 500;
       cursor: pointer; transition: background 0.15s, color 0.15s;
     }
     .btn:hover:not(:disabled) { background: var(--ink-mid); color: #fff; }
@@ -141,7 +116,7 @@
     .thumb-wrap img { display: block; width: 100%; filter: grayscale(1); }
     .thumb-wrap .thumb-hint {
       position: absolute; inset: auto 0 0 0; padding: 4px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.6rem;
+      font-family: var(--font-ui); font-size: 0.6rem;
       color: #B8C2D4; background: rgba(16,19,24,0.72); text-align: center;
     }
     input[type=file] { display: none; }
@@ -161,7 +136,7 @@
     .toggle.on::after { transform: translateX(15px); background: var(--ink-light); }
 
     .info-strip {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem;
+      font-family: var(--font-ui); font-size: 0.65rem;
       color: var(--muted); line-height: 1.75; white-space: pre-line;
     }
 
@@ -175,7 +150,7 @@
     .swatch.active { outline: 2px solid var(--ink-light); outline-offset: 1px; }
 
     .attribution {
-      font-family: 'IBM Plex Mono', monospace;
+      font-family: var(--font-ui);
       font-size: 0.58rem; color: var(--dim); line-height: 1.6;
     }
 
@@ -184,7 +159,7 @@
 
     .viewport-stats {
       position: absolute; top: 12px; right: 14px;
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.62rem;
+      font-family: var(--font-ui); font-size: 0.62rem;
       color: rgba(255,255,255,0.3); text-align: right;
       pointer-events: none; line-height: 1.6; z-index: 4;
     }
@@ -200,7 +175,7 @@
       display: flex; gap: 6px;
     }
     .view-tools button {
-      padding: 6px 12px; font-family: 'IBM Plex Mono', monospace;
+      padding: 6px 12px; font-family: var(--font-ui);
       font-size: 0.66rem; border: 1px solid var(--border); border-radius: 6px;
       background: rgba(16,19,24,0.85); backdrop-filter: blur(6px);
       color: var(--muted); cursor: pointer;
@@ -217,7 +192,7 @@
     }
     .overlay.show { display: flex; }
     .overlay .stage {
-      font-family: 'IBM Plex Mono', monospace; font-size: 0.76rem; color: var(--text);
+      font-family: var(--font-ui); font-size: 0.76rem; color: var(--text);
     }
 
     .no-webgl {
@@ -233,6 +208,7 @@
       .body-wrap { flex-direction: column; }
       .sidebar { width: 100%; max-height: 45%; border-right: none; border-bottom: 1px solid var(--border); }
     }
+  
   </style>
   <script type="importmap">
   {
@@ -242,6 +218,8 @@
     }
   }
   </script>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 
@@ -340,7 +318,7 @@
       </div>
       <div class="ctrl-hint">
         For laser-cut stacking: the preview shows each slat's actual cut
-        profile — full-height slats, no loose pieces. Slice the exported STL
+        profile: full-height slats, no loose pieces. Slice the exported STL
         in s1c3r along the same axis at this thickness.
       </div>
     </div>
@@ -352,7 +330,7 @@
         <button class="active" data-val="0.6">Standard</button>
         <button data-val="0.35">Fine</button>
       </div>
-      <div class="info-strip" id="stats">—</div>
+      <div class="info-strip" id="stats">–</div>
     </div>
 
     <div class="panel">
@@ -372,7 +350,7 @@
 
     <div class="panel">
       <div class="attribution">
-        Everything runs in your browser — your photo is never uploaded.
+        Everything runs in your browser: your photo is never uploaded.
       </div>
     </div>
   </aside>
@@ -388,7 +366,7 @@
     <div class="overlay" id="overlay"><div class="stage" id="ov-stage">Working…</div></div>
     <div class="no-webgl" id="no-webgl">
       <h2>WebGL unavailable</h2>
-      <p>The 3D preview needs WebGL. Exports still work — set your options and download.</p>
+      <p>The 3D preview needs WebGL. Exports still work: set your options and download.</p>
     </div>
   </div>
 </div>

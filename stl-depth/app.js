@@ -173,7 +173,7 @@ function scheduleDepthUpdate() {
 
 function axisToCamera(axis, bbox) {
   // Returns { pos, up } looking toward model origin from the selected axis direction
-  const d = 8; // distance — will be overridden per projection below
+  const d = 8; // distance, overridden per projection below per projection below
   const dirs = {
     pz: { pos: new THREE.Vector3(0, 0,  d), up: new THREE.Vector3(0, 1, 0) },
     nz: { pos: new THREE.Vector3(0, 0, -d), up: new THREE.Vector3(0, 1, 0) },

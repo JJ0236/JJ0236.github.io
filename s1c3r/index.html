@@ -3,15 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
   <title>s1c3r – STL Sheet Slicer</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
     body {
-      background: #141810;
-      color: #D4CDB8;
-      font-family: 'Space Grotesk', system-ui, sans-serif;
       display: flex;
       flex-direction: column;
       height: 100dvh;
@@ -48,7 +44,7 @@
       transition: background .2s;
       white-space: nowrap;
     }
-    #topbar button:hover, #topbar label.btn:hover { background: #5C7A4E; color: #F8F4EE; }
+    #topbar button:hover, #topbar label.btn:hover { background: #5C7A4E; color: var(--surface); }
     #topbar input[type=file] { display: none; }
 
     /* ── Main layout ─────────────────────────── */
@@ -150,9 +146,9 @@
       font-size: .85rem;
       transition: background .2s;
     }
-    .full-btn:hover { background: #5C7A4E; color: #F8F4EE; }
+    .full-btn:hover { background: #5C7A4E; color: var(--surface); }
     .full-btn:disabled { opacity: .4; cursor: not-allowed; }
-    .full-btn.accent { background: #5C7A4E; color: #F8F4EE; }
+    .full-btn.accent { background: #5C7A4E; color: var(--surface); }
 
     /* Toggle switch */
     .toggle-row {
@@ -183,9 +179,9 @@
       transition: transform .2s, background .2s;
     }
     .toggle-sw input:checked + .toggle-track { background: #5C7A4E; border-color: #5C7A4E; }
-    .toggle-sw input:checked + .toggle-track::before { transform: translateX(17px); background: #F8F4EE; }
+    .toggle-sw input:checked + .toggle-track::before { transform: translateX(17px); background: var(--surface); }
     .toggle-sw input:disabled + .toggle-track { opacity: .4; pointer-events: none; }
-    .full-btn.accent:hover { background: #3A4A2C; }
+    .full-btn.accent:hover { background: var(--accent); }
 
     #slice-info {
       font-size: .78rem;
@@ -248,6 +244,7 @@
       line-height: 1;
     }
     #sld-row button:hover { color: #8FAF6E; }
+  
   </style>
 
   <!-- Tool header styles -->
@@ -285,6 +282,8 @@
       letter-spacing: 0.06em;
     }
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 <header class="tool-header">
@@ -319,7 +318,7 @@
       </svg>
       <p>Load an STL to get started</p>
     </div>
-    <div id="placing-hint">Click on the model to add a hole — right-click to cancel</div>
+    <div id="placing-hint">Click on the model to add a hole, right-click to cancel</div>
     <div id="slice-scrubber">
       <div id="sld-row">
         <button id="sld-prev" title="Previous sheet">◀</button>
@@ -418,15 +417,15 @@
       </label>
       <label class="row">
         <span>Width X (<span class="u">mm</span>)</span>
-        <input id="inp-size-x" type="number" min="0.001" step="0.1" placeholder="—"/>
+        <input id="inp-size-x" type="number" min="0.001" step="0.1" placeholder="–"/>
       </label>
       <label class="row">
         <span>Depth Y (<span class="u">mm</span>)</span>
-        <input id="inp-size-y" type="number" min="0.001" step="0.1" placeholder="—"/>
+        <input id="inp-size-y" type="number" min="0.001" step="0.1" placeholder="–"/>
       </label>
       <label class="row">
         <span>Height Z (<span class="u">mm</span>)</span>
-        <input id="inp-size-z" type="number" min="0.001" step="0.1" placeholder="—"/>
+        <input id="inp-size-z" type="number" min="0.001" step="0.1" placeholder="–"/>
       </label>
       <div style="font-size:.72rem;color:#666;margin-bottom:4px">Edit any dimension to scale proportionally</div>
     </div>

@@ -6,6 +6,11 @@ import { layoutForCutting, toSVG } from './export.js';
 
 const $ = id => document.getElementById(id);
 
+// Canvases cannot inherit CSS. Fabric colours deliberately do NOT come from
+// here: a green fabric is green in either theme. Only the sheet the pieces sit
+// on, its grid and its labels follow the page.
+const ink = name => (window.siteTheme ? siteTheme.colour(name) : '');
+
 const UNITS = {
   in: { per: INCH, dp: 2, step: 0.25, area: 'in²', areaPer: INCH * INCH },
   mm: { per: 1, dp: 1, step: 5, area: 'cm²', areaPer: 100 },
@@ -96,7 +101,7 @@ function renderGrid() {
   state.cells.forEach((c, i) => {
     const b = document.createElement('button');
     b.className = 'cell';
-    b.title = `${UNIT_LABELS[c.type]} — click to change, shift-click to rotate`;
+    b.title = `${UNIT_LABELS[c.type]}: click to change, shift-click to rotate`;
     b.innerHTML = '<canvas width="80" height="80"></canvas>';
     b.onclick = e => {
       if (e.shiftKey) c.rot = (c.rot + 1) % 4;
@@ -189,7 +194,7 @@ function drawBlock(cv, block, { plain = false, size } = {}) {
       ctx.fill();
     }
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(60,40,10,0.35)';
+    ctx.strokeStyle = ink('--canvas-grid');
     ctx.stroke();
     out.push({ index: i, pts });
   });
@@ -325,7 +330,7 @@ $('cut').onclick = async () => {
     const sheets = layout.reduce((s, l) => s + l.sheets.length, 0);
     const missed = layout.reduce((s, l) => s + l.unplaced, 0);
     $('cutStatus').textContent = missed
-      ? `${sheets} sheet(s) — ${missed} piece(s) did not fit; enlarge the fabric`
+      ? `${sheets} sheet(s), but ${missed} piece(s) did not fit; enlarge the fabric`
       : `${sheets} sheet(s) across ${layout.length} fabric(s)`;
     $('cutStatus').classList.toggle('bad', !!missed);
     $('download').disabled = false;
@@ -360,8 +365,8 @@ function drawLayout(layout) {
     const x = (i % cols) * (cellW + gap);
     const y = Math.floor(i / cols) * (cellH + labelH + gap);
     ctx.save(); ctx.translate(x, y + labelH);
-    ctx.fillStyle = '#F8F4EE'; ctx.fillRect(0, 0, cellW, cellH);
-    ctx.strokeStyle = '#C8CAD0'; ctx.lineWidth = 1;
+    ctx.fillStyle = ink('--canvas-sheet'); ctx.fillRect(0, 0, cellW, cellH);
+    ctx.strokeStyle = ink('--canvas-grid'); ctx.lineWidth = 1;
     ctx.strokeRect(0.5, 0.5, cellW - 1, cellH - 1);
     const fb = fabricById(sheet.fabric);
     for (const p of sheet.placements) {
@@ -373,8 +378,8 @@ function drawLayout(layout) {
       ctx.lineWidth = 0.8; ctx.strokeStyle = '#c0392b'; ctx.stroke();
     }
     ctx.restore();
-    ctx.fillStyle = '#8C919A';
-    ctx.font = '11px "IBM Plex Mono", monospace';
+    ctx.fillStyle = ink('--canvas-ink');
+    ctx.font = '500 11px "Public Sans", system-ui, sans-serif';
     ctx.fillText(`${fb.name} · sheet ${i + 1}`, x, y + 12);
   });
 }
@@ -391,4 +396,5 @@ $('download').onclick = () => {
 };
 
 addEventListener('resize', () => refresh());
+if (window.siteTheme) siteTheme.onChange(() => { renderBlockList(); renderGrid(); refresh(); });
 renderBlockList(); renderGrid(); renderFabrics(); syncInputs(); refresh();

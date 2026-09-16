@@ -72,6 +72,8 @@ export function createWorld(canvas) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.92;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
+  // Deliberately a bright sky in both themes: the flies live on a sunny
+  // windowsill, and that is the whole idea. It does not follow the page.
   scene.background = new THREE.Color('#CFE3F5');
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;

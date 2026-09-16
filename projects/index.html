@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Projects — Josh Hicks</title>
-  <meta name="description" content="A catalog of browser-based tools, grouped by the machine they feed — laser cutter, 3D printer, or nothing but a browser." />
+  <title>Projects · Josh Hicks</title>
+  <meta name="description" content="A catalog of browser-based tools, grouped by the machine they feed: laser cutter, 3D printer, or nothing but a browser." />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
   <style>
     .projects-wrapper { max-width: var(--content-max); }
 
@@ -74,13 +75,13 @@
       gap: var(--space-2);
       padding: var(--space-3) 0;
       margin-bottom: var(--space-6);
-      background: var(--parchment);
-      border-bottom: 1px solid var(--slate-subtle);
+      background: var(--bg);
+      border-bottom: 1px solid var(--edge);
     }
     .cat-filter-label {
       font-family: var(--font-mono);
       font-size: var(--text-xs);
-      color: var(--slate-light);
+      color: var(--ink-faint);
       text-transform: uppercase;
       letter-spacing: 0.12em;
       margin-right: var(--space-1);
@@ -88,16 +89,16 @@
     .chip {
       font-family: var(--font-mono);
       font-size: var(--text-xs);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       background: transparent;
-      border: 1px solid var(--slate-subtle);
+      border: 1px solid var(--edge);
       border-radius: 999px;
       padding: 0.3rem 0.7rem;
       cursor: pointer;
       line-height: 1.4;
       transition: background var(--transition), color var(--transition), border-color var(--transition);
     }
-    .chip:hover { border-color: var(--soil-mid); color: var(--soil-dark); }
+    .chip:hover { border-color: var(--rule); color: var(--head); }
     .chip[aria-pressed="true"] {
       background: var(--moss-dark);
       border-color: var(--moss-dark);
@@ -125,20 +126,20 @@
       font-family: var(--font-mono);
       font-size: var(--text-sm);
       font-weight: 500;
-      color: var(--soil-dark);
+      color: var(--head);
       text-transform: uppercase;
       letter-spacing: 0.14em;
     }
     .cat-section-count {
       font-family: var(--font-mono);
       font-size: var(--text-xs);
-      color: var(--slate-light);
+      color: var(--ink-faint);
       margin-left: auto;
       white-space: nowrap;
     }
     .cat-section-sub {
       font-size: var(--text-sm);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       line-height: 1.6;
       margin: var(--space-3) 0 var(--space-4);
       max-width: 60ch;
@@ -151,27 +152,27 @@
       align-items: start;
       gap: var(--space-3);
       padding: var(--space-4) var(--space-3);
-      border-bottom: 1px solid var(--slate-subtle);
+      border-bottom: 1px solid var(--edge);
       text-decoration: none;
       color: inherit;
       transition: background var(--transition);
     }
     .cat-row[hidden] { display: none; }
     .cat-row:hover, .cat-row:focus-visible {
-      background: var(--chalk);
+      background: var(--surface);
       outline: none;
     }
     .cat-row:focus-visible { box-shadow: inset 3px 0 0 var(--moss-mid); }
     .cat-num {
       font-family: var(--font-mono);
       font-size: var(--text-sm);
-      color: var(--slate-light);
+      color: var(--ink-faint);
       padding-top: 0.15rem;
       transition: color var(--transition);
     }
     .cat-row:hover .cat-num { color: var(--sec-accent, var(--moss-mid)); }
     .cat-body {
-      border-left: 2px solid var(--slate-subtle);
+      border-left: 2px solid var(--edge);
       padding-left: var(--space-4);
       transition: border-color var(--transition);
       min-width: 0;
@@ -187,7 +188,7 @@
     .cat-name {
       font-size: var(--text-base);
       font-weight: 600;
-      color: var(--soil-dark);
+      color: var(--head);
       line-height: 1.35;
     }
     .cat-fmt {
@@ -198,14 +199,14 @@
       font-size: 0.65rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--slate-light);
+      color: var(--ink-faint);
     }
     .cat-fmt i { font-style: normal; }
-    .cat-fmt i + i::before { content: '·'; margin-right: var(--space-2); color: var(--slate-subtle); }
+    .cat-fmt i + i::before { content: '·'; margin-right: var(--space-2); color: var(--edge); }
     .cat-line {
       display: block;
       font-size: var(--text-sm);
-      color: var(--slate-dark);
+      color: var(--ink);
       line-height: 1.6;
       margin-top: var(--space-1);
     }
@@ -221,7 +222,7 @@
     .cat-more .cat-text {
       display: block;
       font-size: var(--text-sm);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       line-height: 1.7;
       padding-top: var(--space-3);
       max-width: 68ch;
@@ -241,7 +242,7 @@
     .cat-empty {
       font-family: var(--font-mono);
       font-size: var(--text-sm);
-      color: var(--slate-light);
+      color: var(--ink-faint);
       padding: var(--space-8) 0;
       text-align: center;
     }
@@ -357,17 +358,17 @@
             <h2 class="cat-section-name">Laser cutter</h2>
             <span class="cat-section-count" data-count>8 tools</span>
           </div>
-          <p class="cat-section-sub">Cut, score, engrave — every one of these hands you a ready-to-run file.</p>
+          <p class="cat-section-sub">Cut, score, engrave: every one of these hands you a ready-to-run file.</p>
 
           <a href="/patch/" class="cat-row" data-tags="laser">
             <span class="cat-num">01</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Patch — Quilt Block Generator</span>
+                <span class="cat-name">Patch: Quilt Block Generator</span>
                 <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Pick a quilt block, assign your fabrics, get every piece cut to size.</span>
-              <span class="cat-more"><span class="cat-text">Twenty-three classic blocks — Card Trick, Bear&rsquo;s Paw, Log Cabin, Dutchman&rsquo;s Puzzle, Jacob&rsquo;s Ladder and the rest — plus a grid editor for building your own out of half-square, quarter-square, snowball and four-patch units. Set the finished size and it works out every piece, adding the seam allowance by offsetting the finished shape — which reproduces the traditional rules (a half-square triangle lands on finished + ⅞″, a quarter-square on + 1¼″) and also handles geometry no rule book covers. Upload photos of your actual fabric to see the block before you cut it. Pieces are laid out on grain, one set of sheets per fabric.</span></span>
+              <span class="cat-more"><span class="cat-text">Twenty-three classic blocks: Card Trick, Bear&rsquo;s Paw, Log Cabin, Dutchman&rsquo;s Puzzle, Jacob&rsquo;s Ladder and the rest, plus a grid editor for building your own out of half-square, quarter-square, snowball and four-patch units. Set the finished size and it works out every piece, adding the seam allowance by offsetting the finished shape, which reproduces the traditional rules (a half-square triangle lands on finished + ⅞″, a quarter-square on + 1¼″) and also handles geometry no rule book covers. Upload photos of your actual fabric to see the block before you cut it. Pieces are laid out on grain, one set of sheets per fabric.</span></span>
             </span>
           </a>
 
@@ -375,11 +376,11 @@
             <span class="cat-num">02</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Arrange — SVG Nesting</span>
+                <span class="cat-name">Arrange: SVG Nesting</span>
                 <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Pack parts onto sheet stock with as little waste as the geometry allows.</span>
-              <span class="cat-more"><span class="cat-text">Drop in SVGs, set quantities and your stock size, and it nests them — interlocking concave outlines rather than just packing bounding boxes. Kerf clearance, grain lock for plywood, automatic overflow onto more sheets, and merged common lines so the laser cuts a shared edge once instead of twice.</span></span>
+              <span class="cat-more"><span class="cat-text">Drop in SVGs, set quantities and your stock size, and it nests them, interlocking concave outlines rather than just packing bounding boxes. Kerf clearance, grain lock for plywood, automatic overflow onto more sheets, and merged common lines so the laser cuts a shared edge once instead of twice.</span></span>
             </span>
           </a>
 
@@ -387,7 +388,7 @@
             <span class="cat-num">03</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Crease — Origami Pattern Generator</span>
+                <span class="cat-name">Crease: Origami Pattern Generator</span>
                 <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Parametric origami tessellations, sized to your sheet.</span>
@@ -399,7 +400,7 @@
             <span class="cat-num">04</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Unfold — STL to Paper Net</span>
+                <span class="cat-name">Unfold: STL to Paper Net</span>
                 <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">A low-poly STL flattened into a net that cuts as one piece.</span>
@@ -423,7 +424,7 @@
             <span class="cat-num">06</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">s1c3r — STL Sheet Slicer</span>
+                <span class="cat-name">s1c3r: STL Sheet Slicer</span>
                 <span class="cat-fmt"><i>SVG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Any STL sliced into a stack of cuttable sheets.</span>
@@ -436,7 +437,7 @@
             <span class="cat-num">07</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">LAZAR — Laser Image Prep</span>
+                <span class="cat-name">LAZAR: Laser Image Prep</span>
                 <span class="cat-fmt"><i>PNG</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Photographs dithered down to something an engraver can burn.</span>
@@ -452,7 +453,7 @@
                 <span class="cat-fmt"><i>PNG</i></span>
               </span>
               <span class="cat-line">Any STL, orbited in 3D, exported as a 16-bit grayscale depth map.</span>
-              <span class="cat-more"><span><span class="cat-text">Load a model, pick the projection axis, toggle orthographic or perspective, and export a full-range PNG. The 3D counterpart to LAZAR — where that preps a photo for engraving, this preps a model.</span></span></span>
+              <span class="cat-more"><span><span class="cat-text">Load a model, pick the projection axis, toggle orthographic or perspective, and export a full-range PNG. The 3D counterpart to LAZAR: where that preps a photo for engraving, this preps a model.</span></span></span>
             </span>
           </a>
         </section>
@@ -464,13 +465,13 @@
             <h2 class="cat-section-name">3D printer</h2>
             <span class="cat-section-count" data-count>4 tools</span>
           </div>
-          <p class="cat-section-sub">Draw it, generate it, or photograph it — out comes a slicer-ready STL or 3MF.</p>
+          <p class="cat-section-sub">Draw it, generate it, or photograph it, and out comes a slicer-ready STL or 3MF.</p>
 
           <a href="/terra/" class="cat-row" data-tags="print threejs maps">
             <span class="cat-num">09</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Terra — 3D Printable Map Generator</span>
+                <span class="cat-name">Terra: 3D Printable Map Generator</span>
                 <span class="cat-fmt"><i>STL</i><i>3MF</i></span>
               </span>
               <span class="cat-line">Draw a box anywhere on Earth and print what is inside it.</span>
@@ -482,7 +483,7 @@
             <span class="cat-num">10</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Relief — 3D Printable Panel Generator</span>
+                <span class="cat-name">Relief: 3D Printable Panel Generator</span>
                 <span class="cat-fmt"><i>STL</i><i>3MF</i></span>
               </span>
               <span class="cat-line">Procedural relief wall panels at exact real-world dimensions.</span>
@@ -494,7 +495,7 @@
             <span class="cat-num">11</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Imprint — Photo to Slat Relief</span>
+                <span class="cat-name">Imprint: Photo to Slat Relief</span>
                 <span class="cat-fmt"><i>STL</i><i>3MF</i><i>Laser</i></span>
               </span>
               <span class="cat-line">Drop in a photo and its brightness becomes depth.</span>
@@ -510,17 +511,17 @@
             <h2 class="cat-section-name">Simulation</h2>
             <span class="cat-section-count" data-count>2 tools</span>
           </div>
-          <p class="cat-section-sub">Things that run and keep running. Nothing to export — open it and watch.</p>
+          <p class="cat-section-sub">Things that run and keep running. Nothing to export: open it and watch.</p>
 
           <a href="/cloche/" class="cat-row" data-tags="sim threejs">
             <span class="cat-num">12</span>
             <span class="cat-body">
               <span class="cat-head">
-                <span class="cat-name">Cloche — Flies on a Windowsill</span>
+                <span class="cat-name">Cloche: Flies on a Windowsill</span>
                 <span class="cat-fmt"><i>Live</i></span>
               </span>
               <span class="cat-line">Real fruit-fly connectomes, running live in your browser.</span>
-              <span class="cat-more"><span><span class="cat-text">Flies on a sunny kitchen windowsill, each one running its actual connectome — the FlyWire female brain and the Janelia male brain, every neuron and synapse. They taste, smell, and learn which smells mean sugar. A male sees a female and his own courtship neurons make him sing; she hears, accepts, and lays eggs on the banana. Eggs hatch, larvae crawl and pupate, and new flies climb out with brains of their own.</span></span></span>
+              <span class="cat-more"><span><span class="cat-text">Flies on a sunny kitchen windowsill, each one running its actual connectome: the FlyWire female brain and the Janelia male brain, every neuron and synapse. They taste, smell, and learn which smells mean sugar. A male sees a female and his own courtship neurons make him sing; she hears, accepts, and lays eggs on the banana. Eggs hatch, larvae crawl and pupate, and new flies climb out with brains of their own.</span></span></span>
             </span>
           </a>
 
@@ -554,7 +555,7 @@
                 <span class="cat-fmt"><i>Map</i></span>
               </span>
               <span class="cat-line">Slide the ground out from under the trees.</span>
-              <span class="cat-more"><span class="cat-text">A swipe between bare-earth LiDAR and aerial imagery. Bare earth is the survey with the vegetation stripped out, so old roadbeds, homesteads, quarries and sinkholes show up plainly where the aerial photo shows nothing but canopy — which in the Ozarks is most of it. Multidirectional hillshade, slope and elevation-tinted views, contours at 2, 5 or 10&nbsp;ft, live elevation under the cursor, and a link that restores exactly what you were looking at.</span></span>
+              <span class="cat-more"><span class="cat-text">A swipe between bare-earth LiDAR and aerial imagery. Bare earth is the survey with the vegetation stripped out, so old roadbeds, homesteads, quarries and sinkholes show up plainly where the aerial photo shows nothing but canopy, which in the Ozarks is most of it. Multidirectional hillshade, slope and elevation-tinted views, contours at 2, 5 or 10&nbsp;ft, live elevation under the cursor, and a link that restores exactly what you were looking at.</span></span>
             </span>
           </a>
 
@@ -577,7 +578,7 @@
                 <span class="cat-name">Video Transcript Tool</span>
                 <span class="cat-fmt"><i>Text</i></span>
               </span>
-              <span class="cat-line">Video or audio in, transcript out — no API key, no server.</span>
+              <span class="cat-line">Video or audio in, transcript out, with no API key, no server.</span>
               <span class="cat-more"><span><span class="cat-text">Whisper inference running locally in the browser tab. The file never leaves your machine, which matters more than the convenience does.</span></span></span>
             </span>
           </a>
@@ -590,7 +591,7 @@
                 <span class="cat-fmt"><i>Dashboard</i></span>
               </span>
               <span class="cat-line">Any public handle, broken down into a full dashboard.</span>
-              <span class="cat-more"><span><span class="cat-text">Post breakdowns, hashtag performance, hook pattern analysis and cadence heatmaps — enough to tell whether an account is actually working or just posting.</span></span></span>
+              <span class="cat-more"><span><span class="cat-text">Post breakdowns, hashtag performance, hook pattern analysis and cadence heatmaps, enough to tell whether an account is actually working or just posting.</span></span></span>
             </span>
           </a>
         </section>

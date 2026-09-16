@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Contact — Josh Hicks</title>
+  <title>Contact · Josh Hicks</title>
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
   <style>
     .contact-grid {
       display: grid;
@@ -17,8 +18,8 @@
       max-width: 680px;
     }
     .contact-card {
-      background: var(--chalk);
-      border: 1px solid var(--slate-subtle);
+      background: var(--surface);
+      border: 1px solid var(--edge);
       border-radius: var(--radius);
       padding: var(--space-6);
       display: flex;
@@ -31,7 +32,7 @@
     .contact-card:hover {
       box-shadow: var(--shadow-hover);
       transform: translateY(-3px);
-      border-color: var(--soil-mid);
+      border-color: var(--rule);
     }
     .contact-icon {
       width: 40px;
@@ -39,7 +40,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bark-light);
+      background: var(--raised);
       border-radius: var(--radius-sm);
       color: var(--moss-dark);
       flex-shrink: 0;
@@ -52,13 +53,13 @@
     .contact-label {
       font-size: var(--text-base);
       font-weight: 600;
-      color: var(--soil-dark);
+      color: var(--head);
       margin-bottom: var(--space-1);
     }
     .contact-value {
       font-family: var(--font-mono);
       font-size: var(--text-xs);
-      color: var(--slate-mid);
+      color: var(--ink-soft);
       word-break: break-all;
     }
   </style>

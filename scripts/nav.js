@@ -98,6 +98,8 @@
   }
 
   function init() {
+    // theme.js owns the control markup; it just needs telling the DOM changed.
+    const placeTheme = () => window.siteTheme && window.siteTheme.wire && window.siteTheme.wire();
     // Inject sidebar before the .site-content wrapper if it exists,
     // otherwise prepend to body.
     const layout = document.querySelector('.site-layout');
@@ -106,6 +108,7 @@
     } else {
       document.body.insertAdjacentHTML('afterbegin', buildSidebar());
     }
+    placeTheme();
 
     const sidebar  = document.getElementById('sidebar');
     const toggle   = document.getElementById('nav-toggle');

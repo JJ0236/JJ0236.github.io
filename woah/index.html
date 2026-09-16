@@ -3,18 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
     <title>Waveform STL Generator</title>
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            background: #111210;
-            color: #D4CDB8;
-            font-family: 'Space Grotesk', system-ui, sans-serif;
-            font-size: 13px;
-            overflow: hidden;
-        }
+    /* The app shell: fixed header, then a column that owns the rest of
+       the height. Colour and type come from the shared layer. */
+    body {
+      font-size: 13px;
+      overflow: hidden;
+    }
 
         #panel {
             position: fixed;
@@ -227,7 +223,8 @@
         #panel::-webkit-scrollbar { width: 4px; }
         #panel::-webkit-scrollbar-track { background: #191B14; }
         #panel::-webkit-scrollbar-thumb { background: #2C3024; border-radius: 2px; }
-    </style>
+    
+  </style>
     <script type="importmap">
     {
         "imports": {
@@ -272,6 +269,8 @@
       letter-spacing: 0.06em;
     }
   </style>
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
 </head>
 <body>
 <header class="tool-header">

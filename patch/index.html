@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Patch — Quilt Block Generator — joshhicks.info</title>
+  <title>Patch · Quilt Block Generator · joshhicks.info</title>
   <meta name="description" content="Pick a quilt block, assign your fabrics, set the finished size, and get a laser-ready SVG of every piece with the seam allowance already added." />
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
   <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
   <meta name="theme-color" content="#3A4A2C" />
   <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
   <style>
     .site-content { max-width: calc(1520px + var(--sidebar-width)); }
     .wrap { max-width: none; }
@@ -26,36 +27,36 @@
     }
 
     .panel {
-      background: var(--chalk); border: 1px solid var(--slate-subtle);
+      background: var(--surface); border: 1px solid var(--edge);
       border-radius: var(--radius); padding: var(--space-4); box-shadow: var(--shadow-xs);
     }
     .panel + .panel { margin-top: var(--space-4); }
     .panel h2 {
       font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 500;
-      text-transform: uppercase; letter-spacing: 0.12em; color: var(--soil-dark);
+      text-transform: uppercase; letter-spacing: 0.12em; color: var(--head);
       margin-bottom: var(--space-3);
     }
     .field { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); }
-    .field label { font-size: var(--text-sm); color: var(--slate-dark); }
+    .field label { font-size: var(--text-sm); color: var(--ink); }
     .field input[type=number], .field select {
       font-family: var(--font-mono); font-size: var(--text-sm); padding: 0.3rem 0.45rem;
-      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
-      background: var(--white); color: var(--slate-dark); width: 7.5rem;
+      border: 1px solid var(--edge); border-radius: var(--radius-sm);
+      background: var(--field-bg); color: var(--ink); width: 7.5rem;
     }
     .field.check { justify-content: flex-start; gap: var(--space-2); }
     .field.check input { accent-color: var(--moss-mid); }
     .field.check label { font-size: var(--text-sm); }
-    .hint { font-size: var(--text-xs); color: var(--slate-light); line-height: 1.5; margin-top: var(--space-2); }
-    .unit { font-family: var(--font-mono); font-size: 0.65rem; color: var(--slate-light); }
+    .hint { font-size: var(--text-xs); color: var(--ink-faint); line-height: 1.5; margin-top: var(--space-2); }
+    .unit { font-family: var(--font-mono); font-size: 0.65rem; color: var(--ink-faint); }
 
-    .seg { display: inline-flex; border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm); overflow: hidden; background: var(--white); }
+    .seg { display: inline-flex; border: 1px solid var(--edge); border-radius: var(--radius-sm); overflow: hidden; background: var(--field-bg); }
     .seg button {
       font-family: var(--font-mono); font-size: var(--text-xs); padding: 0.3rem 0.65rem;
-      border: none; background: transparent; color: var(--slate-mid); cursor: pointer;
+      border: none; background: transparent; color: var(--ink-soft); cursor: pointer;
       transition: background var(--transition), color var(--transition);
     }
-    .seg button + button { border-left: 1px solid var(--slate-subtle); }
-    .seg button[aria-pressed="true"] { background: var(--moss-dark); color: var(--sidebar-text); }
+    .seg button + button { border-left: 1px solid var(--edge); }
+    .seg button[aria-pressed="true"] { background: var(--accent); color: var(--nav-ink); }
 
     /* Twenty-odd blocks would otherwise run the panel off the page. */
     #blocks {
@@ -65,16 +66,16 @@
     }
     .block-card {
       display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
-      padding: var(--space-2); border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
-      background: var(--white); cursor: pointer; transition: border-color var(--transition), box-shadow var(--transition);
+      padding: var(--space-2); border: 1px solid var(--edge); border-radius: var(--radius-sm);
+      background: var(--field-bg); cursor: pointer; transition: border-color var(--transition), box-shadow var(--transition);
     }
-    .block-card:hover { border-color: var(--soil-mid); }
+    .block-card:hover { border-color: var(--rule); }
     .block-card.on { border-color: var(--moss-mid); box-shadow: 0 0 0 1px var(--moss-mid); }
     .block-card canvas { width: 60px; height: 60px; }
-    .block-card span { font-size: 0.65rem; color: var(--slate-dark); text-align: center; line-height: 1.2; }
+    .block-card span { font-size: 0.65rem; color: var(--ink); text-align: center; line-height: 1.2; }
 
-    #grid { display: grid; gap: 2px; background: var(--slate-subtle); border: 1px solid var(--slate-subtle); }
-    .cell { padding: 0; border: none; background: var(--white); cursor: pointer; aspect-ratio: 1; }
+    #grid { display: grid; gap: 2px; background: var(--edge); border: 1px solid var(--edge); }
+    .cell { padding: 0; border: none; background: var(--field-bg); cursor: pointer; aspect-ratio: 1; }
     .cell canvas { width: 100%; height: 100%; display: block; }
     .cell:hover { outline: 2px solid var(--moss-mid); outline-offset: -2px; }
 
@@ -83,13 +84,13 @@
     .fabric.on .swatch { box-shadow: 0 0 0 2px var(--moss-mid); }
     .swatch {
       width: 32px; height: 32px; flex: none; border-radius: var(--radius-sm);
-      border: 1px solid var(--slate-subtle); cursor: pointer; background-position: center;
+      border: 1px solid var(--edge); cursor: pointer; background-position: center;
     }
     .fab-name {
       flex: 1; min-width: 0; font-size: var(--text-sm); padding: 0.25rem 0.4rem;
-      border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--slate-dark);
+      border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--ink);
     }
-    .fab-name:hover, .fab-name:focus { border-color: var(--slate-subtle); background: var(--white); }
+    .fab-name:hover, .fab-name:focus { border-color: var(--edge); background: var(--field-bg); }
     .swap { cursor: pointer; }
 
     #preview { width: 100%; display: block; cursor: crosshair; border-radius: var(--radius-sm); }
@@ -97,31 +98,32 @@
 
     #pieces { display: flex; flex-direction: column; gap: var(--space-1); max-height: 34vh; overflow-y: auto; }
     .piece { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; gap: var(--space-2); padding: 0.2rem 0; }
-    .pc-swatch { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--slate-subtle); background-position: center; }
+    .pc-swatch { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--edge); background-position: center; }
     .pc-main { min-width: 0; display: flex; flex-direction: column; }
-    .pc-name { font-size: var(--text-sm); color: var(--soil-dark); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pc-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--slate-light); }
-    .pc-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--slate-mid); }
+    .pc-name { font-size: var(--text-sm); color: var(--head); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pc-meta { font-family: var(--font-mono); font-size: 0.62rem; color: var(--ink-faint); }
+    .pc-count { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--ink-soft); }
 
     button.primary {
-      font-family: var(--font-mono); font-size: var(--text-sm); background: var(--moss-dark);
-      color: var(--sidebar-text); border: none; border-radius: var(--radius-sm);
+      font-family: var(--font-mono); font-size: var(--text-sm); background: var(--accent);
+      color: var(--nav-ink); border: none; border-radius: var(--radius-sm);
       padding: 0.5rem 1.2rem; cursor: pointer; transition: background var(--transition);
     }
     button.primary:hover:not(:disabled) { background: var(--moss-mid); }
     button.primary:disabled { opacity: 0.4; cursor: not-allowed; }
     button.ghost {
       font-family: var(--font-mono); font-size: var(--text-xs); background: transparent;
-      border: 1px solid var(--slate-subtle); border-radius: var(--radius-sm);
-      padding: 0.4rem 0.7rem; color: var(--slate-dark); cursor: pointer;
+      border: 1px solid var(--edge); border-radius: var(--radius-sm);
+      padding: 0.4rem 0.7rem; color: var(--ink); cursor: pointer;
     }
-    button.ghost:hover:not(:disabled) { border-color: var(--soil-mid); color: var(--soil-dark); }
+    button.ghost:hover:not(:disabled) { border-color: var(--rule); color: var(--head); }
     button.ghost:disabled { opacity: 0.4; cursor: not-allowed; }
     .ghost.small { padding: 0.22rem 0.5rem; font-size: 0.62rem; }
     .run-row { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-3); flex-wrap: wrap; }
-    .stat { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); }
+    .stat { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); }
     .stat.bad { color: #c0524a; }
-    #pieceTotal, #unitNote { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--slate-light); margin-top: var(--space-2); line-height: 1.6; }
+    #pieceTotal, #unitNote { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-faint); margin-top: var(--space-2); line-height: 1.6; }
+  
   </style>
 </head>
 <body>
@@ -174,7 +176,7 @@
             <div class="panel">
               <h2>Block preview</h2>
               <canvas id="preview"></canvas>
-              <p class="hint">This is the block as it will look <em>finished</em> — the seam allowance is added to the cut pieces, not shown here.</p>
+              <p class="hint">This is the block as it will look <em>finished</em>: the seam allowance is added to the cut pieces, not shown here.</p>
             </div>
 
             <div class="panel">
@@ -203,7 +205,7 @@
               <div class="field"><label for="seam">Seam allowance <span class="unit" data-unit-label>in</span></label><input type="number" id="seam" min="0" /></div>
               <div class="field"><label for="blocksN">How many blocks</label><input type="number" id="blocksN" min="1" max="99" value="1" /></div>
               <div class="field check"><input type="checkbox" id="trim" /><label for="trim">Trim the dog ears</label></div>
-              <p class="hint">A quarter inch is the quilting standard. Offsetting the finished shape by it reproduces the usual rules — a half-square triangle comes out at finished&nbsp;+&nbsp;⅞″, a quarter-square at&nbsp;+&nbsp;1¼″ — only exact rather than rounded to the nearest eighth. Leave the dog ears on and the pieces match what a pattern gives you; trim them and the long points come off, which saves fabric but loses the corner you line the pieces up by.</p>
+              <p class="hint">A quarter inch is the quilting standard. Offsetting the finished shape by it reproduces the usual rules: a half-square triangle comes out at finished&nbsp;+&nbsp;⅞″, a quarter-square at&nbsp;+&nbsp;1¼″, only exact rather than rounded to the nearest eighth. Leave the dog ears on and the pieces match what a pattern gives you; trim them and the long points come off, which saves fabric but loses the corner you line the pieces up by.</p>
             </div>
 
             <div class="panel">
