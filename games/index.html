@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Games · Josh Hicks</title>
+  <meta name="description" content="Small games that run in a browser tab. Play against bots, or make a room and play friends with nothing to install." />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <meta name="theme-color" content="#3A4A2C" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
+  <style>
+    .games { max-width: var(--content-max); }
+    .game {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: var(--space-6);
+      align-items: start;
+      padding: var(--space-5) 0;
+      border-bottom: 1px solid var(--line);
+      color: inherit;
+    }
+    .game:hover .spec-name { color: var(--head); }
+    .game:hover .plate-map { border-color: var(--rule); }
+    .plate-map { width: 100%; aspect-ratio: 21 / 15; display: block; border: 1px solid var(--hair); background: var(--canvas-bg); }
+    .game .spec-head { margin-bottom: var(--space-1); }
+    .game .spec-name { font-size: var(--text-xl); }
+    .game p { font-size: var(--text-base); line-height: 1.65; color: var(--ink); margin-top: var(--space-3); max-width: 60ch; }
+    .game .facts { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--ink-faint); letter-spacing: 0.06em; margin-top: var(--space-3); }
+    .game .go { display: inline-block; margin-top: var(--space-4); }
+    @media (max-width: 700px) {
+      .game { grid-template-columns: 1fr; gap: var(--space-4); }
+    }
+  </style>
+</head>
+<body>
+  <div class="site-layout">
+    <main class="site-content">
+      <div class="page-header">
+        <div class="page-title">Games</div>
+        <div class="page-subtitle">// small things to play in a browser tab</div>
+      </div>
+
+      <div class="games">
+        <a href="/games/tanks/" class="game fade-up">
+          <canvas class="plate-map" id="tanksMap" width="420" height="300" aria-hidden="true"></canvas>
+          <div>
+            <div class="spec-head">
+              <span class="spec-name">Tanks</span>
+              <span class="spec-dim">1–4 players</span>
+            </div>
+            <span class="spec-note">After Tiny Tanks, the old browser game.</span>
+            <p>Top-down tank duels where the last tank standing takes the round. Crates break, power-ups drop, and your shells only bounce off walls if you have picked up a ricochet. Play bots on your own, or make a room with a name and password and send it to friends.</p>
+            <div class="facts">10 maps and a fresh maze · 12 power-ups · free-for-all or red v blue</div>
+            <span class="btn btn-primary go">Play Tanks</span>
+          </div>
+        </a>
+      </div>
+    </main>
+  </div>
+
+  <script src="/scripts/nav.js"></script>
+  <script type="module">
+    // A plan view of one arena, drawn from the game's own map data.
+    import { buildMap, COLS, ROWS, WALL, CRATE } from '/games/tanks/maps.js';
+    const cv = document.getElementById('tanksMap');
+    const ctx = cv.getContext('2d');
+    function draw() {
+      const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      const s = cv.width / COLS;
+      ctx.fillStyle = css('--canvas-bg');
+      ctx.fillRect(0, 0, cv.width, cv.height);
+      const { grid, spawns } = buildMap('bunkers');
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const t = grid[r * COLS + c];
+        if (t === WALL) { ctx.fillStyle = css('--head'); ctx.fillRect(c * s - 0.3, r * s - 0.3, s + 0.6, s + 0.6); }
+        else if (t === CRATE) {
+          ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+          ctx.strokeRect(c * s + 2.5, r * s + 2.5, s - 5, s - 5);
+          ctx.beginPath(); ctx.moveTo(c * s + 2.5, r * s + 2.5); ctx.lineTo(c * s + s - 2.5, r * s + s - 2.5); ctx.stroke();
+        }
+      }
+      const cols = ['#5C7A4E', '#A8553A', '#3F6E9A', '#B8892E'];
+      spawns.forEach((p, i) => {
+        ctx.fillStyle = cols[i];
+        ctx.fillRect(p.c * s + 4, p.r * s + 5, s - 8, s - 10);
+      });
+    }
+    draw();
+    window.siteTheme && window.siteTheme.onChange(draw);
+  </script>
+</body>
+</html>

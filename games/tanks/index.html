@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tanks · Games · joshhicks.info</title>
+  <meta name="description" content="Top-down tank duels in the browser, after the old Tiny Tanks. Play bots solo or make a room with a name and password for friends. Ten maps plus a fresh maze, destructible crates and twelve power-ups." />
+  <meta property="og:title" content="Tanks · joshhicks.info" />
+  <meta property="og:description" content="Top-down tank duels in the browser. Bots or friends, ten maps, twelve power-ups." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://joshhicks.info/games/tanks/" />
+  <meta property="og:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
+  <style>
+    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Colours the canvas reads. Walls are soil, crates are raw timber. */
+    :root {
+      --wall: #5C3D1E;
+      --wall-top: #7C5634;
+      --crate: #D9BD8C;
+      --crate-edge: #8B6340;
+      --shell: #2E2B25;
+      --scorch: rgba(58, 55, 48, 0.12);
+      --pu-weapon: #B0652E;
+      --pu-defense: #5C7A4E;
+      --pu-chaos: #6B5B95;
+    }
+    :root[data-theme='dark'] {
+      --wall: #4A3A26;
+      --wall-top: #6B5438;
+      --crate: #7A6040;
+      --crate-edge: #B8956A;
+      --shell: #EDE6D4;
+      --scorch: rgba(0, 0, 0, 0.28);
+      --pu-weapon: #D98B4E;
+      --pu-defense: #8FAF6E;
+      --pu-chaos: #A493CC;
+    }
+
+    .stage { flex: 1; margin-top: 46px; position: relative; min-height: 0; }
+    .screen { position: absolute; inset: 0; }
+    .screen[hidden], #play[hidden] { display: none; }
+    .scroll { overflow-y: auto; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: var(--space-8) var(--space-5) var(--space-16); }
+
+    .intro h1 { font-size: var(--text-3xl); }
+    .lede { font-size: var(--text-lg); color: var(--ink-soft); max-width: 60ch; margin-top: var(--space-2); line-height: 1.55; }
+    .mobile-note { display: none; margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--hair); background: var(--surface); font-style: italic; color: var(--ink); }
+    @media (hover: none) and (pointer: coarse) { .mobile-note { display: block; } }
+
+    .who { margin-top: var(--space-6); max-width: 18rem; }
+    .who input { width: 100%; }
+
+    .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-6); }
+    .cols .panel + .panel, .how .panel + .panel { margin-top: 0; }
+    .cols + .panel { margin-top: var(--space-4); }
+    .how { align-items: start; }
+    .panel .field-stack + .field-stack { margin-top: var(--space-3); }
+    .panel .field-stack input { width: 100%; }
+    .panel .actions { margin-top: var(--space-4); display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+    .panel-lede { font-size: var(--text-sm); color: var(--ink-soft); font-style: italic; margin-bottom: var(--space-3); line-height: 1.5; }
+    .check { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-sm); margin-top: var(--space-3); }
+    .check input { accent-color: var(--accent); width: 15px; height: 15px; }
+    .err { color: var(--danger); font-size: var(--text-sm); margin-top: var(--space-2); min-height: 1.2em; }
+
+    .games-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
+    .relay { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--ink-faint); }
+    .game-row { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); align-items: center; }
+    .game-row .pw { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+    .game-row .pw input { width: 12rem; }
+    .empty { font-style: italic; color: var(--ink-soft); padding: var(--space-3) 0; font-size: var(--text-sm); }
+    .lock { display: inline-block; width: 10px; height: 11px; margin-left: 6px; vertical-align: -1px; }
+
+    .how { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4); }
+    .keys .spec-name { font-size: var(--text-base); }
+    kbd { font-family: var(--font-ui); font-size: 0.72rem; font-weight: 600; border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px; background: var(--raised); color: var(--ink); }
+    .pu-list .spec { display: grid; grid-template-columns: 30px 1fr; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; }
+    .pu-list canvas { width: 30px; height: 30px; }
+    .pu-list .spec-name { font-size: var(--text-base); }
+    .pu-group { font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--label); margin: var(--space-4) 0 var(--space-1); }
+    .pu-group:first-child { margin-top: 0; }
+
+    /* Room */
+    .room-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; }
+    .room-meta { font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--label); }
+    .room-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6); }
+    .room-cols .panel + .panel { margin-top: 0; }
+    .player .spec-name { display: flex; align-items: center; gap: var(--space-2); }
+    .swatch { width: 12px; height: 12px; border: 1px solid var(--ink); flex: none; }
+    .player .spec-dim button { font: inherit; }
+    .room .field select { width: 11rem; }
+    .room-foot { display: flex; gap: var(--space-3); margin-top: var(--space-6); align-items: center; flex-wrap: wrap; }
+    .room-foot .hint { margin: 0; }
+
+    /* Play */
+    #play { display: flex; flex-direction: column; background: var(--canvas-bg); }
+    .hud { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-5); height: 42px; flex: none; font-family: var(--font-ui); font-size: var(--text-sm); color: var(--ink); border-bottom: 1px solid var(--line); background: var(--surface); }
+    .hud-bottom { border-bottom: 0; border-top: 1px solid var(--line); }
+    .scores { display: flex; gap: var(--space-5); align-items: center; min-width: 0; overflow: hidden; }
+    .score { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
+    .score.out { opacity: 0.45; }
+    .pips { display: inline-flex; gap: 3px; }
+    .pips i { width: 7px; height: 7px; border: 1px solid var(--ink-soft); border-radius: 50%; }
+    .pips i.on { background: var(--ink); border-color: var(--ink); }
+    .round-label { color: var(--ink-soft); white-space: nowrap; }
+    .loadout { display: flex; gap: var(--space-5); align-items: center; }
+    .loadout .w { font-weight: 600; }
+    .loadout .muted { color: var(--ink-faint); font-style: italic; font-family: var(--font-body); }
+    .buffs { display: flex; gap: var(--space-4); color: var(--ink-soft); }
+    .field-wrap { flex: 1; position: relative; min-height: 0; }
+    #field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+    .banner { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; background: var(--surface); border: 1px solid var(--hair); padding: var(--space-3) var(--space-6); box-shadow: var(--shadow-md); }
+    .banner[hidden] { display: none; }
+    .banner b { display: block; font-size: var(--text-2xl); font-weight: 600; color: var(--head); }
+    .banner span { font-style: italic; color: var(--ink-soft); }
+    .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 70%, transparent); }
+    .overlay[hidden] { display: none; }
+    .overlay .panel { min-width: 20rem; max-width: 30rem; }
+    .standings .spec-dim { font-variant-numeric: lining-nums tabular-nums; }
+    .overlay .actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+
+    .toast { position: fixed; left: 50%; bottom: var(--space-6); transform: translateX(-50%); background: var(--surface); border: 1px solid var(--hair); padding: var(--space-3) var(--space-5); box-shadow: var(--shadow-md); z-index: 2000; font-size: var(--text-sm); max-width: calc(100vw - 32px); }
+    .toast[hidden] { display: none; }
+
+    @media (max-width: 860px) {
+      .cols, .room-cols, .how { grid-template-columns: 1fr; }
+      .wrap { padding: var(--space-6) var(--space-4) var(--space-12); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/games/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2L4 7l5 5"/></svg>
+    Games
+  </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<main class="stage">
+
+  <!-- ── Menu ─────────────────────────────────────────── -->
+  <section class="screen scroll" id="menu">
+    <div class="wrap">
+      <div class="intro">
+        <h1>Tanks</h1>
+        <p class="lede">Top-down tank duels after the old Tiny Tanks. Last tank standing takes the round. Crates break, power-ups drop, and shells only bounce if you have picked up a ricochet.</p>
+        <p class="mobile-note">Tanks needs a keyboard and a mouse. Open this page on a computer to play.</p>
+      </div>
+
+      <div class="field-stack who">
+        <label for="nameIn">Your name</label>
+        <input type="text" id="nameIn" maxlength="14" autocomplete="nickname" spellcheck="false" />
+      </div>
+
+      <div class="cols">
+        <div class="panel">
+          <h2>Solo</h2>
+          <div class="hr"></div>
+          <p class="panel-lede">You against up to three computer tanks. No network needed.</p>
+          <div class="actions"><button class="btn btn-primary" id="soloBtn" type="button">Play against bots</button></div>
+        </div>
+
+        <div class="panel">
+          <h2>Make a room</h2>
+          <div class="hr"></div>
+          <div class="field-stack">
+            <label for="hostName">Room name</label>
+            <input type="text" id="hostName" maxlength="24" spellcheck="false" placeholder="e.g. pine hollow" />
+          </div>
+          <div class="field-stack">
+            <label for="hostPw">Password <span class="field-unit">optional</span></label>
+            <input type="password" id="hostPw" maxlength="40" autocomplete="new-password" />
+          </div>
+          <label class="check"><input type="checkbox" id="hostPublic" checked /> List it under open games</label>
+          <div class="actions"><button class="btn" id="hostBtn" type="button">Create room</button></div>
+          <div class="err" id="hostErr"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Join a room</h2>
+          <div class="hr"></div>
+          <div class="field-stack">
+            <label for="joinName">Room name</label>
+            <input type="text" id="joinName" maxlength="24" spellcheck="false" />
+          </div>
+          <div class="field-stack">
+            <label for="joinPw">Password</label>
+            <input type="password" id="joinPw" maxlength="40" autocomplete="off" />
+          </div>
+          <div class="actions"><button class="btn" id="joinBtn" type="button">Join</button></div>
+          <div class="err" id="joinErr"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="games-head">
+          <h2>Open games</h2>
+          <span class="relay" id="relayState">connecting to relays…</span>
+        </div>
+        <div class="hr"></div>
+        <div id="gameList"><p class="empty">Looking for games. Rooms show up here when their host lists them.</p></div>
+      </div>
+
+      <div class="how">
+        <div class="panel keys">
+          <h2>Controls</h2>
+          <div class="hr"></div>
+          <div class="spec"><div class="spec-head"><span class="spec-name">Drive and turn</span><span class="spec-dim"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows</span></div></div>
+          <div class="spec"><div class="spec-head"><span class="spec-name">Aim</span><span class="spec-dim">mouse</span></div><span class="spec-note">The turret follows the pointer; the hull goes where the tracks take it.</span></div>
+          <div class="spec"><div class="spec-head"><span class="spec-name">Fire</span><span class="spec-dim">click or <kbd>Space</kbd></span></div><span class="spec-note">Five shells in the air at once. Plain shells stop at the first wall.</span></div>
+          <div class="spec"><div class="spec-head"><span class="spec-name">Menu</span><span class="spec-dim"><kbd>Esc</kbd></span></div><span class="spec-note">Pauses a solo game.</span></div>
+        </div>
+        <div class="panel pu-list">
+          <h2>Power-ups</h2>
+          <div class="hr"></div>
+          <div id="puList"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Room ─────────────────────────────────────────── -->
+  <section class="screen scroll room" id="room" hidden>
+    <div class="wrap">
+      <div class="room-head">
+        <div>
+          <div class="room-meta" id="roomMeta">Room</div>
+          <h1 id="roomTitle">Room</h1>
+        </div>
+      </div>
+      <p class="hint" id="roomHint"></p>
+
+      <div class="room-cols">
+        <div class="panel">
+          <h2>Tanks <span class="field-unit" id="rosterCount"></span></h2>
+          <div class="hr"></div>
+          <div id="roster"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Settings</h2>
+          <div class="hr"></div>
+          <div class="field"><label>Mode</label>
+            <div class="seg" id="setMode"><button type="button" data-v="ffa">Free-for-all</button><button type="button" data-v="teams">Red v Blue</button></div>
+          </div>
+          <div class="field"><label for="setMap">Map</label><select id="setMap"></select></div>
+          <div class="field"><label for="setRounds">Rounds to win</label>
+            <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select>
+          </div>
+          <div class="field"><label>Power-ups</label>
+            <div class="seg" id="setPickups"><button type="button" data-v="off">off</button><button type="button" data-v="low">few</button><button type="button" data-v="normal">some</button><button type="button" data-v="high">lots</button></div>
+          </div>
+          <div class="field"><label for="setBots">Bots</label>
+            <select id="setBots"><option value="0">none</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+          </div>
+          <div class="field"><label for="setLevel">Bot skill</label>
+            <select id="setLevel"><option value="easy">easy</option><option value="normal">normal</option><option value="hard">hard</option></select>
+          </div>
+          <div class="field field-check" id="ffRow"><input type="checkbox" id="setFF" /><label for="setFF">Friendly fire</label></div>
+        </div>
+      </div>
+
+      <div class="room-foot">
+        <button class="btn btn-primary" id="startBtn" type="button">Start match</button>
+        <button class="btn btn-outline" id="leaveBtn" type="button">Leave</button>
+        <p class="hint" id="startHint"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Play ─────────────────────────────────────────── -->
+  <section class="screen" id="play" hidden>
+    <div class="hud">
+      <div class="scores" id="scores"></div>
+      <span class="round-label" id="roundLabel"></span>
+    </div>
+    <div class="field-wrap">
+      <canvas id="field"></canvas>
+      <div class="banner" id="banner" hidden><b id="bannerTitle"></b><span id="bannerSub"></span></div>
+
+      <div class="overlay" id="pause" hidden>
+        <div class="panel">
+          <h2 id="pauseTitle">Paused</h2>
+          <div class="hr"></div>
+          <p class="panel-lede" id="pauseNote">Esc to carry on.</p>
+          <div class="actions">
+            <button class="btn btn-primary" id="resumeBtn" type="button">Resume</button>
+            <button class="btn btn-outline" id="quitBtn" type="button">Leave game</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="over" hidden>
+        <div class="panel">
+          <h2 id="overTitle">Match over</h2>
+          <div class="hr"></div>
+          <div class="standings" id="standings"></div>
+          <div class="actions" id="overActions">
+            <button class="btn btn-primary" id="rematchBtn" type="button">Rematch</button>
+            <button class="btn btn-outline" id="backBtn" type="button">Back to room</button>
+          </div>
+          <p class="hint" id="overNote"></p>
+        </div>
+      </div>
+    </div>
+    <div class="hud hud-bottom">
+      <div class="loadout" id="loadout"></div>
+      <span class="round-label" id="netLabel"></span>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script type="module" src="./game.js"></script>
+</body>
+</html>

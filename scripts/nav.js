@@ -11,6 +11,7 @@
     { href: '/about/',      label: 'About',      icon: aboutIcon()      },
     { href: '/experience/', label: 'Experience', icon: experienceIcon() },
     { href: '/projects/',   label: 'Projects',   icon: projectsIcon()   },
+    { href: '/games/',      label: 'Games',      icon: gamesIcon()      },
     { href: '/contact/',    label: 'Contact',    icon: contactIcon()    },
   ];
 
@@ -50,6 +51,10 @@
 
   function projectsIcon() {
     return `<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="7" height="7" rx="1"/><rect x="11" y="3" width="7" height="7" rx="1"/><rect x="2" y="12" width="7" height="6" rx="1"/><rect x="11" y="12" width="7" height="6" rx="1"/></svg>`;
+  }
+
+  function gamesIcon() {
+    return `<svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="11" height="6" rx="1"/><circle cx="8.5" cy="9" r="2.5"/><line x1="10.5" y1="7.5" x2="17" y2="4.5"/><line x1="3" y1="17" x2="14" y2="17"/></svg>`;
   }
 
   function contactIcon() {
