@@ -5,22 +5,24 @@
 import {
   createGame, step, snapshot, unpack, addPlayer, removePlayer, drive,
   POWERUPS, COLORS, TEAM, DEFAULT_SETTINGS, DT, wrap,
-} from './sim.js?v=3';
-import { MAPS, buildMap, mapName } from './maps.js?v=3';
-import { makeBrain, botInput } from './bots.js?v=3';
-import { createRenderer, drawIcon } from './render.js?v=3';
-import { openLobby, openGame, roomKey } from './net.js?v=3';
+} from './sim.js?v=4';
+import { MAPS, buildMap, mapName } from './maps.js?v=4';
+import { makeBrain, botInput } from './bots.js?v=4';
+import { createRenderer, drawIcon } from './render.js?v=4';
+import { openLobby, openGame, roomKey } from './net.js?v=4';
 
 const $ = id => document.getElementById(id);
 const MAX = 4;
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 3;
+const PROTOCOL = 4;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory'];
-const INTERP_MIN = 6;         // clients draw at least 100 ms behind the host
+const INTERP_MIN = 4;         // clients draw at least 67 ms behind the host
 const INTERP_MAX = 24;        // and at most 400 ms, however jittery the relay
-const SNAP_EVERY = 3;         // host sends 20 snapshots a second
+const SNAP_EVERY = 2;         // 30 snapshots a second over a direct channel
+const RELAY_EVERY = 8;        // 7.5 a second over the relay: the public brokers
+                              // quietly drop traffic much faster than that
 const INPUT_MS = 33;
 const TEAM_SHADES = { red: ['#A8453A', '#C87A60'], blue: ['#3F6E9A', '#7298BF'] };
 
@@ -49,7 +51,9 @@ const S = {
   // host / solo
   g: null,
   brains: {},
-  outEvents: [],
+  outEvents: [],            // events since the last direct snapshot
+  relayEvents: [],          // and since the last relayed one
+  snapGap: 3,
   acc: 0,
   paused: false,
   // client
@@ -496,7 +500,7 @@ function clientHandlers() {
     onPeerLeave(peer) {
       if (peer === S.hostId) leave('The host left, so the game ended.');
     },
-    onMessage(type, data, peer) {
+    onMessage(type, data, peer, via) {
       if (type === 'version' && !S.hostId) {
         return leave(`You have an out-of-date copy of the game. ${REFRESH}, then join again.`, 'joinErr');
       }
@@ -510,6 +514,7 @@ function clientHandlers() {
         }
         if (!S.hostId) {
           S.hostId = peer;
+          S.net.connectDirect(peer);
           clearTimeout(S.joinTimer);
           $('joinErr').textContent = '';
           $('joinBtn').disabled = false;
@@ -530,7 +535,11 @@ function clientHandlers() {
         return;
       }
       if (peer !== S.hostId) return;
-      if (type === 'snap') return clientSnap(data);
+      if (type === 'snap') {
+        // Once the direct channel is up, the slower relayed copies are noise.
+        if (via === 'relay' && S.net.isDirect(peer)) return;
+        return clientSnap(data);
+      }
       if (type === 'full') return leave('That room is full.', 'joinErr');
     },
   };
@@ -538,7 +547,7 @@ function clientHandlers() {
 
 function resetClientView() {
   S.snaps = []; S.evq = []; S.offset = null; S.pred = null; S.inHist = []; S.gridKey = '';
-  S.smooth = { x: 0, y: 0, a: 0 }; S.jit = 2;
+  S.smooth = { x: 0, y: 0, a: 0 }; S.jit = 2; S.snapGap = 3;
 }
 
 function clientSnap(data) {
@@ -570,6 +579,8 @@ function clientSnap(data) {
     S.grid = m.grid;
     S.gridKey = key;
   }
+  if (prev) S.snapGap = S.snapGap * 0.8 + Math.min(30, v.tick - prev.tick) * 0.2;
+  v.arrived = now;
   S.snaps.push(v);
   if (S.snaps.length > 40) S.snaps.shift();
   if (v.events.length) S.evq.push({ tick: v.tick, events: v.events });
@@ -618,10 +629,14 @@ function clientTick(dt) {
     S.inHist.push(h);
     if (S.inHist.length > 240) S.inHist.shift();
     if (S.pred) drive(S.grid, S.pred, h, DT);
-    if (S.tickN % 2 === 0) sent = true;
+    if (S.tickN % (S.net && S.net.isDirect(S.hostId) ? 1 : RELAY_EVERY) === 0) sent = true;
   }
   if (sent && S.net && S.hostId) {
-    S.net.send('in', { b: S.inHist.slice(-8).map(h => [h.n, h.th, h.tu, h.ax, h.ay, h.fs]) }, S.hostId);
+    // Each packet repeats recent ticks, so a lost one costs nothing.
+    const pack = h => [h.n, h.th, h.tu, h.ax, h.ay, h.fs];
+    if (!S.net.sendDirect('in', { b: S.inHist.slice(-8).map(pack) }, S.hostId)) {
+      S.net.send('in', { b: S.inHist.slice(-20).map(pack) }, S.hostId);
+    }
   }
   const k = Math.exp(-dt * 10);
   S.smooth.x *= k; S.smooth.y *= k; S.smooth.a *= k;
@@ -630,7 +645,9 @@ function clientTick(dt) {
 function clientView(now, dt) {
   if (!S.snaps.length) return null;
   const latest = S.snaps[S.snaps.length - 1];
-  const delay = Math.max(INTERP_MIN, Math.min(INTERP_MAX, 4 + S.jit * 2));
+  // Far enough behind to always have a picture on each side of the moment
+  // being drawn: one snapshot gap, plus the measured lateness.
+  const delay = Math.max(INTERP_MIN, Math.min(INTERP_MAX, S.snapGap + 2 + S.jit * 1.5));
   const rt = now * 0.06 + S.offset - delay;
   let s0 = S.snaps[0], s1 = latest;
   for (let i = S.snaps.length - 1; i >= 0; i--) {
@@ -647,10 +664,22 @@ function clientView(now, dt) {
     return { ...b, x: lerp(a.x, b.x), y: lerp(a.y, b.y), a: a.a + wrap(b.a - a.a) * k, ta: a.ta + wrap(b.ta - a.ta) * k };
   });
   for (const b of s1.tanks) if (!tanks.some(t => t.id === b.id)) tanks.push(b);
-  const shells = s0.shells.filter(a => sh1[a.id]).map(a => {
+  const shells = s0.shells.filter(a => sh1[a.id] && a.owner !== S.myId).map(a => {
     const b = sh1[a.id];
     return { ...b, x: lerp(a.x, b.x), y: lerp(a.y, b.y) };
   });
+  // My own shells skip the delay: drawn from the newest picture and run on
+  // to the present, so a shot leaves the barrel when you click.
+  const prevSnap = S.snaps[S.snaps.length - 2];
+  const before = prevSnap ? byId(prevSnap.shells) : {};
+  const span = prevSnap ? latest.tick - prevSnap.tick : 0;
+  const ahead = Math.max(0, Math.min(10, now * 0.06 + S.offset - latest.tick));
+  for (const b of latest.shells) {
+    if (b.owner !== S.myId) continue;
+    const a = before[b.id];
+    const vx = a && span ? (b.x - a.x) / span : 0, vy = a && span ? (b.y - a.y) / span : 0;
+    shells.push({ ...b, x: b.x + vx * ahead, y: b.y + vy * ahead });
+  }
 
   // Release effects in step with the delayed picture.
   while (S.evq.length && S.evq[0].tick <= rt) renderer.addEvents(S.evq.shift().events, { players: S.players });
@@ -670,6 +699,7 @@ function clientView(now, dt) {
   }
 
   S.lastTanks = tanks;
+  S.lastShells = shells;
   return {
     grid: S.grid,
     tanks, shells,
@@ -853,14 +883,23 @@ function hostTick() {
   step(g, inputs);
   if (g.events.length) {
     renderer.addEvents(g.events, { players: S.players });
-    if (S.role === 'host') S.outEvents.push(...g.events);
+    if (S.role === 'host') { S.outEvents.push(...g.events); S.relayEvents.push(...g.events); }
     g.events = [];
   }
   if (S.role === 'host' && g.tick % SNAP_EVERY === 0) {
     const snap = snapshot(g, S.outEvents);
     snap.ak = S.ack;
-    S.net.send('snap', snap);
+    S.net.sendAllDirect('snap', snap);
     S.outEvents = [];
+  }
+  // Anyone without a direct channel gets a slower stream through the relay.
+  if (S.role === 'host' && g.tick % RELAY_EVERY === 0) {
+    if (S.net.relayed() > 0) {
+      const snap = snapshot(g, S.relayEvents);
+      snap.ak = S.ack;
+      S.net.send('snap', snap);
+    }
+    S.relayEvents = [];
   }
 }
 
@@ -874,7 +913,9 @@ function nextGuestInput(g, id, q) {
   const last = S.inLast[id];
   if (!q.length) return last ? { th: 0, tu: 0, ax: last.ax, ay: last.ay, fs: last.fs } : {};
   const t = g.tanks.find(t => t.id === id);
-  while (q.length > 6) {
+  // Relayed input arrives in bursts, so only catch up on a real backlog.
+  const backlog = S.net && S.net.isDirect(id) ? 6 : 20;
+  while (q.length > backlog) {
     const extra = q.shift();
     if (t && t.alive && !(t.frozen > 0) && (g.phase === 'play' || g.phase === 'ending')) drive(g.grid, t, extra, DT);
     S.ack[id] = extra.n;
@@ -1014,8 +1055,15 @@ function updateHud(view) {
   $('loadout').innerHTML = lo;
 
   if (S.role === 'solo') $('netLabel').textContent = `Solo · bots on ${S.settings.botLevel}`;
-  else if (S.role === 'host') $('netLabel').textContent = `Hosting ${S.roomName} · ${S.humans.length} ${S.humans.length === 1 ? 'player' : 'players'}`;
-  else $('netLabel').textContent = `${S.roomName}`;
+  else if (S.role === 'host') {
+    const guests = S.humans.length - 1;
+    const relayed = S.net ? S.net.relayed() : 0;
+    $('netLabel').textContent = `Hosting ${S.roomName} · ${guests} ${guests === 1 ? 'guest' : 'guests'}` +
+      (guests ? (relayed ? ` · ${relayed} via relay` : ' · all direct') : '');
+  }
+  else $('netLabel').textContent = S.net && S.net.isDirect(S.hostId)
+    ? `${S.roomName} · direct connection`
+    : `${S.roomName} · via relay (slower)`;
 
   // Banner
   let title = '', sub = '';
@@ -1078,7 +1126,7 @@ function resetSession() {
   Object.assign(S, {
     role: null, net: null, myId: 'me', hostId: null, roomName: '', password: '', listed: false,
     humans: [], stage: 'lobby', roster: [], players: {}, g: null, brains: {}, inQ: {}, inTop: {}, inLast: {}, ack: {},
-    outEvents: [], room: null, paused: false,
+    outEvents: [], relayEvents: [], room: null, paused: false,
   });
   resetClientView();
 }

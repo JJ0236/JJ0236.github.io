@@ -202,6 +202,9 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
   }
 
   const peers = new Map();       // peerId -> last heard
+  const direct = new Map();      // peerId -> open RTCDataChannel
+  const pcs = new Map();         // peerId -> RTCPeerConnection
+  const tries = new Map();       // peerId -> direct attempts so far
   const seen = new Set();
   const seenOrder = [];
   let n = 0;
@@ -213,6 +216,32 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
     const payload = await seal(aes, { f: selfId, i: ++n, t: type, d: data });
     const control = type !== 'snap' && type !== 'in';
     link.publish(target ? `${gTopic}/to/${target}` : `${gTopic}/all`, payload, { qos: control ? 1 : 0 });
+  };
+
+  /** Everything received, by relay or direct, ends up here. */
+  const deliver = (m, via) => {
+    if (closed || !m || m.f === selfId || typeof m.t !== 'string') return;
+    const tag = m.f + ':' + m.i;
+    if (seen.has(tag)) return;       // the same message by another route
+    seen.add(tag); seenOrder.push(tag);
+    if (seenOrder.length > 4000) seen.delete(seenOrder.shift());
+
+    const fresh = !peers.has(m.f);
+    peers.set(m.f, Date.now());
+    if (m.t === '_bye') {
+      peers.delete(m.f);
+      dropDirect(m.f);
+      if (!fresh) handlers.onPeerLeave && handlers.onPeerLeave(m.f);
+      return;
+    }
+    if (fresh) {
+      handlers.onPeerJoin && handlers.onPeerJoin(m.f);
+      // Introduce ourselves to someone new, so they know we are here too.
+      if (m.t === '_hi') send('_hey', 0, m.f);
+    }
+    if (m.t === '_rtc') { onRtc(m.f, m.d); return; }
+    if (m.t[0] === '_') return;
+    handlers.onMessage(m.t, m.d, m.f, via);
   };
 
   link.onMessage(async (topic, payload) => {
@@ -227,27 +256,102 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
     if (topic !== `${gTopic}/all` && topic !== `${gTopic}/to/${selfId}`) return;
     let m;
     try { m = await open(aes, payload); } catch { return; }
-    if (!m || m.f === selfId || typeof m.t !== 'string') return;
-    const tag = m.f + ':' + m.i;
-    if (seen.has(tag)) return;       // the same message via the other broker
-    seen.add(tag); seenOrder.push(tag);
-    if (seenOrder.length > 4000) seen.delete(seenOrder.shift());
-
-    const fresh = !peers.has(m.f);
-    peers.set(m.f, Date.now());
-    if (m.t === '_bye') {
-      if (!fresh) { peers.delete(m.f); handlers.onPeerLeave && handlers.onPeerLeave(m.f); }
-      else peers.delete(m.f);
-      return;
-    }
-    if (fresh) {
-      handlers.onPeerJoin && handlers.onPeerJoin(m.f);
-      // Introduce ourselves to someone new, so they know we are here too.
-      if (m.t === '_hi') send('_hey', 0, m.f);
-    }
-    if (m.t[0] === '_') return;
-    handlers.onMessage(m.t, m.d, m.f);
+    deliver(m, 'relay');
   });
+
+  // ── Direct connections ──
+  // The relay is too slow for the game itself (~150 ms each way, with
+  // spikes), so each guest also tries a direct WebRTC channel to the host,
+  // using the relay only to swap connection details. Unordered and
+  // unreliable, like a game socket: a late snapshot is worthless anyway.
+
+  const ICE = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
+
+  const waitIce = pc => new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const t = setTimeout(resolve, 2500);
+    pc.addEventListener('icegatheringstatechange', () => {
+      if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+    });
+  });
+
+  const dropDirect = peer => {
+    const pc = pcs.get(peer);
+    pcs.delete(peer);
+    if (direct.delete(peer)) handlers.onDirect && handlers.onDirect(peer, false);
+    if (pc) try { pc.close(); } catch { /* already closed */ }
+  };
+
+  const attach = (peer, dc) => {
+    dc.onopen = () => { direct.set(peer, dc); handlers.onDirect && handlers.onDirect(peer, true); };
+    dc.onclose = () => { if (direct.get(peer) === dc) { direct.delete(peer); handlers.onDirect && handlers.onDirect(peer, false); } };
+    dc.onmessage = e => {
+      let m;
+      try { m = JSON.parse(e.data); } catch { return; }
+      if (!m || m.f !== peer) return;      // a channel speaks only for its own peer
+      const lag = globalThis.__tanksLagDirect;
+      if (lag) setTimeout(() => deliver(m, 'direct'), lag.base + Math.random() * lag.jitter);
+      else deliver(m, 'direct');
+    };
+    if (dc.readyState === 'open') dc.onopen();
+  };
+
+  const watch = (peer, pc) => {
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        if (pcs.get(peer) === pc) dropDirect(peer);
+      }
+    };
+  };
+
+  /** Guest side: ask the host for a direct channel. Retries a few times. */
+  const connectDirect = async peer => {
+    if (closed || typeof RTCPeerConnection === 'undefined' || pcs.has(peer) || direct.has(peer)) return;
+    const k = (tries.get(peer) || 0) + 1;
+    if (k > 3) return;
+    tries.set(peer, k);
+    const pc = new RTCPeerConnection({ iceServers: ICE });
+    pcs.set(peer, pc);
+    watch(peer, pc);
+    attach(peer, pc.createDataChannel('g', { ordered: false, maxRetransmits: 0 }));
+    try {
+      await pc.setLocalDescription(await pc.createOffer());
+      await waitIce(pc);
+      send('_rtc', { type: 'offer', sdp: pc.localDescription.sdp }, peer);
+    } catch { dropDirect(peer); }
+    setTimeout(() => {
+      if (closed || direct.has(peer) || pcs.get(peer) !== pc) return;
+      dropDirect(peer);
+      setTimeout(() => connectDirect(peer), 5000);
+    }, 12000);
+  };
+
+  const onRtc = async (peer, d) => {
+    if (closed || !d || typeof d.sdp !== 'string' || typeof RTCPeerConnection === 'undefined') return;
+    try {
+      if (d.type === 'offer') {
+        dropDirect(peer);
+        const pc = new RTCPeerConnection({ iceServers: ICE });
+        pcs.set(peer, pc);
+        watch(peer, pc);
+        pc.ondatachannel = e => attach(peer, e.channel);
+        await pc.setRemoteDescription({ type: 'offer', sdp: d.sdp });
+        await pc.setLocalDescription(await pc.createAnswer());
+        await waitIce(pc);
+        send('_rtc', { type: 'answer', sdp: pc.localDescription.sdp }, peer);
+      } else if (d.type === 'answer') {
+        const pc = pcs.get(peer);
+        if (pc && pc.signalingState === 'have-local-offer') await pc.setRemoteDescription({ type: 'answer', sdp: d.sdp });
+      }
+    } catch { dropDirect(peer); }
+  };
+
+  /** Send straight to one peer if a direct channel is open. */
+  const sendDirect = (type, data, peer) => {
+    const dc = direct.get(peer);
+    if (!dc || dc.readyState !== 'open') return false;
+    try { dc.send(JSON.stringify({ f: selfId, i: ++n, t: type, d: data })); return true; } catch { return false; }
+  };
 
   await Promise.all([link.subscribe(`${gTopic}/all`), link.subscribe(`${gTopic}/to/${selfId}`)]);
   send('_hi', 0);
@@ -256,7 +360,7 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
     send('_ping', 0);
     const now = Date.now();
     for (const [p, at] of peers) {
-      if (now - at > PEER_TTL) { peers.delete(p); handlers.onPeerLeave && handlers.onPeerLeave(p); }
+      if (now - at > PEER_TTL) { peers.delete(p); dropDirect(p); handlers.onPeerLeave && handlers.onPeerLeave(p); }
     }
   }, PING_EVERY);
 
@@ -270,7 +374,19 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
 
   return {
     selfId,
+    /** By relay: reliable enough, slow. For control messages. */
     send,
+    sendDirect,
+    /** Send to every peer with a direct channel; returns how many. */
+    sendAllDirect(type, data) {
+      let k = 0;
+      for (const p of direct.keys()) if (sendDirect(type, data, p)) k++;
+      return k;
+    },
+    connectDirect,
+    isDirect: peer => direct.has(peer),
+    /** Peers still reached only through the relay. */
+    relayed: () => [...peers.keys()].filter(p => !direct.has(p)).length,
     peers: () => [...peers.keys()],
     relays: () => link.up(),
     /** Host only: keep the room's listing current. */
@@ -283,6 +399,7 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
       if (closed) return;
       send('_bye', 0);
       if (host) link.publish(adTopic, '', { retain: true, qos: 1 });
+      for (const p of [...pcs.keys()]) dropDirect(p);
       closed = true;
       clearInterval(ping);
       clearInterval(adTimer);
