@@ -149,6 +149,7 @@ export function createRenderer(canvas) {
     }
 
     // Names last, over everything.
+    if (opts.labels === false) return;
     ctx.font = `600 11px ${C.font}`;
     ctx.textAlign = 'center';
     for (const t of view.tanks) {

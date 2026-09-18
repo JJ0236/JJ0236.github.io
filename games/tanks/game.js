@@ -27,7 +27,7 @@ const store = {
 // ── State ──────────────────────────────────────────────────
 
 const S = {
-  screen: 'menu',
+  screen: 'title',
   role: null,              // 'solo' | 'host' | 'client'
   net: null,
   myId: 'me',
@@ -65,20 +65,50 @@ const S = {
 
 const input = { up: 0, down: 0, left: 0, right: 0, fs: 0, mx: null, my: null };
 let lobby = null;
+let hudKey = '';
 let ads = [];
 let myName = store.get('tanks-name', '') || 'Tank ' + Math.floor(10 + Math.random() * 90);
 
 // ── Screens ────────────────────────────────────────────────
 
+const SCREENS = ['title', 'host', 'join', 'how', 'room'];
+const win = $('win');
+
 function show(screen) {
   S.screen = screen;
-  for (const id of ['menu', 'room', 'play']) $(id).hidden = id !== screen;
+  for (const id of SCREENS) $(id).hidden = id !== screen;
+  win.classList.toggle('playing', screen === 'play');
+  $('over').hidden = true;
+  $('pause').hidden = true;
+  S.paused = false;
   if (screen === 'play') {
     if (document.activeElement) document.activeElement.blur();
-    $('over').hidden = true;
-    $('pause').hidden = true;
-    S.paused = false;
-    requestAnimationFrame(() => renderer.resize());
+  } else {
+    $('banner').hidden = true;
+    $('scores').innerHTML = '';
+    hudKey = '';
+    $('roundLabel').textContent = '';
+    $('loadout').innerHTML = '';
+    if (!attract) newAttract();
+    const first = $(screen).querySelector('input:not([type=checkbox]), .gbtn');
+    if (first && screen !== 'room') setTimeout(() => first.focus(), 0);
+  }
+  updateChrome();
+  requestAnimationFrame(() => renderer.resize());
+}
+
+/** Title bar and status bar text outside a match. */
+function updateChrome() {
+  let ctx = '';
+  if (S.role === 'solo') ctx = '· solo';
+  else if (S.role) ctx = '· ' + S.roomName;
+  $('context').textContent = ctx;
+  if (S.screen !== 'play') {
+    const r = lobby ? lobby.relays() : 0;
+    $('netLabel').textContent = S.role === 'host' ? `Hosting · ${S.humans.length} ${S.humans.length === 1 ? 'player' : 'players'}`
+      : S.role === 'client' ? 'Connected to host'
+      : lobby ? (r ? 'Online' : 'Offline: solo only') : 'Connecting…';
+    $('loadout').innerHTML = '<span class="muted">WASD to drive · mouse to aim · click to fire</span>';
   }
 }
 
@@ -113,7 +143,7 @@ function buildPowerupList() {
     for (const [id, def] of Object.entries(POWERUPS)) {
       if (def.group !== g) continue;
       const row = document.createElement('div');
-      row.className = 'spec';
+      row.className = 'pu';
       const cv = document.createElement('canvas');
       cv.width = 60; cv.height = 60;
       const c = cv.getContext('2d');
@@ -127,10 +157,9 @@ function buildPowerupList() {
       drawIcon(c, id, 15, 15, 1);
       const txt = document.createElement('div');
       const amount = def.buff ? `${def.buff} s` : `${def.charges} ${def.charges === 1 ? 'shot' : 'shots'}`;
-      txt.innerHTML = `<div class="spec-head"><span class="spec-name"></span><span class="spec-dim"></span></div><span class="spec-note"></span>`;
-      txt.querySelector('.spec-name').textContent = def.name;
-      txt.querySelector('.spec-dim').textContent = amount;
-      txt.querySelector('.spec-note').textContent = def.note;
+      txt.innerHTML = '<b></b><span></span>';
+      txt.querySelector('b').textContent = `${def.name} · ${amount}`;
+      txt.querySelector('span').textContent = def.note;
       row.append(cv, txt);
       host.appendChild(row);
     }
@@ -139,43 +168,57 @@ function buildPowerupList() {
 
 function renderAds() {
   const list = $('gameList');
-  const shown = ads.filter(a => !a.gone);
+  const shown = ads.slice().sort((a, b) => a.n.localeCompare(b.n));
+  $('openCount').textContent = shown.length ? String(shown.length) : '';
   if (!shown.length) {
-    list.innerHTML = '<p class="empty">No open games right now. Make one, or join a friend\'s room by name.</p>';
+    list.innerHTML = '<p class="empty">No open games right now. Host one, or type a friend\'s room name.</p>';
     return;
   }
+  // Keep a half-typed password when the list refreshes.
+  const typing = list.querySelector('.pw input');
+  const typingFor = typing && typing.closest('.game-row').dataset.room;
+  const typed = typing && typing.value;
   list.innerHTML = '';
   for (const a of shown) {
     const row = document.createElement('div');
-    row.className = 'spec game-row';
+    row.className = 'game-row';
+    row.dataset.room = a.n;
     const left = document.createElement('div');
-    left.innerHTML = `<div class="spec-head"><span class="spec-name"></span></div><span class="spec-note"></span>`;
-    const nm = left.querySelector('.spec-name');
+    left.innerHTML = '<div class="nm"></div><div class="meta"></div>';
+    const nm = left.querySelector('.nm');
     nm.textContent = a.n;
     if (a.l) nm.insertAdjacentHTML('beforeend', '<svg class="lock" viewBox="0 0 10 11" fill="none" stroke="currentColor" stroke-width="1.4" aria-label="password"><rect x="1" y="5" width="8" height="5.5" rx="1"/><path d="M3 5V3.5a2 2 0 014 0V5"/></svg>');
     const mode = a.m === 'teams' ? 'red v blue' : 'free-for-all';
-    left.querySelector('.spec-note').textContent =
-      `${a.c}/${a.x} players · ${mode} · ${a.s === 'match' ? 'match under way' : 'in the lobby'} · host ${a.h}`;
+    left.querySelector('.meta').textContent =
+      `${a.c}/${a.x} players · ${mode} · ${a.s === 'match' ? 'playing' : 'in the lobby'} · host ${a.h}`;
     const btn = document.createElement('button');
-    btn.className = 'btn btn-outline';
+    btn.className = 'gbtn small';
     btn.type = 'button';
     btn.textContent = 'Join';
     btn.disabled = a.c >= a.x;
-    btn.addEventListener('click', () => {
-      if (!a.l) return startJoin(a.n, '');
+    const askPassword = () => {
       let pw = row.querySelector('.pw');
       if (pw) { pw.querySelector('input').focus(); return; }
       pw = document.createElement('div');
       pw.className = 'pw';
-      pw.innerHTML = '<input type="password" placeholder="password" aria-label="Room password" /><button class="btn" type="button">Go</button>';
+      pw.innerHTML = '<input type="password" placeholder="password" aria-label="Room password" /><button class="gbtn small" type="button">Go</button>';
       left.appendChild(pw);
       const go = () => startJoin(a.n, pw.querySelector('input').value);
       pw.querySelector('button').addEventListener('click', go);
       pw.querySelector('input').addEventListener('keydown', e => e.key === 'Enter' && go());
-      pw.querySelector('input').focus();
+      return pw;
+    };
+    btn.addEventListener('click', () => {
+      if (!a.l) return startJoin(a.n, '');
+      askPassword().querySelector('input').focus();
     });
     row.append(left, btn);
     list.appendChild(row);
+    if (a.l && typingFor === a.n) {
+      const inp = askPassword().querySelector('input');
+      inp.value = typed;
+      inp.focus();
+    }
   }
 }
 
@@ -184,14 +227,16 @@ async function startLobby() {
     lobby = await openLobby(list => { ads = list; renderAds(); });
     const tick = () => {
       const r = lobby.relays();
-      $('relayState').textContent = r === null ? 'listening' : r > 0 ? `${r} relay${r === 1 ? '' : 's'} connected` : 'connecting to relays…';
+      $('relayState').textContent = r ? `online · ${r} of ${lobby.total} relays` : 'reconnecting…';
+      updateChrome();
     };
     tick();
     setInterval(tick, 3000);
   } catch (e) {
     console.error(e);
     $('relayState').textContent = 'offline';
-    $('gameList').innerHTML = '<p class="empty">Could not reach the relays, so online play is unavailable. Solo still works.</p>';
+    $('gameList').innerHTML = '<p class="empty">Could not reach the game relays, so online play is unavailable right now. Playing against bots still works.</p>';
+    updateChrome();
   }
 }
 
@@ -218,10 +263,6 @@ async function startHost(name, pw, listed) {
   name = name.trim();
   $('hostErr').textContent = '';
   if (!name) { $('hostErr').textContent = 'Give the room a name.'; return; }
-  if (ads.some(a => roomKey(a.n) === roomKey(name))) {
-    $('hostErr').textContent = 'A listed room already has that name. Pick another.';
-    return;
-  }
   resetSession();
   S.role = 'host';
   S.roomName = name;
@@ -230,15 +271,18 @@ async function startHost(name, pw, listed) {
   S.createdAt = Date.now();
   S.settings = { ...DEFAULT_SETTINGS, bots: 0 };
   $('hostBtn').disabled = true;
+  $('hostErr').textContent = 'Opening the room…';
   try {
-    S.net = await openGame(name, pw, hostHandlers());
+    S.net = await openGame(name, pw, hostHandlers(), { host: true });
   } catch (e) {
-    console.error(e);
-    $('hostErr').textContent = 'Could not reach the relays. Solo still works.';
+    $('hostErr').textContent = e.message === 'taken'
+      ? 'A room with that name is already open. Pick another name.'
+      : 'Could not reach the game relays. Check your connection, or play against bots.';
     $('hostBtn').disabled = false;
     S.role = null;
     return;
   }
+  $('hostErr').textContent = '';
   $('hostBtn').disabled = false;
   S.myId = S.net.selfId;
   S.hostId = S.myId;
@@ -261,6 +305,8 @@ function hostHandlers() {
       if (type === 'hello') return hostHello(peer, data);
       if (type === 'in') {
         if (!data || typeof data !== 'object') return;
+        // Two relays can deliver out of order: never go back to older input.
+        if ((data.q | 0) <= (S.lastSeq[peer] || 0)) return;
         S.peerInputs[peer] = {
           th: clamp(+data.th || 0, -1, 1), tu: clamp(+data.tu || 0, -1, 1),
           ax: +data.ax || 0, ay: +data.ay || 0, fs: data.fs | 0,
@@ -350,15 +396,12 @@ function roomChanged() {
 }
 
 function advertise() {
-  if (!lobby) return;
-  if (S.role === 'host' && S.listed) {
-    lobby.advertise({
-      n: S.roomName, h: myName, l: !!S.password,
-      c: S.humans.length, x: MAX, m: S.settings.mode, s: S.stage,
-    });
-  } else {
-    lobby.advertise(null);
-  }
+  if (S.role !== 'host' || !S.net) return;
+  S.net.announce({
+    listed: S.listed, h: myName,
+    c: S.humans.length, x: MAX, m: S.settings.mode, s: S.stage,
+  });
+  updateChrome();
 }
 
 /** Resolve humans + bots into a roster with teams and colours. */
@@ -402,21 +445,25 @@ async function startJoin(name, pw) {
   S.role = 'client';
   S.roomName = name;
   S.password = pw;
+  if (S.screen !== 'join') show('join');
   $('joinErr').textContent = 'Looking for the room…';
   $('joinBtn').disabled = true;
   try {
     S.net = await openGame(name, pw, clientHandlers());
   } catch (e) {
-    console.error(e);
-    $('joinErr').textContent = 'Could not reach the relays.';
+    const why = {
+      missing: `No open room called "${name}". Check the spelling, or ask the host whether it is still open.`,
+      password: 'That password does not match the room.',
+    }[e.message] || 'Could not reach the game relays. Check your connection.';
+    $('joinErr').textContent = why;
     $('joinBtn').disabled = false;
     S.role = null;
     return;
   }
   S.myId = S.net.selfId;
   S.joinTimer = setTimeout(() => {
-    if (!S.hostId) leave(`No answer from a room called "${name}". Check the name and the password.`, 'joinErr');
-  }, 16000);
+    if (!S.hostId) leave(`The room "${name}" is listed but its host is not answering. It may have just closed.`, 'joinErr');
+  }, 12000);
 }
 
 function clientHandlers() {
@@ -424,9 +471,6 @@ function clientHandlers() {
     onPeerJoin(peer) { S.net && S.net.send('hello', { name: myName }, peer); },
     onPeerLeave(peer) {
       if (peer === S.hostId) leave('The host left, so the game ended.');
-    },
-    onError(kind) {
-      if (kind === 'password' && !S.hostId) leave('Could not get in. Usually the password does not match; sometimes a network blocks direct connections.', 'joinErr');
     },
     onMessage(type, data, peer) {
       if (type === 'room') {
@@ -469,7 +513,12 @@ function clientSnap(data) {
   const now = performance.now();
   // A rematch restarts the host's clock: drop the old match's pictures.
   const prev = S.snaps[S.snaps.length - 1];
-  if (prev && v.tick < prev.tick) { resetClientView(); }
+  if (prev && v.tick <= prev.tick) {
+    // Far behind: a rematch restarted the clock. Slightly behind: a late
+    // duplicate from the slower relay, which is simply dropped.
+    if (prev.tick - v.tick > 120) resetClientView();
+    else return;
+  }
   const sample = v.tick - now * 0.06;
   if (S.offset === null || Math.abs(sample - S.offset) > 30) S.offset = sample;
   else S.offset += (sample - S.offset) * 0.05;
@@ -577,7 +626,7 @@ const isBoss = () => S.role === 'host' || S.role === 'solo';
 
 function buildMapSelect() {
   const sel = $('setMap');
-  sel.innerHTML = '<option value="rotation">Rotation (every map in turn)</option><option value="random">Random each round</option>' +
+  sel.innerHTML = '<option value="rotation">Every map in turn</option><option value="random">Random each round</option>' +
     MAPS.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
 }
 
@@ -608,47 +657,39 @@ function renderRoom() {
   }
   $('roomHint').textContent = hint;
 
-  // Roster
+  // Roster: four seats, filled or open.
   const humans = roster.filter(p => !p.bot).length;
   $('rosterCount').textContent = `${roster.length}/${MAX}`;
   const box = $('roster');
   box.innerHTML = '';
-  for (const p of roster) {
+  for (let i = 0; i < MAX; i++) {
+    const p = roster[i];
     const row = document.createElement('div');
-    row.className = 'spec player';
-    const head = document.createElement('div');
-    head.className = 'spec-head';
-    const nm = document.createElement('span');
-    nm.className = 'spec-name';
-    nm.innerHTML = '<span class="swatch"></span><span></span>';
-    nm.firstChild.style.background = p.color;
-    nm.lastChild.textContent = p.name + (p.id === S.myId ? ' (you)' : '');
-    const dim = document.createElement('span');
-    dim.className = 'spec-dim';
+    row.className = 'slot' + (p ? '' : ' open');
+    row.innerHTML = '<span class="swatch"></span><span class="nm"></span><span class="tagx"></span>';
+    if (!p) {
+      row.querySelector('.nm').textContent = S.role === 'solo' ? 'empty' : 'open seat';
+      box.appendChild(row);
+      continue;
+    }
+    row.querySelector('.swatch').style.background = p.color;
+    row.querySelector('.nm').textContent = p.name + (p.id === S.myId ? ' (you)' : '');
     const bits = [];
     if (p.bot) bits.push(`bot · ${st.botLevel}`);
-    if (p.id === (S.role === 'solo' ? 'me' : S.hostId) && S.role !== 'solo') bits.push('host');
-    dim.textContent = bits.join(' · ');
+    if (S.role !== 'solo' && p.id === S.hostId) bits.push('host');
+    row.querySelector('.tagx').textContent = bits.join(' · ');
     if (st.mode === 'teams') {
       const canSwap = !p.bot && (boss || p.id === S.myId);
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'btn btn-quiet';
+      b.className = 'team-btn';
       b.textContent = TEAM[p.team] ? TEAM[p.team].name : '';
       b.disabled = !canSwap;
       b.title = canSwap ? 'Switch team' : '';
       b.addEventListener('click', () => swapTeam(p.id));
-      dim.append(' ', b);
+      row.appendChild(b);
     }
-    head.append(nm, dim);
-    row.appendChild(head);
     box.appendChild(row);
-  }
-  if (S.role !== 'solo' && humans < 2 && S.role === 'host') {
-    const p = document.createElement('p');
-    p.className = 'empty';
-    p.textContent = 'Waiting for players. Bots can fill the empty seats.';
-    box.appendChild(p);
   }
 
   // Settings
@@ -841,7 +882,6 @@ function winnerText(w, view) {
   return nameOf(w);
 }
 
-let hudKey = '';
 function updateHud(view) {
   if (!view) {
     $('scores').innerHTML = '';
@@ -951,7 +991,7 @@ function showStandings(view) {
 
 function resetSession() {
   clearTimeout(S.joinTimer);
-  if (S.net) { try { S.net.send('bye', 1); } catch { /* gone */ } S.net.leave(); }
+  if (S.net) S.net.leave();
   Object.assign(S, {
     role: null, net: null, myId: 'me', hostId: null, roomName: '', password: '', listed: false,
     humans: [], stage: 'lobby', roster: [], players: {}, g: null, brains: {}, peerInputs: {}, lastSeq: {},
@@ -965,19 +1005,19 @@ function leave(msg, where) {
   advertise();
   $('joinBtn').disabled = false;
   $('hostBtn').disabled = false;
-  show('menu');
+  show(where === 'joinErr' ? 'join' : 'title');
   if (msg) {
     if (where) $(where).textContent = msg;
-    toast(msg);
+    else toast(msg);
   }
 }
 
-window.addEventListener('pagehide', () => { if (S.net) S.net.leave(); if (lobby) lobby.leave(); });
+window.addEventListener('pagehide', () => { if (S.net) S.net.leave(); });
 
 // ── Helpers ────────────────────────────────────────────────
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
-function cleanName(n) { return (typeof n === 'string' ? n : '').replace(/[ -]/g, '').trim().slice(0, 14) || 'Tank'; }
+function cleanName(n) { return (typeof n === 'string' ? n : '').replace(/[\u0000-\u001f]/g, '').trim().slice(0, 14) || 'Tank'; }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 
 // ── Loop ───────────────────────────────────────────────────
@@ -1005,6 +1045,78 @@ ticker.onmessage = () => {
   if (n === 15) S.acc = 0;
 };
 
+// ── Attract mode: bots play behind the menus ───────────────
+
+let attract = null;
+let attractBrains = {};
+let attractPlayers = {};
+
+function newAttract() {
+  const ps = BOT_NAMES.map((name, i) => ({ id: 'a' + i, name, color: COLORS[i], bot: true, team: null }));
+  attract = createGame({ mode: 'ffa', map: 'random', rounds: 99, pickups: 'high' }, ps);
+  attractBrains = Object.fromEntries(ps.map((p, i) => [p.id, makeBrain(i % 2 ? 'normal' : 'hard')]));
+  attractPlayers = Object.fromEntries(ps.map(p => [p.id, p]));
+  renderer.addEvents([{ type: 'round' }], {});
+}
+
+function stepAttract(dt) {
+  if (!attract) newAttract();
+  S.attractAcc = Math.min(0.2, (S.attractAcc || 0) + dt);
+  while (S.attractAcc >= DT) {
+    const inputs = {};
+    for (const t of attract.tanks) inputs[t.id] = botInput(attract, t, attractBrains[t.id], DT);
+    step(attract, inputs);
+    if (attract.events.length) { renderer.addEvents(attract.events, { players: attractPlayers }); attract.events = []; }
+    S.attractAcc -= DT;
+  }
+  if (attract.phase === 'matchEnd' || attract.round > 30) newAttract();
+  return {
+    grid: attract.grid, tanks: attract.tanks, shells: attract.shells, mines: attract.mines,
+    pickups: attract.pickups, beams: attract.beams, players: attractPlayers,
+  };
+}
+
+// ── Window: size, full screen, menu keys ───────────────────
+
+const BARS = 76 + 4;
+const FIELD_RATIO = 21 / 15;
+function fit() {
+  if (document.fullscreenElement) { win.style.width = win.style.height = ''; return; }
+  const stage = win.parentElement;
+  const cs = getComputedStyle(stage);
+  const aw = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const ah = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  let w = Math.min(aw, (ah - BARS) * FIELD_RATIO);
+  // Never so small that the menus stop fitting; the stage scrolls instead.
+  w = Math.max(w, Math.min(aw, 720));
+  win.style.width = Math.floor(w) + 'px';
+  win.style.height = Math.floor(w / FIELD_RATIO + BARS) + 'px';
+}
+window.addEventListener('resize', fit);
+document.addEventListener('fullscreenchange', () => { fit(); requestAnimationFrame(() => renderer.resize()); });
+$('fsBtn').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (win.requestFullscreen) win.requestFullscreen().catch(() => {});
+});
+
+document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => show(b.dataset.go)));
+document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => {
+  if (S.role === 'client' && !S.hostId) leave();
+  show('title');
+}));
+
+window.addEventListener('keydown', e => {
+  if (S.screen === 'play') return;
+  if (e.key === 'Escape' && ['host', 'join', 'how'].includes(S.screen)) { show('title'); return; }
+  if (S.screen === 'title' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    const items = [...document.querySelectorAll('#mainMenu .gbtn')];
+    const at = items.indexOf(document.activeElement);
+    const next = at < 0 ? 0 : (at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next].focus();
+    e.preventDefault();
+  }
+});
+
 let last = performance.now();
 let hudT = 0;
 function frame(now) {
@@ -1021,6 +1133,8 @@ function frame(now) {
     renderer.draw(view, { me: S.myId, dt: S.paused ? 0 : dt, time: now / 1000 });
     hudT -= dt;
     if (hudT <= 0) { updateHud(view); hudT = 0.1; }
+  } else {
+    renderer.draw(stepAttract(dt), { me: null, dt, time: now / 1000, labels: false });
   }
   requestAnimationFrame(frame);
 }
@@ -1030,6 +1144,8 @@ requestAnimationFrame(frame);
 
 buildMapSelect();
 buildPowerupList();
+fit();
+show('title');
 if (window.siteTheme) {
   window.siteTheme.onChange(() => { renderer.readTheme(); buildPowerupList(); });
 }

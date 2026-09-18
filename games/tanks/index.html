@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="/styles/main.css" />
   <script src="/scripts/theme.js"></script>
   <style>
-    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
     /* Colours the canvas reads. Walls are soil, crates are raw timber. */
     :root {
@@ -31,6 +31,10 @@
       --pu-weapon: #B0652E;
       --pu-defense: #5C7A4E;
       --pu-chaos: #6B5B95;
+      --chrome: #262A1F;
+      --chrome-ink: #E8E0CC;
+      --chrome-dim: #A89F8A;
+      --veil: rgba(240, 235, 224, 0.78);
     }
     :root[data-theme='dark'] {
       --wall: #4A3A26;
@@ -42,96 +46,196 @@
       --pu-weapon: #D98B4E;
       --pu-defense: #8FAF6E;
       --pu-chaos: #A493CC;
+      --chrome: #0F120C;
+      --chrome-ink: #E3DDCD;
+      --chrome-dim: #8F8877;
+      --veil: rgba(23, 26, 20, 0.8);
     }
 
-    .stage { flex: 1; margin-top: 46px; position: relative; min-height: 0; }
-    .screen { position: absolute; inset: 0; }
-    .screen[hidden], #play[hidden] { display: none; }
-    .scroll { overflow-y: auto; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: var(--space-8) var(--space-5) var(--space-16); }
+    .stage { flex: 1; margin-top: 46px; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 16px; }
 
-    .intro h1 { font-size: var(--text-3xl); }
-    .lede { font-size: var(--text-lg); color: var(--ink-soft); max-width: 60ch; margin-top: var(--space-2); line-height: 1.55; }
-    .mobile-note { display: none; margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--hair); background: var(--surface); font-style: italic; color: var(--ink); }
-    @media (hover: none) and (pointer: coarse) { .mobile-note { display: block; } }
+    /* ── The game window ─────────────────────────────── */
+    .window {
+      position: relative;
+      display: flex; flex-direction: column;
+      background: var(--chrome);
+      border: 2px solid var(--chrome);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(30, 22, 10, 0.28), 0 2px 6px rgba(30, 22, 10, 0.2);
+      overflow: hidden;
+      font-family: var(--font-ui);
+      user-select: none;
+    }
+    .window:fullscreen { width: 100vw !important; height: 100vh !important; border-radius: 0; border: 0; }
+    .window input { user-select: text; }
+    .bar {
+      height: 38px; flex: none;
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 14px;
+      color: var(--chrome-ink);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .bar .grow { flex: 1; min-width: 0; overflow: hidden; }
+    .wordmark { font-weight: 800; letter-spacing: 0.22em; font-size: 13px; color: var(--chrome-ink); }
+    .dim { color: var(--chrome-dim); }
+    .card .dim { color: var(--ink-faint); }
+    .iconbtn { background: none; border: 1px solid transparent; color: var(--chrome-dim); border-radius: 4px; width: 28px; height: 26px; display: grid; place-items: center; cursor: pointer; }
+    .iconbtn:hover { color: var(--chrome-ink); border-color: rgba(255,255,255,0.18); }
+    .iconbtn svg { width: 15px; height: 15px; }
 
-    .who { margin-top: var(--space-6); max-width: 18rem; }
-    .who input { width: 100%; }
+    .field-wrap { position: relative; flex: 1; min-height: 0; background: var(--chrome); }
+    #field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .playing #field { cursor: crosshair; }
 
-    .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-6); }
-    .cols .panel + .panel, .how .panel + .panel { margin-top: 0; }
-    .cols + .panel { margin-top: var(--space-4); }
-    .how { align-items: start; }
-    .panel .field-stack + .field-stack { margin-top: var(--space-3); }
-    .panel .field-stack input { width: 100%; }
-    .panel .actions { margin-top: var(--space-4); display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
-    .panel-lede { font-size: var(--text-sm); color: var(--ink-soft); font-style: italic; margin-bottom: var(--space-3); line-height: 1.5; }
-    .check { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-sm); margin-top: var(--space-3); }
-    .check input { accent-color: var(--accent); width: 15px; height: 15px; }
-    .err { color: var(--danger); font-size: var(--text-sm); margin-top: var(--space-2); min-height: 1.2em; }
+    /* Scores and loadout, in the bars */
+    .scores { display: flex; gap: 18px; align-items: center; }
+    .score { display: flex; align-items: center; gap: 7px; }
+    .score.out { opacity: 0.4; }
+    .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35); }
+    .pips { display: inline-flex; gap: 3px; }
+    .pips i { width: 7px; height: 7px; border: 1px solid var(--chrome-dim); border-radius: 50%; }
+    .pips i.on { background: var(--chrome-ink); border-color: var(--chrome-ink); }
+    .loadout { display: flex; gap: 14px; align-items: center; }
+    .loadout .w { font-weight: 700; letter-spacing: 0.04em; }
+    .loadout .muted { color: var(--chrome-dim); }
+    .buffs { display: flex; gap: 12px; color: var(--chrome-dim); }
 
-    .games-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
-    .relay { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--ink-faint); }
-    .game-row { display: grid; grid-template-columns: 1fr auto; gap: var(--space-3); align-items: center; }
-    .game-row .pw { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
-    .game-row .pw input { width: 12rem; }
-    .empty { font-style: italic; color: var(--ink-soft); padding: var(--space-3) 0; font-size: var(--text-sm); }
+    /* ── Screens inside the window ───────────────────── */
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      background: var(--veil);
+      overflow: auto;
+    }
+    .screen[hidden] { display: none; }
+    .card {
+      width: min(560px, 100%);
+      margin: auto;
+      background: var(--surface);
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      box-shadow: 6px 6px 0 rgba(30, 22, 10, 0.22);
+      padding: 22px 24px;
+      color: var(--ink);
+    }
+    .card.wide { width: min(880px, 100%); }
+    .card h2 { font-family: var(--font-ui); font-size: 15px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); margin-bottom: 14px; }
+    .card p.lede { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); font-size: 15px; margin: -6px 0 14px; line-height: 1.5; }
+
+    /* Title */
+    #title { background: linear-gradient(to bottom, transparent 0%, var(--veil) 55%); align-items: flex-end; }
+    .title-block { width: min(560px, 100%); margin: 0 auto 3%; text-align: center; }
+    .logo {
+      font-family: var(--font-ui); font-weight: 900; font-size: clamp(56px, 8vw, 100px);
+      letter-spacing: 0.12em; line-height: 0.9; color: var(--head);
+      text-shadow: 4px 4px 0 var(--canvas-bg), 7px 7px 0 var(--ink);
+      margin-bottom: 8px; padding-left: 0.12em;
+    }
+    .subtitle { font-family: var(--font-body); font-style: italic; color: var(--ink); margin-bottom: 20px; font-size: 16px; }
+    .menu { display: grid; gap: 10px; width: min(340px, 100%); margin: 0 auto; }
+    .callsign { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--label); }
+    .callsign input { width: 12rem; text-align: center; font-weight: 600; }
+    .phone-note { display: none; margin: 0 auto 16px; max-width: 30rem; font-family: var(--font-body); font-style: italic; color: var(--ink); background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; padding: 10px 14px; }
+    @media (hover: none) and (pointer: coarse) { .phone-note { display: block; } }
+
+    /* Game buttons: chunky and pressable */
+    .gbtn {
+      font-family: var(--font-ui); font-weight: 800; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 13px 18px; border-radius: 6px; cursor: pointer;
+      background: var(--accent); color: var(--accent-ink);
+      border: 2px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+      transform: translateY(0); transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .gbtn:hover:not(:disabled), .gbtn:focus-visible { background: var(--moss-mid); color: #F2EDE1; }
+    .gbtn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+    .gbtn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    .gbtn.alt { background: var(--surface); color: var(--ink); }
+    .gbtn.alt:hover:not(:disabled), .gbtn.alt:focus-visible { background: var(--raised); color: var(--head); }
+    .gbtn.small { font-size: 12px; padding: 9px 14px; box-shadow: 0 3px 0 var(--ink); }
+    .gbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .gbtn .count { font-size: 11px; letter-spacing: 0.06em; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 1px 7px; }
+    .gbtn .count:empty { display: none; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+    .row .spacer { flex: 1; }
+
+    .fields { display: grid; gap: 12px; }
+    .fields label, .lbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--label); margin-bottom: 5px; }
+    .fields input[type=text], .fields input[type=password] { width: 100%; }
+    .fields label.check { display: flex; gap: 8px; align-items: center; font-family: var(--font-body); font-size: 15px; color: var(--ink); text-transform: none; letter-spacing: 0; font-weight: 400; margin: 0; }
+    .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+    .err { color: var(--danger); font-family: var(--font-body); font-size: 14px; margin-top: 10px; min-height: 1.3em; }
+
+    /* Join */
+    .join-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; }
+    .games-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .relay { font-size: 11px; color: var(--ink-faint); }
+    .game-list { border: 2px solid var(--ink); border-radius: 6px; background: var(--field-bg); min-height: 180px; max-height: 300px; overflow: auto; }
+    .game-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .game-row:last-child { border-bottom: 0; }
+    .game-row .nm { font-family: var(--font-body); font-weight: 600; font-size: 16px; color: var(--ink); }
+    .game-row .meta { font-size: 11px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
+    .game-row .pw { display: flex; gap: 8px; margin-top: 8px; }
+    .game-row .pw input { width: 11rem; }
+    .empty { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); padding: 14px 12px; font-size: 14px; }
     .lock { display: inline-block; width: 10px; height: 11px; margin-left: 6px; vertical-align: -1px; }
 
-    .how { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-4); }
-    .keys .spec-name { font-size: var(--text-base); }
-    kbd { font-family: var(--font-ui); font-size: 0.72rem; font-weight: 600; border: 1px solid var(--hair); border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px; background: var(--raised); color: var(--ink); }
-    .pu-list .spec { display: grid; grid-template-columns: 30px 1fr; gap: var(--space-3); align-items: center; padding: var(--space-2) 0; }
-    .pu-list canvas { width: 30px; height: 30px; }
-    .pu-list .spec-name { font-size: var(--text-base); }
-    .pu-group { font-family: var(--font-ui); font-size: var(--text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--label); margin: var(--space-4) 0 var(--space-1); }
+    /* How to play */
+    .how-cols { display: grid; grid-template-columns: 1fr 1.5fr; gap: 24px; }
+    .keys { display: grid; gap: 10px; }
+    .key-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-family: var(--font-body); font-size: 15px; color: var(--ink); }
+    kbd { font-family: var(--font-ui); font-size: 11px; font-weight: 700; border: 2px solid var(--ink); border-bottom-width: 3px; border-radius: 4px; padding: 1px 6px; background: var(--raised); color: var(--ink); }
+    .rules { font-family: var(--font-body); font-size: 14px; color: var(--ink-soft); line-height: 1.55; margin-top: 14px; }
+    .pu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .pu { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; }
+    .pu canvas { width: 30px; height: 30px; }
+    .pu b { font-size: 13px; font-weight: 700; color: var(--ink); display: block; }
+    .pu span { font-family: var(--font-body); font-style: italic; font-size: 12.5px; color: var(--ink-soft); line-height: 1.3; display: block; }
+    .pu-group { grid-column: 1 / -1; font-size: 10.5px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--label); margin-top: 8px; }
     .pu-group:first-child { margin-top: 0; }
 
     /* Room */
-    .room-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; }
-    .room-meta { font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--label); }
-    .room-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-top: var(--space-6); }
-    .room-cols .panel + .panel { margin-top: 0; }
-    .player .spec-name { display: flex; align-items: center; gap: var(--space-2); }
-    .swatch { width: 12px; height: 12px; border: 1px solid var(--ink); flex: none; }
-    .player .spec-dim button { font: inherit; }
-    .room .field select { width: 11rem; }
-    .room-foot { display: flex; gap: var(--space-3); margin-top: var(--space-6); align-items: center; flex-wrap: wrap; }
-    .room-foot .hint { margin: 0; }
+    .room-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .room-head h2 { margin: 0; font-size: 20px; letter-spacing: 0.1em; }
+    .room-meta { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--label); }
+    .room-hint { font-family: var(--font-body); font-style: italic; font-size: 14px; color: var(--ink-soft); margin-bottom: 14px; }
+    .room-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .slot { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 16px; color: var(--ink); }
+    .slot:last-child { border-bottom: 0; }
+    .slot .nm { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .slot .tagx { font-family: var(--font-ui); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; }
+    .slot .swatch { width: 14px; height: 14px; }
+    .slot.open { color: var(--ink-faint); font-style: italic; }
+    .slot.open .swatch { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); }
+    .team-btn { font-family: var(--font-ui); font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; border: 2px solid var(--ink); border-radius: 4px; padding: 2px 8px; background: var(--raised); color: var(--ink); cursor: pointer; }
+    .team-btn:disabled { cursor: default; opacity: 0.7; }
+    .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 15px; color: var(--ink); }
+    .setting:last-child { border-bottom: 0; }
+    .setting[hidden] { display: none; }
+    .setting select { width: 12rem; }
+    .setting input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+    .seg button { font-size: 13px; padding: 0.3rem 0.6rem; }
+    .start-hint { font-family: var(--font-body); font-style: italic; font-size: 14px; color: var(--ink-soft); }
 
-    /* Play */
-    #play { display: flex; flex-direction: column; background: var(--canvas-bg); }
-    .hud { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-5); height: 42px; flex: none; font-family: var(--font-ui); font-size: var(--text-sm); color: var(--ink); border-bottom: 1px solid var(--line); background: var(--surface); }
-    .hud-bottom { border-bottom: 0; border-top: 1px solid var(--line); }
-    .scores { display: flex; gap: var(--space-5); align-items: center; min-width: 0; overflow: hidden; }
-    .score { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
-    .score.out { opacity: 0.45; }
-    .pips { display: inline-flex; gap: 3px; }
-    .pips i { width: 7px; height: 7px; border: 1px solid var(--ink-soft); border-radius: 50%; }
-    .pips i.on { background: var(--ink); border-color: var(--ink); }
-    .round-label { color: var(--ink-soft); white-space: nowrap; }
-    .loadout { display: flex; gap: var(--space-5); align-items: center; }
-    .loadout .w { font-weight: 600; }
-    .loadout .muted { color: var(--ink-faint); font-style: italic; font-family: var(--font-body); }
-    .buffs { display: flex; gap: var(--space-4); color: var(--ink-soft); }
-    .field-wrap { flex: 1; position: relative; min-height: 0; }
-    #field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
-    .banner { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; background: var(--surface); border: 1px solid var(--hair); padding: var(--space-3) var(--space-6); box-shadow: var(--shadow-md); }
+    /* In-play overlays */
+    .banner { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; box-shadow: 5px 5px 0 rgba(30,22,10,0.22); padding: 12px 28px; }
     .banner[hidden] { display: none; }
-    .banner b { display: block; font-size: var(--text-2xl); font-weight: 600; color: var(--head); }
-    .banner span { font-style: italic; color: var(--ink-soft); }
-    .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--bg) 70%, transparent); }
-    .overlay[hidden] { display: none; }
-    .overlay .panel { min-width: 20rem; max-width: 30rem; }
-    .standings .spec-dim { font-variant-numeric: lining-nums tabular-nums; }
-    .overlay .actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+    .banner b { display: block; font-family: var(--font-ui); font-weight: 900; font-size: 26px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--head); }
+    .banner span { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); }
+    .standings .st { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 16px; color: var(--ink); }
+    .standings .st:last-child { border-bottom: 0; }
+    .standings .st span:last-child { color: var(--ink-soft); font-variant-numeric: lining-nums tabular-nums; }
 
-    .toast { position: fixed; left: 50%; bottom: var(--space-6); transform: translateX(-50%); background: var(--surface); border: 1px solid var(--hair); padding: var(--space-3) var(--space-5); box-shadow: var(--shadow-md); z-index: 2000; font-size: var(--text-sm); max-width: calc(100vw - 32px); }
+    .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; padding: 9px 16px; z-index: 5; font-family: var(--font-body); font-size: 14px; color: var(--ink); max-width: calc(100% - 32px); box-shadow: 4px 4px 0 rgba(30,22,10,0.2); }
     .toast[hidden] { display: none; }
 
-    @media (max-width: 860px) {
-      .cols, .room-cols, .how { grid-template-columns: 1fr; }
-      .wrap { padding: var(--space-6) var(--space-4) var(--space-12); }
+    @media (max-width: 760px) {
+      .join-cols, .how-cols, .room-cols { grid-template-columns: 1fr; }
+      .pu-grid { grid-template-columns: 1fr; }
+      .scores { gap: 10px; }
+      .stage { padding: 8px; }
     }
   </style>
 </head>
@@ -146,180 +250,177 @@
 </header>
 
 <main class="stage">
-
-  <!-- ── Menu ─────────────────────────────────────────── -->
-  <section class="screen scroll" id="menu">
-    <div class="wrap">
-      <div class="intro">
-        <h1>Tanks</h1>
-        <p class="lede">Top-down tank duels after the old Tiny Tanks. Last tank standing takes the round. Crates break, power-ups drop, and shells only bounce if you have picked up a ricochet.</p>
-        <p class="mobile-note">Tanks needs a keyboard and a mouse. Open this page on a computer to play.</p>
-      </div>
-
-      <div class="field-stack who">
-        <label for="nameIn">Your name</label>
-        <input type="text" id="nameIn" maxlength="14" autocomplete="nickname" spellcheck="false" />
-      </div>
-
-      <div class="cols">
-        <div class="panel">
-          <h2>Solo</h2>
-          <div class="hr"></div>
-          <p class="panel-lede">You against up to three computer tanks. No network needed.</p>
-          <div class="actions"><button class="btn btn-primary" id="soloBtn" type="button">Play against bots</button></div>
-        </div>
-
-        <div class="panel">
-          <h2>Make a room</h2>
-          <div class="hr"></div>
-          <div class="field-stack">
-            <label for="hostName">Room name</label>
-            <input type="text" id="hostName" maxlength="24" spellcheck="false" placeholder="e.g. pine hollow" />
-          </div>
-          <div class="field-stack">
-            <label for="hostPw">Password <span class="field-unit">optional</span></label>
-            <input type="password" id="hostPw" maxlength="40" autocomplete="new-password" />
-          </div>
-          <label class="check"><input type="checkbox" id="hostPublic" checked /> List it under open games</label>
-          <div class="actions"><button class="btn" id="hostBtn" type="button">Create room</button></div>
-          <div class="err" id="hostErr"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Join a room</h2>
-          <div class="hr"></div>
-          <div class="field-stack">
-            <label for="joinName">Room name</label>
-            <input type="text" id="joinName" maxlength="24" spellcheck="false" />
-          </div>
-          <div class="field-stack">
-            <label for="joinPw">Password</label>
-            <input type="password" id="joinPw" maxlength="40" autocomplete="off" />
-          </div>
-          <div class="actions"><button class="btn" id="joinBtn" type="button">Join</button></div>
-          <div class="err" id="joinErr"></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="games-head">
-          <h2>Open games</h2>
-          <span class="relay" id="relayState">connecting to relays…</span>
-        </div>
-        <div class="hr"></div>
-        <div id="gameList"><p class="empty">Looking for games. Rooms show up here when their host lists them.</p></div>
-      </div>
-
-      <div class="how">
-        <div class="panel keys">
-          <h2>Controls</h2>
-          <div class="hr"></div>
-          <div class="spec"><div class="spec-head"><span class="spec-name">Drive and turn</span><span class="spec-dim"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> or arrows</span></div></div>
-          <div class="spec"><div class="spec-head"><span class="spec-name">Aim</span><span class="spec-dim">mouse</span></div><span class="spec-note">The turret follows the pointer; the hull goes where the tracks take it.</span></div>
-          <div class="spec"><div class="spec-head"><span class="spec-name">Fire</span><span class="spec-dim">click or <kbd>Space</kbd></span></div><span class="spec-note">Five shells in the air at once. Plain shells stop at the first wall.</span></div>
-          <div class="spec"><div class="spec-head"><span class="spec-name">Menu</span><span class="spec-dim"><kbd>Esc</kbd></span></div><span class="spec-note">Pauses a solo game.</span></div>
-        </div>
-        <div class="panel pu-list">
-          <h2>Power-ups</h2>
-          <div class="hr"></div>
-          <div id="puList"></div>
-        </div>
-      </div>
+  <div class="window" id="win">
+    <!-- Title bar -->
+    <div class="bar">
+      <span class="wordmark">TANKS</span>
+      <span class="dim" id="context"></span>
+      <div class="grow"><div class="scores" id="scores"></div></div>
+      <span class="dim" id="roundLabel"></span>
+      <button class="iconbtn" id="fsBtn" type="button" title="Full screen" aria-label="Full screen">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>
+      </button>
     </div>
-  </section>
 
-  <!-- ── Room ─────────────────────────────────────────── -->
-  <section class="screen scroll room" id="room" hidden>
-    <div class="wrap">
-      <div class="room-head">
-        <div>
-          <div class="room-meta" id="roomMeta">Room</div>
-          <h1 id="roomTitle">Room</h1>
-        </div>
-      </div>
-      <p class="hint" id="roomHint"></p>
-
-      <div class="room-cols">
-        <div class="panel">
-          <h2>Tanks <span class="field-unit" id="rosterCount"></span></h2>
-          <div class="hr"></div>
-          <div id="roster"></div>
-        </div>
-
-        <div class="panel">
-          <h2>Settings</h2>
-          <div class="hr"></div>
-          <div class="field"><label>Mode</label>
-            <div class="seg" id="setMode"><button type="button" data-v="ffa">Free-for-all</button><button type="button" data-v="teams">Red v Blue</button></div>
-          </div>
-          <div class="field"><label for="setMap">Map</label><select id="setMap"></select></div>
-          <div class="field"><label for="setRounds">Rounds to win</label>
-            <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select>
-          </div>
-          <div class="field"><label>Power-ups</label>
-            <div class="seg" id="setPickups"><button type="button" data-v="off">off</button><button type="button" data-v="low">few</button><button type="button" data-v="normal">some</button><button type="button" data-v="high">lots</button></div>
-          </div>
-          <div class="field"><label for="setBots">Bots</label>
-            <select id="setBots"><option value="0">none</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
-          </div>
-          <div class="field"><label for="setLevel">Bot skill</label>
-            <select id="setLevel"><option value="easy">easy</option><option value="normal">normal</option><option value="hard">hard</option></select>
-          </div>
-          <div class="field field-check" id="ffRow"><input type="checkbox" id="setFF" /><label for="setFF">Friendly fire</label></div>
-        </div>
-      </div>
-
-      <div class="room-foot">
-        <button class="btn btn-primary" id="startBtn" type="button">Start match</button>
-        <button class="btn btn-outline" id="leaveBtn" type="button">Leave</button>
-        <p class="hint" id="startHint"></p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Play ─────────────────────────────────────────── -->
-  <section class="screen" id="play" hidden>
-    <div class="hud">
-      <div class="scores" id="scores"></div>
-      <span class="round-label" id="roundLabel"></span>
-    </div>
-    <div class="field-wrap">
+    <div class="field-wrap" id="fieldWrap">
       <canvas id="field"></canvas>
       <div class="banner" id="banner" hidden><b id="bannerTitle"></b><span id="bannerSub"></span></div>
 
-      <div class="overlay" id="pause" hidden>
-        <div class="panel">
+      <!-- Title -->
+      <section class="screen" id="title">
+        <div class="title-block">
+          <p class="phone-note">Tanks needs a keyboard and a mouse. Open this page on a computer to play.</p>
+          <div class="logo">TANKS</div>
+          <div class="subtitle">Last tank standing takes the round.</div>
+          <nav class="menu" id="mainMenu">
+            <button class="gbtn" type="button" id="soloBtn">Play vs bots</button>
+            <button class="gbtn alt" type="button" data-go="host">Host a game</button>
+            <button class="gbtn alt" type="button" data-go="join">Join a game <span class="count" id="openCount"></span></button>
+            <button class="gbtn alt" type="button" data-go="how">How to play</button>
+          </nav>
+          <label class="callsign">Name <input type="text" id="nameIn" maxlength="14" autocomplete="nickname" spellcheck="false" /></label>
+        </div>
+      </section>
+
+      <!-- Host -->
+      <section class="screen" id="host" hidden>
+        <div class="card">
+          <h2>Host a game</h2>
+          <p class="lede">Your browser runs the match. Friends join with the room name, and the password if you set one.</p>
+          <div class="fields">
+            <div><label for="hostName">Room name</label><input type="text" id="hostName" maxlength="24" spellcheck="false" placeholder="e.g. pine hollow" /></div>
+            <div><label for="hostPw">Password <span class="dim">(optional)</span></label><input type="password" id="hostPw" maxlength="40" autocomplete="new-password" /></div>
+            <label class="check"><input type="checkbox" id="hostPublic" checked /> Show it in the open games list</label>
+          </div>
+          <div class="err" id="hostErr"></div>
+          <div class="row">
+            <button class="gbtn" type="button" id="hostBtn">Create room</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" data-back>Back</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Join -->
+      <section class="screen" id="join" hidden>
+        <div class="card wide">
+          <h2>Join a game</h2>
+          <div class="join-cols">
+            <div>
+              <div class="games-head"><span class="lbl">Open games</span><span class="relay" id="relayState">connecting…</span></div>
+              <div class="game-list" id="gameList"><p class="empty">Looking for games…</p></div>
+            </div>
+            <div>
+              <span class="lbl">Join by name</span>
+              <div class="fields">
+                <div><label for="joinName">Room name</label><input type="text" id="joinName" maxlength="24" spellcheck="false" /></div>
+                <div><label for="joinPw">Password</label><input type="password" id="joinPw" maxlength="40" autocomplete="off" /></div>
+              </div>
+              <div class="row"><button class="gbtn" type="button" id="joinBtn">Join</button></div>
+              <div class="err" id="joinErr"></div>
+            </div>
+          </div>
+          <div class="row"><span class="spacer"></span><button class="gbtn alt small" type="button" data-back>Back</button></div>
+        </div>
+      </section>
+
+      <!-- How to play -->
+      <section class="screen" id="how" hidden>
+        <div class="card wide">
+          <h2>How to play</h2>
+          <div class="how-cols">
+            <div>
+              <div class="keys">
+                <div class="key-row">Drive and turn <span><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></span></div>
+                <div class="key-row">Aim <span>mouse</span></div>
+                <div class="key-row">Fire <span>click or <kbd>Space</kbd></span></div>
+                <div class="key-row">Menu <span><kbd>Esc</kbd></span></div>
+              </div>
+              <p class="rules">Last tank (or team) standing takes the round. Five shells in the air at a time, and plain shells stop at the first wall they hit. Crates break. Drive over a token to pick it up: a weapon replaces the one you hold, a boost runs on a timer.</p>
+            </div>
+            <div class="pu-grid" id="puList"></div>
+          </div>
+          <div class="row"><span class="spacer"></span><button class="gbtn alt small" type="button" data-back>Back</button></div>
+        </div>
+      </section>
+
+      <!-- Room -->
+      <section class="screen" id="room" hidden>
+        <div class="card wide">
+          <div class="room-head"><h2 id="roomTitle">Room</h2><span class="room-meta" id="roomMeta"></span></div>
+          <p class="room-hint" id="roomHint"></p>
+          <div class="room-cols">
+            <div>
+              <span class="lbl">Tanks <span class="dim" id="rosterCount"></span></span>
+              <div id="roster"></div>
+            </div>
+            <div>
+              <span class="lbl">Settings</span>
+              <div class="setting"><span>Mode</span>
+                <div class="seg" id="setMode"><button type="button" data-v="ffa">Free-for-all</button><button type="button" data-v="teams">Red v Blue</button></div>
+              </div>
+              <div class="setting"><label for="setMap">Map</label><select id="setMap"></select></div>
+              <div class="setting"><label for="setRounds">Rounds to win</label>
+                <select id="setRounds"><option>3</option><option selected>5</option><option>7</option><option>10</option></select>
+              </div>
+              <div class="setting"><span>Power-ups</span>
+                <div class="seg" id="setPickups"><button type="button" data-v="off">off</button><button type="button" data-v="low">few</button><button type="button" data-v="normal">some</button><button type="button" data-v="high">lots</button></div>
+              </div>
+              <div class="setting"><label for="setBots">Bots</label>
+                <select id="setBots"><option value="0">none</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+              </div>
+              <div class="setting"><label for="setLevel">Bot skill</label>
+                <select id="setLevel"><option value="easy">easy</option><option value="normal">normal</option><option value="hard">hard</option></select>
+              </div>
+              <div class="setting" id="ffRow"><label for="setFF">Friendly fire</label><input type="checkbox" id="setFF" /></div>
+            </div>
+          </div>
+          <div class="row">
+            <button class="gbtn" type="button" id="startBtn">Start match</button>
+            <span class="start-hint" id="startHint"></span>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="leaveBtn">Leave</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pause -->
+      <section class="screen" id="pause" hidden>
+        <div class="card">
           <h2 id="pauseTitle">Paused</h2>
-          <div class="hr"></div>
-          <p class="panel-lede" id="pauseNote">Esc to carry on.</p>
-          <div class="actions">
-            <button class="btn btn-primary" id="resumeBtn" type="button">Resume</button>
-            <button class="btn btn-outline" id="quitBtn" type="button">Leave game</button>
+          <p class="lede" id="pauseNote">Esc to carry on.</p>
+          <div class="row">
+            <button class="gbtn" type="button" id="resumeBtn">Resume</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="quitBtn">Leave game</button>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="overlay" id="over" hidden>
-        <div class="panel">
+      <!-- Match over -->
+      <section class="screen" id="over" hidden>
+        <div class="card">
           <h2 id="overTitle">Match over</h2>
-          <div class="hr"></div>
           <div class="standings" id="standings"></div>
-          <div class="actions" id="overActions">
-            <button class="btn btn-primary" id="rematchBtn" type="button">Rematch</button>
-            <button class="btn btn-outline" id="backBtn" type="button">Back to room</button>
+          <div class="row" id="overActions">
+            <button class="gbtn" type="button" id="rematchBtn">Rematch</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="backBtn">Back to room</button>
           </div>
-          <p class="hint" id="overNote"></p>
+          <p class="lede" id="overNote" style="margin-top:12px"></p>
         </div>
-      </div>
-    </div>
-    <div class="hud hud-bottom">
-      <div class="loadout" id="loadout"></div>
-      <span class="round-label" id="netLabel"></span>
-    </div>
-  </section>
-</main>
+      </section>
 
-<div class="toast" id="toast" role="status" hidden></div>
+      <div class="toast" id="toast" role="status" hidden></div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="bar">
+      <div class="grow"><div class="loadout" id="loadout"></div></div>
+      <span class="dim" id="netLabel"></span>
+    </div>
+  </div>
+</main>
 
 <script type="module" src="./game.js"></script>
 </body>
