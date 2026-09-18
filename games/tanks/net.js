@@ -194,7 +194,9 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
   // A host's listing is cleared by the broker if its connection drops.
   const link = await connect({ will: host ? { topic: adTopic, payload: '', retain: true } : undefined });
 
-  const existing = await readAd(link, adTopic);
+  let existing = await readAd(link, adTopic);
+  // A room created a moment ago may not have its listing out yet.
+  if (!host && !existing) existing = await readAd(link, adTopic);
   if (host && existing) { link.close(); throw new Error('taken'); }
   if (!host) {
     if (!existing) { link.close(); throw new Error('missing'); }
@@ -210,6 +212,10 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
   let n = 0;
   let closed = false;
   let ad = null;
+  // Nothing reaches the game until the caller has its handle back, or a
+  // message arriving mid-setup would be answered by a game with no link.
+  let ready = false;
+  const early = [];
 
   const send = async (type, data, target) => {
     if (closed) return;
@@ -220,6 +226,7 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
 
   /** Everything received, by relay or direct, ends up here. */
   const deliver = (m, via) => {
+    if (!ready) { early.push([m, via]); return; }
     if (closed || !m || m.f === selfId || typeof m.t !== 'string') return;
     const tag = m.f + ':' + m.i;
     if (seen.has(tag)) return;       // the same message by another route
@@ -371,6 +378,8 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
     link.publish(adTopic, JSON.stringify(body), { retain: true, qos: 1 });
   };
   const adTimer = host ? setInterval(publishAd, AD_EVERY) : 0;
+
+  setTimeout(() => { ready = true; for (const [m, via] of early.splice(0)) deliver(m, via); }, 0);
 
   return {
     selfId,

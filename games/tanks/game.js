@@ -5,17 +5,17 @@
 import {
   createGame, step, snapshot, unpack, addPlayer, removePlayer, drive,
   POWERUPS, COLORS, TEAM, DEFAULT_SETTINGS, DT, wrap,
-} from './sim.js?v=4';
-import { MAPS, buildMap, mapName } from './maps.js?v=4';
-import { makeBrain, botInput } from './bots.js?v=4';
-import { createRenderer, drawIcon } from './render.js?v=4';
-import { openLobby, openGame, roomKey } from './net.js?v=4';
+} from './sim.js?v=5';
+import { MAPS, buildMap, mapName } from './maps.js?v=5';
+import { makeBrain, botInput } from './bots.js?v=5';
+import { createRenderer, drawIcon } from './render.js?v=5';
+import { openLobby, openGame, roomKey } from './net.js?v=5';
 
 const $ = id => document.getElementById(id);
 const MAX = 4;
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 4;
+const PROTOCOL = 5;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory'];
 const INTERP_MIN = 4;         // clients draw at least 67 ms behind the host
@@ -465,6 +465,14 @@ function refreshPlayers() {
 
 // ── Rooms: client ──────────────────────────────────────────
 
+let helloAt = 0;
+function sayHello() {
+  const now = performance.now();
+  if (!S.net || !S.hostId || now - helloAt < 1500) return;
+  helloAt = now;
+  S.net.send('hello', { name: myName, pv: PROTOCOL }, S.hostId);
+}
+
 async function startJoin(name, pw) {
   name = name.trim();
   $('joinErr').textContent = '';
@@ -489,6 +497,12 @@ async function startJoin(name, pw) {
     return;
   }
   S.myId = S.net.selfId;
+  const retry = setInterval(() => {
+    if (S.role !== 'client' || !S.net) return clearInterval(retry);
+    const listed = S.room && S.room.roster.some(p => p.id === S.myId);
+    if (listed) return clearInterval(retry);
+    sayHello();
+  }, 2000);
   S.joinTimer = setTimeout(() => {
     if (!S.hostId) leave(`The room "${name}" is listed but its host is not answering. It may have just closed.`, 'joinErr');
   }, 12000);
@@ -523,6 +537,9 @@ function clientHandlers() {
         if (peer !== S.hostId) return;
         const wasStage = S.room && S.room.stage;
         S.room = data;
+        // Not on the host's list yet? Say hello again: the relay can drop
+        // a message, and a room is useless to a guest the host never met.
+        if (!data.roster.some(p => p.id === S.myId)) sayHello();
         S.settings = data.settings;
         S.stage = data.stage;
         refreshPlayers();
