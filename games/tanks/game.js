@@ -14,7 +14,8 @@ import { openLobby, openGame, roomKey } from './net.js';
 const $ = id => document.getElementById(id);
 const MAX = 4;
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory'];
-const INTERP_TICKS = 6;       // clients draw about 100 ms behind the host
+const INTERP_MIN = 6;         // clients draw at least 100 ms behind the host
+const INTERP_MAX = 24;        // and at most 400 ms, however jittery the relay
 const SNAP_EVERY = 3;         // host sends 20 snapshots a second
 const INPUT_MS = 33;
 const TEAM_SHADES = { red: ['#A8453A', '#C87A60'], blue: ['#3F6E9A', '#7298BF'] };
@@ -44,8 +45,6 @@ const S = {
   // host / solo
   g: null,
   brains: {},
-  peerInputs: {},
-  lastSeq: {},
   outEvents: [],
   acc: 0,
   paused: false,
@@ -57,7 +56,16 @@ const S = {
   grid: null,
   gridKey: '',
   pred: null,
-  predHist: [],
+  inHist: [],               // my inputs, one per tick, until the host has used them
+  tickN: 0,
+  clientAcc: 0,
+  smooth: { x: 0, y: 0, a: 0 },
+  jit: 2,
+  // host: per-guest input queues
+  inQ: {},
+  inTop: {},
+  inLast: {},
+  ack: {},
   seq: 0,
   lastSend: 0,
   joinTimer: 0,
@@ -304,14 +312,18 @@ function hostHandlers() {
     onMessage(type, data, peer) {
       if (type === 'hello') return hostHello(peer, data);
       if (type === 'in') {
-        if (!data || typeof data !== 'object') return;
-        // Two relays can deliver out of order: never go back to older input.
-        if ((data.q | 0) <= (S.lastSeq[peer] || 0)) return;
-        S.peerInputs[peer] = {
-          th: clamp(+data.th || 0, -1, 1), tu: clamp(+data.tu || 0, -1, 1),
-          ax: +data.ax || 0, ay: +data.ay || 0, fs: data.fs | 0,
-        };
-        S.lastSeq[peer] = data.q | 0;
+        if (!data || !Array.isArray(data.b)) return;
+        // Each packet repeats the last few ticks, so a lost or reordered
+        // packet costs nothing: queue only ticks not seen before.
+        const q = (S.inQ[peer] ||= []);
+        for (const e of data.b) {
+          if (!Array.isArray(e) || (e[0] | 0) <= (S.inTop[peer] || 0)) continue;
+          q.push({
+            n: e[0] | 0, th: clamp(+e[1] || 0, -1, 1), tu: clamp(+e[2] || 0, -1, 1),
+            ax: +e[3] || 0, ay: +e[4] || 0, fs: e[5] | 0,
+          });
+          S.inTop[peer] = e[0] | 0;
+        }
         return;
       }
       if (type === 'team') {
@@ -368,7 +380,7 @@ function hostDrop(peer) {
   const i = S.humans.findIndex(h => h.id === peer);
   if (i < 0) return;
   const [h] = S.humans.splice(i, 1);
-  delete S.peerInputs[peer];
+  delete S.inQ[peer]; delete S.inTop[peer]; delete S.inLast[peer]; delete S.ack[peer];
   if (S.g) removePlayer(S.g, peer);
   roomChanged();
   toast(`${h.name} left.`);
@@ -504,7 +516,8 @@ function clientHandlers() {
 }
 
 function resetClientView() {
-  S.snaps = []; S.evq = []; S.offset = null; S.pred = null; S.predHist = []; S.gridKey = '';
+  S.snaps = []; S.evq = []; S.offset = null; S.pred = null; S.inHist = []; S.gridKey = '';
+  S.smooth = { x: 0, y: 0, a: 0 }; S.jit = 2;
 }
 
 function clientSnap(data) {
@@ -519,9 +532,15 @@ function clientSnap(data) {
     if (prev.tick - v.tick > 120) resetClientView();
     else return;
   }
+  // Clock: track the earliest-arriving snapshots, and measure how late the
+  // rest are, so the picture is drawn just far enough behind to stay smooth.
   const sample = v.tick - now * 0.06;
-  if (S.offset === null || Math.abs(sample - S.offset) > 30) S.offset = sample;
-  else S.offset += (sample - S.offset) * 0.05;
+  if (S.offset === null || Math.abs(sample - S.offset) > 60) { S.offset = sample; S.jit = 2; }
+  else if (sample > S.offset) S.offset = sample;
+  else {
+    S.jit = S.jit * 0.9 + (S.offset - sample) * 0.1;
+    S.offset += (sample - S.offset) * 0.01;
+  }
 
   const key = v.map.id + ':' + v.map.seed + ':' + v.destroyed.length;
   if (key !== S.gridKey) {
@@ -537,24 +556,61 @@ function clientSnap(data) {
   // Anything that moves my tank without my input: start prediction afresh.
   if (v.events.some(e => (e.type === 'tp' || e.type === 'freeze') && e.id === S.myId || e.type === 'round')) S.pred = null;
 
-  // Reconcile: compare where the host has me with where I thought I was
-  // when I sent the input it has just acknowledged.
+  reconcile(v, data.ak && data.ak[S.myId]);
+}
+
+/**
+ * Take the host's word for where my tank is, then replay every input the
+ * host has not used yet. The difference from what I was showing is kept as
+ * an offset that fades out, so a correction glides instead of popping.
+ */
+function reconcile(v, ack) {
+  if (ack) while (S.inHist.length && S.inHist[0].n <= ack) S.inHist.shift();
   const me = v.tanks.find(t => t.id === S.myId);
-  const ack = data.ak && data.ak[S.myId];
-  if (S.pred && me && ack) {
-    const h = S.predHist.find(p => p.q === ack);
-    if (h) {
-      const ex = me.x - h.x, ey = me.y - h.y;
-      if (Math.hypot(ex, ey) > 48) { S.pred.x = me.x; S.pred.y = me.y; S.pred.a = me.a; }
-      else { S.pred.x += ex * 0.3; S.pred.y += ey * 0.3; S.pred.a = wrap(S.pred.a + wrap(me.a - h.a) * 0.3); }
+  const playing = v.phase === 'play' || v.phase === 'ending';
+  if (!me || !me.alive || me.frozen > 0 || !playing || !S.grid) {
+    S.pred = null;
+    S.smooth = { x: 0, y: 0, a: 0 };
+    return;
+  }
+  const p = { x: me.x, y: me.y, a: me.a, buffs: me.buffs };
+  for (const h of S.inHist) drive(S.grid, p, h, DT);
+  if (S.pred) {
+    const ex = S.pred.x + S.smooth.x - p.x, ey = S.pred.y + S.smooth.y - p.y;
+    if (Math.hypot(ex, ey) < 80) {
+      S.smooth = { x: ex, y: ey, a: wrap(S.pred.a + S.smooth.a - p.a) };
+    } else {
+      S.smooth = { x: 0, y: 0, a: 0 };
     }
   }
+  S.pred = p;
+}
+
+/** Guest: sample input at the host's tick rate, predict, and send. */
+function clientTick(dt) {
+  S.clientAcc = Math.min(0.25, S.clientAcc + dt);
+  let sent = false;
+  while (S.clientAcc >= DT) {
+    S.clientAcc -= DT;
+    const inp = localInput(S.pred || S.drawnMe);
+    const h = { n: ++S.tickN, th: inp.th, tu: inp.tu, ax: Math.round(inp.ax), ay: Math.round(inp.ay), fs: inp.fs };
+    S.inHist.push(h);
+    if (S.inHist.length > 240) S.inHist.shift();
+    if (S.pred) drive(S.grid, S.pred, h, DT);
+    if (S.tickN % 2 === 0) sent = true;
+  }
+  if (sent && S.net && S.hostId) {
+    S.net.send('in', { b: S.inHist.slice(-8).map(h => [h.n, h.th, h.tu, h.ax, h.ay, h.fs]) }, S.hostId);
+  }
+  const k = Math.exp(-dt * 10);
+  S.smooth.x *= k; S.smooth.y *= k; S.smooth.a *= k;
 }
 
 function clientView(now, dt) {
   if (!S.snaps.length) return null;
   const latest = S.snaps[S.snaps.length - 1];
-  const rt = now * 0.06 + S.offset - INTERP_TICKS;
+  const delay = Math.max(INTERP_MIN, Math.min(INTERP_MAX, 4 + S.jit * 2));
+  const rt = now * 0.06 + S.offset - delay;
   let s0 = S.snaps[0], s1 = latest;
   for (let i = S.snaps.length - 1; i >= 0; i--) {
     if (S.snaps[i].tick <= rt) { s0 = S.snaps[i]; s1 = S.snaps[i + 1] || S.snaps[i]; break; }
@@ -580,22 +636,19 @@ function clientView(now, dt) {
   if (S.evq.length > 60) S.evq.splice(0, S.evq.length - 60);
 
   // My own tank: predicted, and aimed from the local mouse.
-  const serverMe = latest.tanks.find(t => t.id === S.myId);
-  const playing = latest.phase === 'play' || latest.phase === 'ending';
-  if (serverMe && serverMe.alive && serverMe.frozen <= 0 && playing) {
-    if (!S.pred) S.pred = { x: serverMe.x, y: serverMe.y, a: serverMe.a, buffs: serverMe.buffs };
-    S.pred.buffs = serverMe.buffs;
-    drive(S.grid, S.pred, localInput(S.pred), dt);
-  } else {
-    S.pred = null;
-  }
   const mine = tanks.find(t => t.id === S.myId);
   if (mine && mine.alive) {
-    if (S.pred) { mine.x = S.pred.x; mine.y = S.pred.y; mine.a = S.pred.a; }
+    if (S.pred) {
+      mine.x = S.pred.x + S.smooth.x;
+      mine.y = S.pred.y + S.smooth.y;
+      mine.a = S.pred.a + S.smooth.a;
+    }
+    S.drawnMe = { x: mine.x, y: mine.y };
     const aim = aimPoint(mine);
     if (!(mine.frozen > 0)) mine.ta = Math.atan2(aim.y - mine.y, aim.x - mine.x);
   }
 
+  S.lastTanks = tanks;
   return {
     grid: S.grid,
     tanks, shells,
@@ -607,18 +660,6 @@ function clientView(now, dt) {
   };
 }
 
-function sendInput(now) {
-  if (!S.net || !S.hostId || now - S.lastSend < INPUT_MS) return;
-  S.lastSend = now;
-  const me = S.pred || (S.snaps.length && S.snaps[S.snaps.length - 1].tanks.find(t => t.id === S.myId));
-  const inp = localInput(me);
-  const q = ++S.seq;
-  S.net.send('in', { ...inp, ax: Math.round(inp.ax), ay: Math.round(inp.ay), q }, S.hostId);
-  if (S.pred) {
-    S.predHist.push({ q, x: S.pred.x, y: S.pred.y, a: S.pred.a });
-    if (S.predHist.length > 90) S.predHist.shift();
-  }
-}
 
 // ── Room screen ────────────────────────────────────────────
 
@@ -786,7 +827,7 @@ $('backBtn').addEventListener('click', backToRoom);
 function hostTick() {
   const g = S.g;
   const inputs = { [S.myId]: localInput(g.tanks.find(t => t.id === S.myId)) };
-  for (const [id, inp] of Object.entries(S.peerInputs)) inputs[id] = inp;
+  for (const [id, q] of Object.entries(S.inQ)) inputs[id] = nextGuestInput(g, id, q);
   for (const t of g.tanks) if (S.brains[t.id]) inputs[t.id] = botInput(g, t, S.brains[t.id], DT);
   step(g, inputs);
   if (g.events.length) {
@@ -796,10 +837,31 @@ function hostTick() {
   }
   if (S.role === 'host' && g.tick % SNAP_EVERY === 0) {
     const snap = snapshot(g, S.outEvents);
-    snap.ak = S.lastSeq;
+    snap.ak = S.ack;
     S.net.send('snap', snap);
     S.outEvents = [];
   }
+}
+
+/**
+ * One guest input per tick, in order, so the host moves a guest's tank
+ * exactly as the guest's own screen did. If the relay is late, the tank
+ * idles for that tick rather than guessing; if inputs pile up after a
+ * stall, the extra ones are driven straight away to catch up.
+ */
+function nextGuestInput(g, id, q) {
+  const last = S.inLast[id];
+  if (!q.length) return last ? { th: 0, tu: 0, ax: last.ax, ay: last.ay, fs: last.fs } : {};
+  const t = g.tanks.find(t => t.id === id);
+  while (q.length > 6) {
+    const extra = q.shift();
+    if (t && t.alive && !(t.frozen > 0) && (g.phase === 'play' || g.phase === 'ending')) drive(g.grid, t, extra, DT);
+    S.ack[id] = extra.n;
+  }
+  const inp = q.shift();
+  S.inLast[id] = inp;
+  S.ack[id] = inp.n;
+  return inp;
 }
 
 function hostView() {
@@ -994,7 +1056,7 @@ function resetSession() {
   if (S.net) S.net.leave();
   Object.assign(S, {
     role: null, net: null, myId: 'me', hostId: null, roomName: '', password: '', listed: false,
-    humans: [], stage: 'lobby', roster: [], players: {}, g: null, brains: {}, peerInputs: {}, lastSeq: {},
+    humans: [], stage: 'lobby', roster: [], players: {}, g: null, brains: {}, inQ: {}, inTop: {}, inLast: {}, ack: {},
     outEvents: [], room: null, paused: false,
   });
   resetClientView();
@@ -1127,7 +1189,7 @@ function frame(now) {
     if (isBoss() && S.g) {
       view = hostView();
     } else if (S.role === 'client') {
-      sendInput(now);
+      clientTick(dt);
       view = clientView(now, dt);
     }
     renderer.draw(view, { me: S.myId, dt: S.paused ? 0 : dt, time: now / 1000 });

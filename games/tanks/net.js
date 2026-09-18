@@ -103,6 +103,7 @@ async function connect({ will } = {}) {
       })));
     },
     onMessage(fn) { handlers.add(fn); return () => handlers.delete(fn); },
+    emit(topic, payload) { for (const h of handlers) h(topic, payload); },
     close() { for (const c of clients) c.end(false); },
   };
 }
@@ -215,6 +216,13 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
 
   link.onMessage(async (topic, payload) => {
     if (closed || !topic.startsWith(gTopic + '/')) return;
+    // Test hook: simulate a slow, jittery network (set from the console).
+    const lag = globalThis.__tanksLag;
+    if (lag && !payload.__late) {
+      const late = payload.slice(); late.__late = true;
+      setTimeout(() => link.emit(topic, late), lag.base + Math.random() * lag.jitter);
+      return;
+    }
     if (topic !== `${gTopic}/all` && topic !== `${gTopic}/to/${selfId}`) return;
     let m;
     try { m = await open(aes, payload); } catch { return; }
