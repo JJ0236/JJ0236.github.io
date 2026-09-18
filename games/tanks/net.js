@@ -152,6 +152,7 @@ function cleanAd(ad) {
     x: Math.max(0, Math.min(8, ad.x | 0)),
     m: ad.m === 'teams' ? 'teams' : 'ffa',
     s: ad.s === 'match' ? 'match' : 'lobby',
+    pv: ad.pv | 0,
   };
 }
 
@@ -262,7 +263,7 @@ export async function openGame(name, password, handlers, { host = false } = {}) 
   const publishAd = () => {
     if (!ad || closed) return;
     const body = { v: 2, listed: !!ad.listed, l: !!password, chk, ts: Date.now() };
-    if (ad.listed) Object.assign(body, { n: name.trim().slice(0, 24), h: ad.h, c: ad.c, x: ad.x, m: ad.m, s: ad.s });
+    if (ad.listed) Object.assign(body, { n: name.trim().slice(0, 24), h: ad.h, c: ad.c, x: ad.x, m: ad.m, s: ad.s, pv: ad.pv });
     link.publish(adTopic, JSON.stringify(body), { retain: true, qos: 1 });
   };
   const adTimer = host ? setInterval(publishAd, AD_EVERY) : 0;

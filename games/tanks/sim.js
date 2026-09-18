@@ -2,7 +2,7 @@
 // (or a solo game) calls step() sixty times a second with everyone's input;
 // clients only ever see snapshots of this state.
 
-import { COLS, ROWS, FLOOR, WALL, CRATE, ROTATION, MAPS, buildMap } from './maps.js';
+import { COLS, ROWS, FLOOR, WALL, CRATE, ROTATION, MAPS, buildMap } from './maps.js?v=3';
 
 export const TILE = 40;
 export const W = COLS * TILE;

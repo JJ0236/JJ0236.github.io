@@ -5,14 +5,18 @@
 import {
   createGame, step, snapshot, unpack, addPlayer, removePlayer, drive,
   POWERUPS, COLORS, TEAM, DEFAULT_SETTINGS, DT, wrap,
-} from './sim.js';
-import { MAPS, buildMap, mapName } from './maps.js';
-import { makeBrain, botInput } from './bots.js';
-import { createRenderer, drawIcon } from './render.js';
-import { openLobby, openGame, roomKey } from './net.js';
+} from './sim.js?v=3';
+import { MAPS, buildMap, mapName } from './maps.js?v=3';
+import { makeBrain, botInput } from './bots.js?v=3';
+import { createRenderer, drawIcon } from './render.js?v=3';
+import { openLobby, openGame, roomKey } from './net.js?v=3';
 
 const $ = id => document.getElementById(id);
 const MAX = 4;
+// Bump when host and guest code stop being compatible. Browsers can hold an
+// old copy for a few minutes after a deploy, so the two sides check.
+const PROTOCOL = 3;
+const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory'];
 const INTERP_MIN = 6;         // clients draw at least 100 ms behind the host
 const INTERP_MAX = 24;        // and at most 400 ms, however jittery the relay
@@ -198,12 +202,13 @@ function renderAds() {
     if (a.l) nm.insertAdjacentHTML('beforeend', '<svg class="lock" viewBox="0 0 10 11" fill="none" stroke="currentColor" stroke-width="1.4" aria-label="password"><rect x="1" y="5" width="8" height="5.5" rx="1"/><path d="M3 5V3.5a2 2 0 014 0V5"/></svg>');
     const mode = a.m === 'teams' ? 'red v blue' : 'free-for-all';
     left.querySelector('.meta').textContent =
-      `${a.c}/${a.x} players · ${mode} · ${a.s === 'match' ? 'playing' : 'in the lobby'} · host ${a.h}`;
+      `${a.c}/${a.x} players · ${mode} · ${a.s === 'match' ? 'playing' : 'in the lobby'} · host ${a.h}` +
+      (a.pv !== PROTOCOL ? (a.pv > PROTOCOL ? ' · newer version: refresh to join' : ' · host needs to refresh') : '');
     const btn = document.createElement('button');
     btn.className = 'gbtn small';
     btn.type = 'button';
     btn.textContent = 'Join';
-    btn.disabled = a.c >= a.x;
+    btn.disabled = a.c >= a.x || a.pv !== PROTOCOL;
     const askPassword = () => {
       let pw = row.querySelector('.pw');
       if (pw) { pw.querySelector('input').focus(); return; }
@@ -344,6 +349,12 @@ function hostHandlers() {
 
 function hostHello(peer, data) {
   const name = cleanName(data && data.name);
+  if (!data || data.pv !== PROTOCOL) {
+    S.net.send('version', { pv: PROTOCOL }, peer);
+    if (!S.warned) S.warned = {};
+    if (!S.warned[peer]) { S.warned[peer] = 1; toast(`${name} has an out-of-date copy of the game and needs to refresh.`); }
+    return;
+  }
   const known = S.humans.find(h => h.id === peer);
   if (known) { known.name = name; roomChanged(); return; }
   if (S.humans.length >= MAX) { S.net.send('full', 1, peer); return; }
@@ -388,6 +399,7 @@ function hostDrop(peer) {
 
 function roomState() {
   return {
+    pv: PROTOCOL,
     name: S.roomName,
     hostId: S.myId,
     createdAt: S.createdAt,
@@ -410,7 +422,7 @@ function roomChanged() {
 function advertise() {
   if (S.role !== 'host' || !S.net) return;
   S.net.announce({
-    listed: S.listed, h: myName,
+    listed: S.listed, h: myName, pv: PROTOCOL,
     c: S.humans.length, x: MAX, m: S.settings.mode, s: S.stage,
   });
   updateChrome();
@@ -480,13 +492,22 @@ async function startJoin(name, pw) {
 
 function clientHandlers() {
   return {
-    onPeerJoin(peer) { S.net && S.net.send('hello', { name: myName }, peer); },
+    onPeerJoin(peer) { S.net && S.net.send('hello', { name: myName, pv: PROTOCOL }, peer); },
     onPeerLeave(peer) {
       if (peer === S.hostId) leave('The host left, so the game ended.');
     },
     onMessage(type, data, peer) {
+      if (type === 'version' && !S.hostId) {
+        return leave(`You have an out-of-date copy of the game. ${REFRESH}, then join again.`, 'joinErr');
+      }
       if (type === 'room') {
         if (!data || data.hostId !== peer) return;
+        if (data.pv !== PROTOCOL) {
+          const older = !(data.pv > PROTOCOL);
+          return leave(older
+            ? `The host has an out-of-date copy of the game. Ask them to refresh their page, then join again.`
+            : `You have an out-of-date copy of the game. ${REFRESH}, then join again.`, 'joinErr');
+        }
         if (!S.hostId) {
           S.hostId = peer;
           clearTimeout(S.joinTimer);

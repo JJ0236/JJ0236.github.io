@@ -1,8 +1,8 @@
 // Computer tanks. A bot reads the same game state a player sees and returns
 // the same input a player would send, so the rules treat it identically.
 
-import { COLS, ROWS, FLOOR, WALL, CRATE } from './maps.js';
-import { TILE, TANK_R, wrap, tileAt, teamOf } from './sim.js';
+import { COLS, ROWS, FLOOR, WALL, CRATE } from './maps.js?v=3';
+import { TILE, TANK_R, wrap, tileAt, teamOf } from './sim.js?v=3';
 
 const LEVELS = {
   easy:   { err: 0.3,  react: 0.95, gap: 1.1,  dodge: 0.1,  lead: 0 },

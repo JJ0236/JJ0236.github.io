@@ -2,8 +2,8 @@
 // interpolated snapshot on a client. Colours come from the page's tokens so
 // the field follows the site theme.
 
-import { COLS, ROWS, WALL, CRATE } from './maps.js';
-import { TILE, W, H, TANK_R, POWERUPS } from './sim.js';
+import { COLS, ROWS, WALL, CRATE } from './maps.js?v=3';
+import { TILE, W, H, TANK_R, POWERUPS } from './sim.js?v=3';
 
 const GROUP_RING = { weapon: '--pu-weapon', defense: '--pu-defense', chaos: '--pu-chaos' };
 
