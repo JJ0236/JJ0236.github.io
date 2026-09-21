@@ -57,6 +57,19 @@
             <span class="btn btn-primary go">Play Tanks</span>
           </div>
         </a>
+        <a href="/games/derby/" class="game fade-up">
+          <canvas class="plate-map" id="derbyMap" width="420" height="300" aria-hidden="true"></canvas>
+          <div>
+            <div class="spec-head">
+              <span class="spec-name">Derby</span>
+              <span class="spec-dim">1–6 players</span>
+            </div>
+            <span class="spec-note">A demolition derby over a quarry, in 3D.</span>
+            <p>Last car running takes the round. Panels dent where you hit them, doors and bumpers hang loose and then come off, and a car that loses a wheel drags. The engine sits in the nose, so the old hands ram in reverse. The platform crumbles from the edges, containers drop from the sky and four crushers slam down on anyone parked underneath.</p>
+            <div class="facts">4 cars from compact to school bus · crushers, containers, crumbling edges · kill-cam</div>
+            <span class="btn btn-primary go">Play Derby</span>
+          </div>
+        </a>
       </div>
     </main>
   </div>
@@ -86,6 +99,45 @@
       spawns.forEach((p, i) => {
         ctx.fillStyle = cols[i];
         ctx.fillRect(p.c * s + 4, p.r * s + 5, s - 8, s - 10);
+      });
+    }
+    draw();
+    window.siteTheme && window.siteTheme.onChange(draw);
+  </script>
+  <script type="module">
+    // The Derby platform from above: floor cells, the bowl, pits, ramps and crushers.
+    import * as A from '/games/derby/arena.js?v=1';
+    const cv = document.getElementById('derbyMap');
+    const ctx = cv.getContext('2d');
+    function draw() {
+      const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      const W = cv.width, H = cv.height;
+      ctx.fillStyle = css('--canvas-bg');
+      ctx.fillRect(0, 0, W, H);
+      const s = (H - 24) / (A.N * A.CELL);
+      const ox = (W - A.N * A.CELL * s) / 2, oy = 12;
+      const X = x => ox + (x + A.HALF) * s, Y = z => oy + (z + A.HALF) * s;
+      const cells = A.startCells();
+      for (let j = 0; j < A.N; j++) for (let i = 0; i < A.N; i++) {
+        if (!cells[j * A.N + i]) continue;
+        const ring = A.ringOf(i, j);
+        ctx.fillStyle = ring < A.MIN_RING ? css('--line') : css('--hair');
+        ctx.fillRect(ox + i * A.CELL * s + 0.5, oy + j * A.CELL * s + 0.5, A.CELL * s - 1, A.CELL * s - 1);
+      }
+      ctx.strokeStyle = css('--rule'); ctx.lineWidth = 1.2;
+      for (const r of [A.BOWL_R, A.BOWL_R * 0.66, A.BOWL_R * 0.33]) { ctx.beginPath(); ctx.arc(X(0), Y(0), r * s, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.fillStyle = css('--head');
+      for (const r of A.RAMPS) {
+        const p = A.rampPoints(r);
+        ctx.beginPath(); ctx.moveTo(X(p[0][0]), Y(p[0][2])); ctx.lineTo(X(p[1][0]), Y(p[1][2])); ctx.lineTo(X(p[5][0]), Y(p[5][2])); ctx.lineTo(X(p[4][0]), Y(p[4][2])); ctx.closePath(); ctx.fill();
+      }
+      ctx.fillStyle = '#D9A21B';
+      for (const c of A.CRUSHERS) ctx.fillRect(X(c.x - A.PLATE.half), Y(c.z - A.PLATE.half), A.PLATE.half * 2 * s, A.PLATE.half * 2 * s);
+      const cols = ['#C2452F', '#2F6FA8', '#D9A21B', '#4E8A3E', '#8C4FA3', '#D56F21'];
+      A.spawnPoints(6).forEach((p, k) => {
+        ctx.save(); ctx.translate(X(p.x), Y(p.z)); ctx.rotate(-p.yaw);
+        ctx.fillStyle = cols[k]; ctx.fillRect(-4.5 * s * 1.4, -2 * s * 1.4, 9 * s * 1.4, 4 * s * 1.4);
+        ctx.restore();
       });
     }
     draw();

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Derby · Games · joshhicks.info</title>
+  <meta name="description" content="A 3D demolition derby in the browser. Six cars on a crumbling platform over a quarry: dent them, knock their doors off, shove them over the edge. Bots or friends, nothing to install." />
+  <meta property="og:title" content="Derby · joshhicks.info" />
+  <meta property="og:description" content="A 3D demolition derby in the browser. Six cars, a crumbling arena, crushers and falling containers." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://joshhicks.info/games/derby/" />
+  <meta property="og:image" content="https://joshhicks.info/assets/portfolio/og-card.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="alternate icon" href="/assets/favicon.ico" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+  <link rel="stylesheet" href="/styles/main.css" />
+  <script src="/scripts/theme.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+      }
+    }
+  </script>
+  <style>
+    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+    /* The window chrome. The 3D view keeps its own dusk light in both themes. */
+    :root {
+      --chrome: #262A1F;
+      --chrome-ink: #E8E0CC;
+      --chrome-dim: #A89F8A;
+      --veil: rgba(240, 235, 224, 0.72);
+      --gauge-ok: #6E9A58;
+      --gauge-warn: #D9A21B;
+      --gauge-bad: #C2452F;
+      --boost: #E8C33A;
+    }
+    :root[data-theme='dark'] {
+      --chrome: #0F120C;
+      --chrome-ink: #E3DDCD;
+      --chrome-dim: #8F8877;
+      --veil: rgba(23, 26, 20, 0.74);
+    }
+
+    .stage { flex: 1; margin-top: 46px; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 16px; }
+
+    .window {
+      position: relative;
+      display: flex; flex-direction: column;
+      background: var(--chrome);
+      border: 2px solid var(--chrome);
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(30, 22, 10, 0.28), 0 2px 6px rgba(30, 22, 10, 0.2);
+      overflow: hidden;
+      font-family: var(--font-ui);
+      user-select: none;
+    }
+    .window:fullscreen { width: 100vw !important; height: 100vh !important; border-radius: 0; border: 0; }
+    .window input { user-select: text; }
+    .bar {
+      height: 38px; flex: none;
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 14px;
+      color: var(--chrome-ink);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .bar .grow { flex: 1; min-width: 0; overflow: hidden; }
+    .wordmark { font-weight: 800; letter-spacing: 0.22em; font-size: 13px; color: var(--chrome-ink); }
+    .dim { color: var(--chrome-dim); }
+    .card .dim { color: var(--ink-faint); }
+    .iconbtn { background: none; border: 1px solid transparent; color: var(--chrome-dim); border-radius: 4px; width: 28px; height: 26px; display: grid; place-items: center; cursor: pointer; }
+    .iconbtn:hover { color: var(--chrome-ink); border-color: rgba(255,255,255,0.18); }
+    .iconbtn svg { width: 15px; height: 15px; }
+
+    .field-wrap { position: relative; flex: 1; min-height: 0; background: #2B2118; }
+    #field { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+    /* Title bar: who is still running */
+    .scores { display: flex; gap: 16px; align-items: center; }
+    .score { display: flex; align-items: center; gap: 7px; }
+    .score.out { opacity: 0.38; text-decoration: line-through; text-decoration-thickness: 1px; }
+    .swatch { width: 11px; height: 11px; border-radius: 2px; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35); }
+    .pips { display: inline-flex; gap: 3px; }
+    .pips i { width: 7px; height: 7px; border: 1px solid var(--chrome-dim); border-radius: 50%; }
+    .pips i.on { background: var(--chrome-ink); border-color: var(--chrome-ink); }
+
+    /* Status bar: engine, boost, damage */
+    .dash { display: flex; gap: 18px; align-items: center; }
+    .gauge { display: flex; align-items: center; gap: 8px; }
+    .gauge .lbl2 { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--chrome-dim); text-transform: uppercase; }
+    .meter { width: 120px; height: 10px; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
+    .meter i { display: block; height: 100%; width: 0; background: var(--gauge-ok); transition: width 120ms linear; }
+    .meter.boost i { background: var(--boost); }
+    .gauge b { font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; font-weight: 700; }
+    .dmg { width: 44px; height: 24px; }
+    .buffs { display: flex; gap: 12px; color: var(--chrome-ink); font-weight: 700; letter-spacing: 0.04em; }
+    .muted { color: var(--chrome-dim); }
+
+    /* Screens inside the window */
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      background: var(--veil);
+      overflow: auto;
+    }
+    .screen[hidden] { display: none; }
+    .card {
+      width: min(560px, 100%);
+      margin: auto;
+      background: var(--surface);
+      border: 2px solid var(--ink);
+      border-radius: 6px;
+      box-shadow: 6px 6px 0 rgba(30, 22, 10, 0.22);
+      padding: 22px 24px;
+      color: var(--ink);
+    }
+    .card.wide { width: min(900px, 100%); }
+    .card h2 { font-family: var(--font-ui); font-size: 15px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); margin-bottom: 14px; }
+    .card p.lede { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); font-size: 15px; margin: -6px 0 14px; line-height: 1.5; }
+
+    #title { background: linear-gradient(to bottom, transparent 0%, var(--veil) 60%); align-items: flex-end; }
+    .title-block { width: min(560px, 100%); margin: 0 auto 3%; text-align: center; }
+    .logo {
+      font-family: var(--font-ui); font-weight: 900; font-size: clamp(56px, 8vw, 100px);
+      letter-spacing: 0.12em; line-height: 0.9; color: var(--head);
+      text-shadow: 4px 4px 0 var(--canvas-bg), 7px 7px 0 var(--ink);
+      margin-bottom: 8px; padding-left: 0.12em;
+    }
+    .subtitle { font-family: var(--font-body); font-style: italic; color: var(--ink); margin-bottom: 20px; font-size: 16px; }
+    .menu { display: grid; gap: 10px; width: min(340px, 100%); margin: 0 auto; }
+    .callsign { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--label); }
+    .callsign input { width: 12rem; text-align: center; font-weight: 600; }
+    .phone-note { display: none; margin: 0 auto 16px; max-width: 30rem; font-family: var(--font-body); font-style: italic; color: var(--ink); background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; padding: 10px 14px; }
+    @media (hover: none) and (pointer: coarse) { .phone-note { display: block; } }
+    .loading { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); margin-top: 12px; min-height: 1.4em; }
+
+    .gbtn {
+      font-family: var(--font-ui); font-weight: 800; font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase;
+      padding: 13px 18px; border-radius: 6px; cursor: pointer;
+      background: var(--accent); color: var(--accent-ink);
+      border: 2px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+      transform: translateY(0); transition: transform 80ms ease, box-shadow 80ms ease, background 120ms ease;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .gbtn:hover:not(:disabled), .gbtn:focus-visible { background: var(--moss-mid); color: #F2EDE1; }
+    .gbtn:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+    .gbtn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    .gbtn.alt { background: var(--surface); color: var(--ink); }
+    .gbtn.alt:hover:not(:disabled), .gbtn.alt:focus-visible { background: var(--raised); color: var(--head); }
+    .gbtn.small { font-size: 12px; padding: 9px 14px; box-shadow: 0 3px 0 var(--ink); }
+    .gbtn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .gbtn .count { font-size: 11px; letter-spacing: 0.06em; background: var(--accent); color: var(--accent-ink); border-radius: 10px; padding: 1px 7px; }
+    .gbtn .count:empty { display: none; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+    .row .spacer { flex: 1; }
+
+    .fields { display: grid; gap: 12px; }
+    .fields label, .lbl { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--label); margin-bottom: 5px; }
+    .fields input[type=text], .fields input[type=password] { width: 100%; }
+    .fields label.check { display: flex; gap: 8px; align-items: center; font-family: var(--font-body); font-size: 15px; color: var(--ink); text-transform: none; letter-spacing: 0; font-weight: 400; margin: 0; }
+    .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+    .err { color: var(--danger); font-family: var(--font-body); font-size: 14px; margin-top: 10px; min-height: 1.3em; }
+
+    .join-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 22px; }
+    .games-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .relay { font-size: 11px; color: var(--ink-faint); }
+    .game-list { border: 2px solid var(--ink); border-radius: 6px; background: var(--field-bg); min-height: 180px; max-height: 300px; overflow: auto; }
+    .game-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .game-row:last-child { border-bottom: 0; }
+    .game-row .nm { font-family: var(--font-body); font-weight: 600; font-size: 16px; color: var(--ink); }
+    .game-row .meta { font-size: 11px; color: var(--ink-soft); margin-top: 2px; letter-spacing: 0.02em; }
+    .game-row .pw { display: flex; gap: 8px; margin-top: 8px; }
+    .game-row .pw input { width: 11rem; }
+    .empty { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); padding: 14px 12px; font-size: 14px; }
+    .lock { display: inline-block; width: 10px; height: 11px; margin-left: 6px; vertical-align: -1px; }
+
+    .how-cols { display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; }
+    .keys { display: grid; gap: 9px; }
+    .key-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; font-family: var(--font-body); font-size: 15px; color: var(--ink); }
+    kbd { font-family: var(--font-ui); font-size: 11px; font-weight: 700; border: 2px solid var(--ink); border-bottom-width: 3px; border-radius: 4px; padding: 1px 6px; background: var(--raised); color: var(--ink); }
+    .rules { font-family: var(--font-body); font-size: 14px; color: var(--ink-soft); line-height: 1.55; }
+    .rules p + p { margin-top: 10px; }
+    .rules b { color: var(--ink); font-weight: 600; }
+
+    /* Room */
+    .room-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .room-head h2 { margin: 0; font-size: 20px; letter-spacing: 0.1em; }
+    .room-meta { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--label); }
+    .room-hint { font-family: var(--font-body); font-style: italic; font-size: 14px; color: var(--ink-soft); margin-bottom: 14px; }
+    .room-cols { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; }
+    .slot { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 16px; color: var(--ink); }
+    .slot:last-child { border-bottom: 0; }
+    .slot .nm { flex: 1; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .slot .tagx { font-family: var(--font-ui); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; }
+    .slot .swatch { width: 14px; height: 14px; }
+    .slot.open { color: var(--ink-faint); font-style: italic; }
+    .slot.open .swatch { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); }
+    .slot select { width: 9.5rem; font-size: 13px; }
+    .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 15px; color: var(--ink); }
+    .setting:last-child { border-bottom: 0; }
+    .setting select { width: 11rem; }
+    .setting input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+    .start-hint { font-family: var(--font-body); font-style: italic; font-size: 14px; color: var(--ink-soft); }
+    .classes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+    .cls { border: 2px solid var(--hair); border-radius: 6px; padding: 8px 10px; background: var(--raised); cursor: pointer; text-align: left; color: var(--ink); font-family: var(--font-body); }
+    .cls[aria-pressed=true] { border-color: var(--ink); box-shadow: 0 3px 0 var(--ink); background: var(--surface); }
+    .cls b { display: block; font-family: var(--font-ui); font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    .cls span { display: block; font-style: italic; font-size: 13px; color: var(--ink-soft); }
+    .cls .bars { display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; margin-top: 6px; font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.08em; color: var(--label); text-transform: uppercase; align-items: center; }
+    .cls .bars i { display: block; height: 5px; background: var(--hair); border-radius: 1px; }
+    .cls .bars i s { display: block; height: 100%; background: var(--accent); text-decoration: none; }
+
+    /* In play */
+    .banner { position: absolute; left: 50%; top: 26%; transform: translate(-50%, -50%); text-align: center; pointer-events: none; background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; box-shadow: 5px 5px 0 rgba(30,22,10,0.22); padding: 12px 28px; }
+    .banner[hidden] { display: none; }
+    .banner b { display: block; font-family: var(--font-ui); font-weight: 900; font-size: 26px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--head); }
+    .banner span { font-family: var(--font-body); font-style: italic; color: var(--ink-soft); }
+    .count-big { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%); font-family: var(--font-ui); font-weight: 900; font-size: 120px; color: #F4EEE0; text-shadow: 5px 5px 0 #1D1B18; pointer-events: none; }
+    .count-big[hidden] { display: none; }
+    .tagline { position: absolute; left: 14px; top: 12px; font-family: var(--font-ui); font-weight: 900; font-size: 14px; letter-spacing: 0.3em; color: #F4EEE0; background: #B8321E; padding: 5px 10px; border-radius: 3px; pointer-events: none; }
+    .tagline[hidden] { display: none; }
+    .feed { position: absolute; right: 12px; top: 12px; display: grid; gap: 6px; justify-items: end; pointer-events: none; }
+    .feed div { font-family: var(--font-ui); font-size: 13px; font-weight: 700; color: #F4EEE0; background: rgba(20, 18, 15, 0.7); padding: 5px 10px; border-radius: 3px; animation: feed 5s forwards; }
+    .feed .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 5px; vertical-align: 0; }
+    @keyframes feed { 0% { opacity: 0; transform: translateX(10px); } 6% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
+    .spect { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font-family: var(--font-body); font-style: italic; font-size: 14px; color: #F4EEE0; background: rgba(20, 18, 15, 0.7); padding: 6px 14px; border-radius: 4px; pointer-events: none; }
+    .spect[hidden] { display: none; }
+    .standings .st { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-family: var(--font-body); font-size: 16px; color: var(--ink); }
+    .standings .st:last-child { border-bottom: 0; }
+    .standings .st span:last-child { color: var(--ink-soft); font-variant-numeric: lining-nums tabular-nums; }
+
+    .toast { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); background: var(--surface); border: 2px solid var(--ink); border-radius: 6px; padding: 9px 16px; z-index: 5; font-family: var(--font-body); font-size: 14px; color: var(--ink); max-width: calc(100% - 32px); box-shadow: 4px 4px 0 rgba(30,22,10,0.2); }
+    .toast[hidden] { display: none; }
+
+    @media (max-width: 760px) {
+      .join-cols, .how-cols, .room-cols { grid-template-columns: 1fr; }
+      .classes { grid-template-columns: 1fr 1fr; }
+      .scores { gap: 10px; }
+      .stage { padding: 8px; }
+      .meter { width: 70px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="tool-header">
+  <a href="/games/" class="tool-header-back">
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2L4 7l5 5"/></svg>
+    Games
+  </a>
+  <span class="tool-header-site">joshhicks.info</span>
+</header>
+
+<main class="stage">
+  <div class="window" id="win">
+    <div class="bar">
+      <span class="wordmark">DERBY</span>
+      <span class="dim" id="context"></span>
+      <div class="grow"><div class="scores" id="scores"></div></div>
+      <span class="dim" id="roundLabel"></span>
+      <button class="iconbtn" id="fsBtn" type="button" title="Full screen" aria-label="Full screen">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>
+      </button>
+    </div>
+
+    <div class="field-wrap" id="fieldWrap">
+      <canvas id="field"></canvas>
+      <div class="banner" id="banner" hidden><b id="bannerTitle"></b><span id="bannerSub"></span></div>
+      <div class="count-big" id="countBig" hidden></div>
+      <div class="tagline" id="replayTag" hidden>KILL CAM</div>
+      <div class="feed" id="feed" aria-live="polite"></div>
+      <div class="spect" id="spect" hidden></div>
+
+      <section class="screen" id="title">
+        <div class="title-block">
+          <p class="phone-note">Derby needs a keyboard. Open this page on a computer to play.</p>
+          <div class="logo">DERBY</div>
+          <div class="subtitle">Last car running takes the round.</div>
+          <nav class="menu" id="mainMenu">
+            <button class="gbtn" type="button" id="soloBtn">Play vs bots</button>
+            <button class="gbtn alt" type="button" data-go="host">Host a game</button>
+            <button class="gbtn alt" type="button" data-go="join">Join a game <span class="count" id="openCount"></span></button>
+            <button class="gbtn alt" type="button" data-go="how">How to play</button>
+          </nav>
+          <label class="callsign">Name <input type="text" id="nameIn" maxlength="14" autocomplete="nickname" spellcheck="false" /></label>
+          <p class="loading" id="loading">Loading the physics engine…</p>
+        </div>
+      </section>
+
+      <section class="screen" id="host" hidden>
+        <div class="card">
+          <h2>Host a game</h2>
+          <p class="lede">Your browser runs the match. Friends join with the room name, and the password if you set one.</p>
+          <div class="fields">
+            <div><label for="hostName">Room name</label><input type="text" id="hostName" maxlength="24" spellcheck="false" placeholder="e.g. scrapyard" /></div>
+            <div><label for="hostPw">Password <span class="dim">(optional)</span></label><input type="password" id="hostPw" maxlength="40" autocomplete="new-password" /></div>
+            <label class="check"><input type="checkbox" id="hostPublic" checked /> Show it in the open games list</label>
+          </div>
+          <div class="err" id="hostErr"></div>
+          <div class="row">
+            <button class="gbtn" type="button" id="hostBtn">Create room</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" data-back>Back</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="join" hidden>
+        <div class="card wide">
+          <h2>Join a game</h2>
+          <div class="join-cols">
+            <div>
+              <div class="games-head"><span class="lbl">Open games</span><span class="relay" id="relayState">connecting…</span></div>
+              <div class="game-list" id="gameList"><p class="empty">Looking for games…</p></div>
+            </div>
+            <div>
+              <span class="lbl">Join by name</span>
+              <div class="fields">
+                <div><label for="joinName">Room name</label><input type="text" id="joinName" maxlength="24" spellcheck="false" /></div>
+                <div><label for="joinPw">Password</label><input type="password" id="joinPw" maxlength="40" autocomplete="off" /></div>
+              </div>
+              <div class="row"><button class="gbtn" type="button" id="joinBtn">Join</button></div>
+              <div class="err" id="joinErr"></div>
+            </div>
+          </div>
+          <div class="row"><span class="spacer"></span><button class="gbtn alt small" type="button" data-back>Back</button></div>
+        </div>
+      </section>
+
+      <section class="screen" id="how" hidden>
+        <div class="card wide">
+          <h2>How to play</h2>
+          <div class="how-cols">
+            <div class="keys">
+              <div class="key-row">Accelerate, reverse <span><kbd>W</kbd> <kbd>S</kbd></span></div>
+              <div class="key-row">Steer <span><kbd>A</kbd> <kbd>D</kbd></span></div>
+              <div class="key-row">Handbrake <span><kbd>Space</kbd></span></div>
+              <div class="key-row">Boost <span><kbd>Shift</kbd></span></div>
+              <div class="key-row">Look behind <span><kbd>C</kbd></span></div>
+              <div class="key-row">Flip upright <span><kbd>R</kbd></span></div>
+              <div class="key-row">Watch someone else <span><kbd>Q</kbd> <kbd>E</kbd></span></div>
+              <div class="key-row">Menu <span><kbd>Esc</kbd></span></div>
+            </div>
+            <div class="rules">
+              <p>Last car running takes the round. You are out when your <b>engine dies</b> or you <b>go over the edge</b>.</p>
+              <p>The car doing the ramming takes less than the car it hits. But the engine sits in the nose, so a head-on hurts you both: old derby hands ram in reverse. A hit in the side tears doors off. Parts hang loose, then come off, and a car that loses a wheel drags.</p>
+              <p>From 45 seconds the edge crumbles, a ring at a time. Containers drop where the red ring shows. Stay out from under the four crushers when their pads flash.</p>
+              <p>Pickups: <b>repair</b> (engine +40), <b>armour</b> (half damage), <b>plough</b> (your nose hits twice as hard) and <b>boost</b>.</p>
+            </div>
+          </div>
+          <div class="row"><span class="spacer"></span><button class="gbtn alt small" type="button" data-back>Back</button></div>
+        </div>
+      </section>
+
+      <section class="screen" id="room" hidden>
+        <div class="card wide">
+          <div class="room-head"><h2 id="roomTitle">Room</h2><span class="room-meta" id="roomMeta"></span></div>
+          <p class="room-hint" id="roomHint"></p>
+          <div class="room-cols">
+            <div>
+              <span class="lbl">Cars <span class="dim" id="rosterCount"></span></span>
+              <div id="roster"></div>
+            </div>
+            <div>
+              <span class="lbl">Settings</span>
+              <div class="setting"><label for="setRounds">Rounds to win</label>
+                <select id="setRounds"><option>1</option><option selected>3</option><option>5</option></select>
+              </div>
+              <div class="setting"><label for="setBots">Bots</label>
+                <select id="setBots"><option value="0">none</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+              </div>
+              <div class="setting"><label for="setLevel">Bot skill</label>
+                <select id="setLevel"><option value="easy">easy</option><option value="normal">normal</option><option value="hard">hard</option></select>
+              </div>
+              <div class="setting"><label for="setHazards">Crushers, containers, crumbling</label><input type="checkbox" id="setHazards" /></div>
+              <div class="setting"><label for="setPickups">Pickups</label><input type="checkbox" id="setPickups" /></div>
+            </div>
+          </div>
+          <span class="lbl" style="margin-top:16px">Your car</span>
+          <div class="classes" id="classes"></div>
+          <div class="row">
+            <button class="gbtn" type="button" id="startBtn">Start match</button>
+            <span class="start-hint" id="startHint"></span>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="leaveBtn">Leave</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="pause" hidden>
+        <div class="card">
+          <h2 id="pauseTitle">Paused</h2>
+          <p class="lede" id="pauseNote">Esc to carry on.</p>
+          <div class="row">
+            <button class="gbtn" type="button" id="resumeBtn">Resume</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="quitBtn">Leave game</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="over" hidden>
+        <div class="card">
+          <h2 id="overTitle">Match over</h2>
+          <div class="standings" id="standings"></div>
+          <div class="row" id="overActions">
+            <button class="gbtn" type="button" id="rematchBtn">Rematch</button>
+            <span class="spacer"></span>
+            <button class="gbtn alt small" type="button" id="backBtn">Back to room</button>
+          </div>
+          <p class="lede" id="overNote" style="margin-top:12px"></p>
+        </div>
+      </section>
+
+      <div class="toast" id="toast" role="status" hidden></div>
+    </div>
+
+    <div class="bar">
+      <div class="grow"><div class="dash" id="dash"></div></div>
+      <span class="dim" id="netLabel"></span>
+    </div>
+  </div>
+</main>
+
+<script type="module" src="./game.js?v=1"></script>
+</body>
+</html>
