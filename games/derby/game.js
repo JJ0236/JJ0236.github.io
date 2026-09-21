@@ -5,18 +5,18 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=2';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=2';
-import { makeBrain, botInput } from './bots.js?v=2';
-import { createRenderer } from './render.js?v=2';
-import { openLobby, openGame } from '../shared/net.js?v=2';
+} from './sim.js?v=3';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=3';
+import { makeBrain, botInput } from './bots.js?v=3';
+import { createRenderer } from './render.js?v=3';
+import { openLobby, openGame } from '../shared/net.js?v=3';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
 const $ = id => document.getElementById(id);
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 2;
+const PROTOCOL = 3;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory', 'Sorrel', 'Tamarack'];
 const INTERP_MIN = 4;

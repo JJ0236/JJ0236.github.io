@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import {
   createMatch, step, snapshot, unpackSnap, view, DT, yawQuat, rotate,
   createMirror, mirrorStep, mirrorCorrect, unpackCar, packCar,
-} from './sim.js?v=2';
-import { makeBrain, botInput } from './bots.js?v=2';
-import * as A from './arena.js?v=2';
-import { PART_IDS } from './cars.js?v=2';
+} from './sim.js?v=3';
+import { makeBrain, botInput } from './bots.js?v=3';
+import * as A from './arena.js?v=3';
+import { PART_IDS } from './cars.js?v=3';
 
 const mod = await import(process.env.RAPIER || '@dimforge/rapier3d-compat');
 const R = mod.default || mod;
@@ -217,4 +217,20 @@ test("a guest's own world tracks the host's car", () => {
   }
   assert.ok(worst < 0.5, `guest stayed within ${worst.toFixed(3)} m of the host`);
   mr.world.free();
+});
+
+test('once every person is out, the healthiest bot takes the round', () => {
+  const players = [{ id: 'me', name: 'Me', cls: 'sedan' }, { id: 'b1', name: 'B1', cls: 'sedan', bot: true }, { id: 'b2', name: 'B2', cls: 'sedan', bot: true }];
+  const m = createMatch(R, { hazards: false, pickups: false }, players, 4);
+  m.phase = 'play'; m.t = 0;
+  place(m.cars[0], -20, -40, FACE_X);
+  place(m.cars[1], 0, -40, FACE_X);
+  place(m.cars[2], 20, -40, FACE_X);
+  m.cars[1].engine = 40;
+  m.cars[0].engine = 0;
+  m.cars[0].out = 'wreck';
+  const ev = run(m, 60 * 5);
+  const end = ev.find(e => e.type === 'roundEnd');
+  assert.ok(end, 'the round ended');
+  assert.equal(end.winner, 'b2');
 });

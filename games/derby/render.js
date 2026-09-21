@@ -8,8 +8,8 @@
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=2';
-import * as A from './arena.js?v=2';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=3';
+import * as A from './arena.js?v=3';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const tmpV = V(), tmpV2 = V(), tmpQ = new THREE.Quaternion();
@@ -582,7 +582,7 @@ export function createRenderer(canvas) {
 
   function orbit(dt, time) {
     cam.orbit += dt * 0.06;
-    const r = 62, a = cam.orbit;
+    const r = 76, a = cam.orbit;
     cam.pos.lerp(V(Math.cos(a) * r, 30 + Math.sin(time * 0.1) * 4, Math.sin(a) * r), 1 - Math.exp(-dt * 2));
     cam.look.lerp(V(0, -2, 0), 1 - Math.exp(-dt * 2));
   }

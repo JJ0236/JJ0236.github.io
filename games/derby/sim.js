@@ -6,14 +6,15 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=2';
-import * as A from './arena.js?v=2';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=3';
+import * as A from './arena.js?v=3';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
 export const COUNTDOWN = 3;
 export const ROUND_END = 5.5;        // seconds between a round's end and the next
 export const ROUND_LIMIT = 240;
+export const BOTS_ONLY_WAIT = 3;   // seconds after the last person is out
 export const PICKUP_KINDS = ['repair', 'armour', 'plough', 'boost'];
 export const PICKUPS = {
   repair: { name: 'Repair', note: '+40 engine' },
@@ -189,6 +190,7 @@ export function startRound(m) {
   m.t = -COUNTDOWN;
   m.endAt = 0;
   m.winner = undefined;
+  m.humansOutAt = undefined;
   m.world = new R.World({ x: 0, y: -9.81, z: 0 });
   m.world.timestep = DT;
   m.queue = new R.EventQueue(true);
@@ -417,9 +419,14 @@ export function step(m, inputs) {
   if (m.phase === 'play') {
     const alive = m.cars.filter(c => !c.out);
     const limit = m.t >= ROUND_LIMIT;
-    if (alive.length <= 1 || limit) {
+    // Once every person is out, nobody wants to watch bots circle: after a
+    // moment for the kill-cam, the healthiest bot takes the round.
+    const humans = m.cars.filter(c => m.players.some(p => p.id === c.id && !p.bot));
+    if (humans.length && humans.every(c => c.out)) m.humansOutAt ??= m.t;
+    const botsOnly = m.humansOutAt !== undefined && m.t - m.humansOutAt >= BOTS_ONLY_WAIT;
+    if (alive.length <= 1 || limit || botsOnly) {
       let w = alive.length === 1 ? alive[0] : null;
-      if (limit && alive.length > 1) w = alive.slice().sort((a, b) => b.engine - a.engine)[0];
+      if (alive.length > 1) w = alive.slice().sort((a, b) => b.engine - a.engine)[0];
       m.winner = w ? w.id : null;
       if (w) m.wins[w.id]++;
       m.phase = 'roundEnd';

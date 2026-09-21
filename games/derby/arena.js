@@ -6,13 +6,13 @@
 // were never there, and crumbling removes whole rings of cells from the
 // outside in.
 
-export const N = 24;
+export const N = 30;
 export const CELL = 4;
-export const HALF = (N * CELL) / 2;          // 48 m from the middle to an edge
+export const HALF = (N * CELL) / 2;          // 60 m from the middle to an edge
 export const FALL_Y = -8;                    // below this a car is out
-export const BOWL_R = 15;
+export const BOWL_R = 18;
 export const BOWL_DEPTH = 2.2;
-export const MIN_RING = 7;                   // rings 0..6 can crumble; 10x10 cells stay
+export const MIN_RING = 9;                   // rings 0..8 can crumble; 12x12 cells stay
 
 /** Floor height at a point, ignoring holes. */
 export function heightAt(x, z) {
@@ -29,19 +29,19 @@ export const cellCentre = i => -HALF + (i + 0.5) * CELL;
 export const ringOf = (i, j) => Math.min(i, j, N - 1 - i, N - 1 - j);
 
 // Four 2x2 pits near the corners.
-export const PITS = [[-28, -28], [28, -28], [-28, 28], [28, 28]];
+export const PITS = [[-36, -36], [36, -36], [-36, 36], [36, 36]];
 
 // Four ramps facing the bowl, high end inward.
 export const RAMPS = [
-  { x: 31, z: 0, dir: [-1, 0] },
-  { x: -31, z: 0, dir: [1, 0] },
-  { x: 0, z: 31, dir: [0, -1] },
-  { x: 0, z: -31, dir: [0, 1] },
+  { x: 38, z: 0, dir: [-1, 0] },
+  { x: -38, z: 0, dir: [1, 0] },
+  { x: 0, z: 38, dir: [0, -1] },
+  { x: 0, z: -38, dir: [0, 1] },
 ];
 export const RAMP = { L: 9, W: 6, H: 1.7 };
 
 // Four hydraulic crushers on the diagonals, inside the rings that never crumble.
-export const CRUSHERS = [[17, 17], [-17, 17], [17, -17], [-17, -17]].map(([x, z], k) => ({ x, z, k }));
+export const CRUSHERS = [[20, 20], [-20, 20], [20, -20], [-20, -20]].map(([x, z], k) => ({ x, z, k }));
 export const PLATE = { half: 3.4, top: 10, bottom: 1.05, thick: 0.9 };
 // One cycle, in seconds: idle up top, shake, slam, hold, rise.
 export const CRUSH_CYCLE = { idle: 6.5, warn: 1.3, slam: 0.22, hold: 1.1, rise: 1.6 };
@@ -74,7 +74,7 @@ export const firstSlam = k => CRUSH_START + k * (CYCLE / 4) * 0.85 + CRUSH_CYCLE
 // Crumbling: the outer ring starts cracking at CRUMBLE_START, falls
 // CRUMBLE_WARN later, and the next ring follows every CRUMBLE_EVERY.
 export const CRUMBLE_START = 45;
-export const CRUMBLE_EVERY = 12;
+export const CRUMBLE_EVERY = 11;
 export const CRUMBLE_WARN = 3;
 
 /** Which ring (if any) is cracking or has fallen by time t. */
@@ -159,7 +159,7 @@ export function spawnPoints(n) {
   const out = [];
   for (let k = 0; k < n; k++) {
     const a = (k / n) * Math.PI * 2 + Math.PI / 6;
-    const x = Math.cos(a) * 24, z = Math.sin(a) * 24;
+    const x = Math.cos(a) * 30, z = Math.sin(a) * 30;
     out.push({ x, z, yaw: Math.atan2(z, -x) });
   }
   return out;

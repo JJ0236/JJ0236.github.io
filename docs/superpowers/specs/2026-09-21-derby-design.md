@@ -85,7 +85,7 @@ Tanks keeps its import path and its topics.
 
 ## Arena: "The Quarry"
 
-- A raised square platform, about 90 m across, over a drop. A car below
+- A raised square platform, 120 m across (30 cells of 4 m), over a drop. A car below
   `y = -8` is out.
 - The floor is a height grid (trimesh collider): a shallow bowl in the
   middle, four pits near the corners, and four ramps facing the bowl.
@@ -115,7 +115,9 @@ At most three on the floor, respawning: **repair** (+40 engine),
 
 ## Rounds
 
-3 s countdown, then last car running wins. A match is first to N round wins
+3 s countdown, then last car running wins. Once every person in the match
+is out, the round ends 3 s later (time for the kill-cam) and the bot with
+the healthiest engine takes it: nobody has to watch bots circle. A match is first to N round wins
 (3 by default). Crumbling guarantees an end; if two cars are still running
 at 4 minutes, the healthier engine wins.
 
