@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=3';
-import * as A from './arena.js?v=3';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=4';
+import * as A from './arena.js?v=4';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -482,6 +482,8 @@ function gatherHits(m) {
     const p = g.p.map(v => v / g.w);
     const cars = [g.o1 && g.o1.car, g.o2 && g.o2.car];
     const boxes = [g.o1 && g.o1.box, g.o2 && g.o2.box];
+    // A container can sink away while its hit is still being gathered.
+    if (boxes.some(b => b && !m.owners.has(b.col.handle))) continue;
     const worldHit = !g.o1 || !g.o2;
     // Landing on the floor is not a crash; hitting a pillar or ramp side is.
     if (worldHit && Math.abs(g.n[1]) > 0.6) continue;
@@ -695,9 +697,10 @@ function applyPickup(car, kind) {
 export function addPlayer(m, p) {
   if (m.players.some(q => q.id === p.id)) return;
   if (m.players.length >= MAX_CARS) {
+    // The bot finishes this round; its seat is the newcomer's from the next.
     const bot = [...m.players].reverse().find(q => q.bot);
     if (!bot) return false;
-    removePlayer(m, bot.id);
+    m.players = m.players.filter(q => q !== bot);
   }
   m.players.push({ id: p.id, name: p.name, bot: !!p.bot, cls: CLASSES[p.cls] ? p.cls : 'sedan', seat: m.players.length });
   recolour(m);

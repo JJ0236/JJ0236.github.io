@@ -8,8 +8,8 @@
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=3';
-import * as A from './arena.js?v=3';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=4';
+import * as A from './arena.js?v=4';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const tmpV = V(), tmpV2 = V(), tmpQ = new THREE.Quaternion();
@@ -22,11 +22,14 @@ function hash(n) { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.f
 
 export function createRenderer(canvas) {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  gl.setPixelRatio(Math.min(1.75, window.devicePixelRatio || 1));
   gl.shadowMap.enabled = true;
   gl.shadowMap.type = THREE.PCFShadowMap;
   gl.toneMapping = THREE.ACESFilmicToneMapping;
   gl.toneMappingExposure = 1.05;
+  // Checking every shader for errors makes the browser wait on each compile.
+  gl.debug.checkShaderErrors = false;
+  const MAX_RATIO = Math.min(1.75, window.devicePixelRatio || 1);
+  let ratio = MAX_RATIO;
 
   const scene = new THREE.Scene();
   const HORIZON = new THREE.Color('#D7A07A');
@@ -237,10 +240,15 @@ export function createRenderer(canvas) {
     }
     for (const [id, o] of boxes) {
       if (seen.has(id)) continue;
-      scene.remove(o.mesh, o.ring, o.shadow);
-      o.mesh.material.dispose();
+      dropBox(o);
       boxes.delete(id);
     }
+  }
+
+  function dropBox(o) {
+    scene.remove(o.mesh, o.ring, o.shadow);
+    o.mesh.material.dispose();
+    o.shadow.geometry.dispose();
   }
 
   // ── Pickups ──
@@ -284,6 +292,7 @@ export function createRenderer(canvas) {
     for (const [id, o] of pickupObjs) {
       if (seen.has(id)) continue;
       scene.remove(o.root);
+      disposeTree(o.root);
       pickupObjs.delete(id);
     }
   }
@@ -299,6 +308,23 @@ export function createRenderer(canvas) {
   const headMat = new THREE.MeshStandardMaterial({ color: '#FFF4D6', emissive: '#FFE9B0', emissiveIntensity: 1.2 });
   const tailMat = new THREE.MeshStandardMaterial({ color: '#8A1E14', emissive: '#E0301E', emissiveIntensity: 0.6 });
   const bladeMat = new THREE.MeshStandardMaterial({ color: '#B8BDC0', metalness: 0.85, roughness: 0.3, flatShading: true });
+
+  // Everything shared between cars, containers and pickups: never disposed.
+  const shared = new Set([wheelGeo, tyreMat, hubMat, glassMat, trimMat, headMat, tailMat, bladeMat,
+    boxGeo, warnGeo, warnMat, shadowMat, corrugate, stripe, slabGeo, rock, steel]);
+  /** Free the GPU memory of whatever a removed object owned itself. */
+  function disposeTree(root, { materials = true } = {}) {
+    root.traverse(o => {
+      // Sprites all share one geometry inside three.js: leave it.
+      if (o.geometry && !o.isSprite && !shared.has(o.geometry)) o.geometry.dispose();
+      if (!materials || !o.material) return;
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (shared.has(m)) continue;
+        if (m.map && !shared.has(m.map)) m.map.dispose();
+        m.dispose();
+      }
+    });
+  }
 
   function segs(n) { return Math.max(1, Math.min(10, Math.round(n / 0.32))); }
 
@@ -391,7 +417,7 @@ export function createRenderer(canvas) {
 
   function disposeCar(c) {
     scene.remove(c.root);
-    c.root.traverse(o => { if (o.isMesh && o.geometry !== wheelGeo) o.geometry.dispose(); });
+    disposeTree(c.root);
     c.paint.dispose();
   }
 
@@ -456,15 +482,19 @@ export function createRenderer(canvas) {
       size = Math.max(...part.def.size) / 2;
     }
     scene.add(obj);
+    // Materials only this part uses (the roof's number) are freed with it.
+    const own = [];
+    obj.traverse(o => {
+      for (const mt of o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []) {
+        if (mt !== c.paint && !shared.has(mt) && !own.includes(mt)) own.push(mt);
+      }
+    });
     const out = V().subVectors(obj.position, c.root.position).setY(0).normalize();
     const v = V(...(vel || [0, 0, 0])).addScaledVector(out, 3 + Math.random() * 4);
     v.y += 3 + Math.random() * 4;
-    debris.push({ obj, v, w: V(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(9), r: Math.max(0.15, Math.min(0.6, size * 0.4)), age: 0, rest: 0 });
+    debris.push({ obj, own, v, w: V(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(9), r: Math.max(0.15, Math.min(0.6, size * 0.4)), age: 0, rest: 0 });
     sparks(obj.position, 16);
-    while (debris.length > DEBRIS_MAX) {
-      const d = debris.shift();
-      scene.remove(d.obj);
-    }
+    while (debris.length > DEBRIS_MAX) dropDebris(debris.shift());
   }
 
   function stepDebris(dt, carViews) {
@@ -502,7 +532,7 @@ export function createRenderer(canvas) {
       if (p.y < -70) d.rest = 99;
     }
     for (let i = debris.length - 1; i >= 0; i--) {
-      if (debris[i].obj.position.y < -70) { scene.remove(debris[i].obj); debris.splice(i, 1); }
+      if (debris[i].obj.position.y < -70) { dropDebris(debris[i]); debris.splice(i, 1); }
     }
     // Slabs
     let n = 0;
@@ -518,8 +548,14 @@ export function createRenderer(canvas) {
     slabs.instanceMatrix.needsUpdate = true;
   }
 
+  function dropDebris(d) {
+    scene.remove(d.obj);
+    disposeTree(d.obj, { materials: false });
+    for (const mt of d.own || []) { if (mt.map) mt.map.dispose(); mt.dispose(); }
+  }
+
   function clearDebris() {
-    for (const d of debris) scene.remove(d.obj);
+    for (const d of debris) dropDebris(d);
     debris.length = 0;
     slabList.length = 0;
   }
@@ -646,8 +682,10 @@ export function createRenderer(canvas) {
     for (const c of cars) if (c) disposeCar(c);
     cars.length = 0;
     clearDebris();
-    for (const [, o] of boxes) scene.remove(o.mesh, o.ring, o.shadow);
+    for (const [, o] of boxes) dropBox(o);
     boxes.clear();
+    for (const [, o] of pickupObjs) { scene.remove(o.root); disposeTree(o.root); }
+    pickupObjs.clear();
     cells = A.startCells();
     fallenShown = -1;
     buildFloor();
@@ -730,8 +768,29 @@ export function createRenderer(canvas) {
   }
 
   let opts = {};
+  // Resolution follows the machine: a slow frame rate drops the pixel
+  // ratio a step, and plenty of headroom brings it back.
+  const perf = { last: 0, avg: 16, checkAt: 0, lowered: 0 };
+  function adapt(now) {
+    const ft = now - perf.last;
+    perf.last = now;
+    if (ft <= 0 || ft > 200) return;           // a hidden tab, not a slow one
+    perf.avg = perf.avg * 0.95 + ft * 0.05;
+    if (now < perf.checkAt) return;
+    perf.checkAt = now + 2000;
+    let next = ratio;
+    if (perf.avg > 24 && ratio > 0.75) next = Math.max(0.75, ratio - 0.25);
+    else if (perf.avg < 13 && ratio < MAX_RATIO && now - perf.lowered > 8000) next = Math.min(MAX_RATIO, ratio + 0.25);
+    if (next !== ratio) {
+      if (next < ratio) perf.lowered = now;
+      ratio = next;
+      resize();
+    }
+  }
+
   function draw(view, o = {}) {
     opts = o;
+    adapt(performance.now());
     players = o.players || players;
     const dt = o.dt || 0;
     const time = o.time || 0;
@@ -794,6 +853,7 @@ export function createRenderer(canvas) {
     const el = gl.domElement.parentElement;
     const w = el.clientWidth, h = el.clientHeight;
     if (!w || !h) return;
+    gl.setPixelRatio(ratio);
     gl.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -801,12 +861,44 @@ export function createRenderer(canvas) {
 
   buildFloor();
 
+  /**
+   * Compile every kind of material once, up front. Otherwise the first
+   * container, pickup or name tag to appear stalls the game while its
+   * shaders build. One of each is drawn in front of the camera, then kept,
+   * hidden: three.js drops a program once no material uses it.
+   */
+  function warmup() {
+    camera.position.set(0, 40, 70);
+    camera.lookAt(0, 40, 0);
+    const keep = new THREE.Group();
+    const car = buildCar({ cls: 'sedan', idx: 0, id: '_warm' }, { _warm: { name: 'warm' } });
+    car.blade.visible = car.shell.visible = true;
+    scene.remove(car.root);
+    car.root.position.set(0, 40, 58);
+    keep.add(car.root);
+    Object.keys(PICK_COL).forEach((k, i) => { const o = pickupMesh(k); o.root.position.set(-4 + i * 2.5, 37, 55); keep.add(o.root); });
+    const box = new THREE.Mesh(boxGeo, new THREE.MeshStandardMaterial({ color: boxColours[0], map: corrugate, roughness: 0.7, metalness: 0.3 }));
+    box.position.set(6, 40, 50);
+    const ring = new THREE.Mesh(warnGeo, warnMat);
+    ring.position.set(-6, 40, 50);
+    keep.add(box, ring);
+    scene.add(keep);
+    buildCracks(0);
+    slabs.count = 1;
+    try { gl.setSize(64, 64, false); gl.render(scene, camera); } catch { /* compiled on first use instead */ }
+    slabs.count = 0;
+    buildCracks(-1);
+    keep.visible = false;
+  }
+  warmup();
+
   return {
     draw, resize, addEvents, resetRound,
     startReplay: (focus, other, label, time) => startReplay(focus, other, label, time),
     replay: () => (replay.on ? replay.label : ''),
     stopReplay: () => { replay.on = false; },
     shake: k => { cam.shake = Math.min(1.5, cam.shake + k); },
+    info: () => ({ ...gl.info.memory, programs: gl.info.programs.length, ratio, debris: debris.length }),
   };
 }
 

@@ -5,18 +5,18 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=3';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=3';
-import { makeBrain, botInput } from './bots.js?v=3';
-import { createRenderer } from './render.js?v=3';
-import { openLobby, openGame } from '../shared/net.js?v=3';
+} from './sim.js?v=4';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=4';
+import { makeBrain, botInput } from './bots.js?v=4';
+import { createRenderer } from './render.js?v=4';
+import { openLobby, openGame } from '../shared/net.js?v=4';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
 const $ = id => document.getElementById(id);
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 3;
+const PROTOCOL = 4;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory', 'Sorrel', 'Tamarack'];
 const INTERP_MIN = 4;
@@ -74,6 +74,7 @@ const S = {
   tickN: 0,
   clientAcc: 0,
   lastView: null,
+  session: 0,
   // both
   spect: -1,
   lastOut: null,
@@ -220,6 +221,7 @@ async function startLobby() {
 
 $('soloBtn').addEventListener('click', () => {
   if (!R) return;
+  cancelPending();
   resetSession();
   S.role = 'solo';
   S.myId = 'me';
@@ -254,9 +256,12 @@ async function startHost(name, pw, listed) {
   S.settings = { ...DEFAULT_SETTINGS, bots: 3 };
   $('hostBtn').disabled = true;
   $('hostErr').textContent = 'Opening the room…';
+  const session = S.session;
+  let net;
   try {
-    S.net = await openGame(name, pw, hostHandlers(), { host: true, root: NET_ROOT });
+    net = await openGame(name, pw, hostHandlers(), { host: true, root: NET_ROOT });
   } catch (e) {
+    if (session !== S.session) return;      // cancelled while it was opening
     $('hostErr').textContent = e.message === 'taken'
       ? 'A room with that name is already open. Pick another name.'
       : 'Could not reach the game relays. Check your connection, or play against bots.';
@@ -264,6 +269,9 @@ async function startHost(name, pw, listed) {
     S.role = null;
     return;
   }
+  // Backed out (or started something else) while the room was opening.
+  if (session !== S.session) { net.leave(); return; }
+  S.net = net;
   $('hostErr').textContent = '';
   $('hostBtn').disabled = false;
   S.myId = S.net.selfId;
@@ -327,7 +335,6 @@ function hostHello(peer, data) {
   // Mid-match: a seat from the next round, taken from a bot if need be.
   if (S.stage === 'match' && S.m) {
     addPlayer(S.m, { id: h.id, name: h.name, cls: h.cls, bot: false });
-    for (const id of Object.keys(S.brains)) if (!S.m.players.some(p => p.id === id)) delete S.brains[id];
   }
   roomChanged();
   toast(`${name} joined.`);
@@ -337,7 +344,7 @@ function hostDrop(peer) {
   const i = S.humans.findIndex(h => h.id === peer);
   if (i < 0) return;
   const [h] = S.humans.splice(i, 1);
-  delete S.inQ[peer]; delete S.inTop[peer]; delete S.inLast[peer]; delete S.ack[peer];
+  delete S.inQ[peer]; delete S.inTop[peer]; delete S.inLast[peer]; delete S.ack[peer]; delete S.starve[peer];
   if (S.m) removePlayer(S.m, peer);
   roomChanged();
   toast(`${h.name} left.`);
@@ -410,9 +417,12 @@ async function startJoin(name, pw) {
   if (S.screen !== 'join') show('join');
   $('joinErr').textContent = 'Looking for the room…';
   $('joinBtn').disabled = true;
+  const session = S.session;
+  let net;
   try {
-    S.net = await openGame(name, pw, clientHandlers(), { root: NET_ROOT });
+    net = await openGame(name, pw, clientHandlers(), { root: NET_ROOT });
   } catch (e) {
+    if (session !== S.session) return;
     const why = {
       missing: `No open room called "${name}". Check the spelling, or ask the host whether it is still open.`,
       password: 'That password does not match the room.',
@@ -422,14 +432,16 @@ async function startJoin(name, pw) {
     S.role = null;
     return;
   }
+  if (session !== S.session) { net.leave(); return; }
+  S.net = net;
   S.myId = S.net.selfId;
   const retry = setInterval(() => {
-    if (S.role !== 'client' || !S.net) return clearInterval(retry);
+    if (session !== S.session || S.role !== 'client' || !S.net) return clearInterval(retry);
     if (S.room && S.room.roster.some(p => p.id === S.myId)) return clearInterval(retry);
     sayHello();
   }, 2000);
   S.joinTimer = setTimeout(() => {
-    if (!S.hostId) leave(`The room "${name}" is listed but its host is not answering. It may have just closed.`, 'joinErr');
+    if (session === S.session && !S.hostId) leave(`The room "${name}" is listed but its host is not answering. It may have just closed.`, 'joinErr');
   }, 12000);
 }
 
@@ -497,10 +509,11 @@ function clientSnap(data) {
   v.kills = data.kl || {};
   const now = performance.now();
   const prev = S.snaps[S.snaps.length - 1];
-  if (prev && v.tick <= prev.tick) {
-    if (prev.tick - v.tick > 120) resetClientView();
-    else return;
-  }
+  if (data.mid !== S.snapMid) {
+    // A new match (a rematch restarts the host's clock).
+    if (S.snapMid !== undefined) resetClientView();
+    S.snapMid = data.mid;
+  } else if (prev && v.tick <= prev.tick) return;   // late or duplicate
   // Clock: follow the earliest-arriving snapshots and measure how late the
   // rest are, so the picture is drawn just far enough behind to stay smooth.
   const sample = v.tick - now * 0.06;
@@ -516,6 +529,7 @@ function clientSnap(data) {
     S.lastQ = q;
     S.evq.push({ tick: k, e });
   }
+  trimEvents(300);
 
   // My own car: a local world for it, rebuilt each round.
   const me = myIdxIn(v);
@@ -549,8 +563,8 @@ function clientTick(dt) {
     (S.inHist ||= []).push(h);
     if (S.inHist.length > 60) S.inHist.shift();
     if (S.mirror && !S.mirror.me.out) {
-      const idx = myIdxIn(latest);
-      if (S.lastView) mirrorPlace(S.mirror, S.lastView.cars, idx);
+      // Stand-ins only from a picture of the mirror's own round.
+      if (S.lastView && S.lastView.round === S.mirrorRound) mirrorPlace(S.mirror, S.lastView.cars, myIdxIn(S.lastView));
       mirrorStep(S.mirror, inp, n, frozen);
     }
     if (n % (S.net && S.net.isDirect(S.hostId) ? 1 : RELAY_EVERY) === 0) sent = true;
@@ -569,6 +583,14 @@ function slerpArr(a, b, k) {
   const out = [0, 1, 2, 3].map(i => a[i] + (b[i] * s - a[i]) * k);
   const l = Math.hypot(...out) || 1;
   return out.map(x => x / l);
+}
+
+/** Keep the guest's queue of effects short, holding on to the newest round. */
+function trimEvents(max) {
+  if (S.evq.length <= max) return;
+  const cut = S.evq.splice(0, S.evq.length - max);
+  const round = cut.filter(x => x.e.type === 'round').pop();
+  if (round && !S.evq.some(x => x.e.type === 'round')) S.evq.unshift(round);
 }
 
 function clientView(now) {
@@ -592,18 +614,26 @@ function clientView(now) {
     const a = byId[b.id] || b;
     return { ...b, pos: b.pos.map((v, j) => lerp(a.pos[j], v)), quat: slerpArr(a.quat, b.quat, k) };
   });
-  // Effects, in step with the delayed picture.
+  // Effects, in step with the delayed picture. Back from a hidden tab, the
+  // ones long past are skipped, but a new round still resets the scene.
   const released = [];
-  while (S.evq.length && S.evq[0].tick <= rt) released.push(S.evq.shift().e);
-  if (S.evq.length > 200) S.evq.splice(0, S.evq.length - 200);
+  let lastRound = null;
+  while (S.evq.length && S.evq[0].tick <= rt) {
+    const x = S.evq.shift();
+    if (x.tick >= rt - 60) released.push(x.e);
+    else if (x.e.type === 'round') lastRound = x.e;
+  }
+  if (lastRound && !released.some(e => e.type === 'round')) released.unshift(lastRound);
+  trimEvents(200);
 
   // My own car comes from my own world, not the delayed picture.
   const me = cars.findIndex(c => c.id === S.myId);
-  if (me >= 0 && S.mirror && !cars[me].out && latest.cars[me] && !latest.cars[me].out) {
+  const mine = latest.cars.find(c => c.id === S.myId);
+  if (me >= 0 && S.mirror && s1.round === latest.round && S.mirrorRound === latest.round && !cars[me].out && mine && !mine.out) {
     const b = S.mirror.me.body;
     const p = b.translation(), q = b.rotation(), vv = b.linvel();
-    cars[me] = { ...latest.cars[me], pos: [p.x, p.y, p.z], quat: [q.x, q.y, q.z, q.w], vel: [vv.x, vv.y, vv.z], steer: S.mirror.me.steer,
-      susp: [0, 1, 2, 3].map(i => S.mirror.me.vc.wheelSuspensionLength(i) ?? latest.cars[me].susp[i]) };
+    cars[me] = { ...mine, idx: me, pos: [p.x, p.y, p.z], quat: [q.x, q.y, q.z, q.w], vel: [vv.x, vv.y, vv.z], steer: S.mirror.me.steer,
+      susp: [0, 1, 2, 3].map(i => S.mirror.me.vc.wheelSuspensionLength(i) ?? mine.susp[i]) };
   }
   const v = {
     t: lerp(s0.t, s1.t), phase: latest.phase, round: latest.round, fallen: s1.fallen, winner: latest.winner,
@@ -724,9 +754,12 @@ $('leaveBtn').addEventListener('click', () => leave());
 
 function startMatch() {
   if (!isBoss() || !R) return;
+  if (S.role === 'host' && !S.net) return;      // the room is still opening
   buildRoster();
   if (S.roster.length < 2) return;
   renderer.resetRound();
+  freeMatch();
+  S.matchId = (S.matchId || 0) + 1;
   S.m = createMatch(R, S.settings, S.roster.map(p => ({ ...p })));
   S.brains = {};
   S.roster.forEach((p, i) => { if (p.bot) S.brains[p.id] = makeBrain(S.settings.botLevel, i / MAX_CARS); });
@@ -742,10 +775,16 @@ function startMatch() {
   advertise();
 }
 
+/** A match's physics lives in WASM memory: it has to be freed, not dropped. */
+function freeMatch() {
+  if (S.m && S.m.world) { S.m.world.free(); S.m.queue.free(); }
+  S.m = null;
+}
+
 function backToRoom() {
   if (!isBoss()) return;
   S.stage = 'lobby';
-  S.m = null;
+  freeMatch();
   renderer.resetRound();
   roomChanged();
   show('room');
@@ -758,27 +797,35 @@ function hostTick() {
   const inputs = { [S.myId]: localInput() };
   for (const [id, q] of Object.entries(S.inQ)) inputs[id] = nextGuestInput(id, q);
   for (const car of m.cars) {
-    if (!S.brains[car.id] && m.players.some(p => p.id === car.id && p.bot)) S.brains[car.id] = makeBrain(m.settings.botLevel);
     if (S.brains[car.id]) inputs[car.id] = botInput(m, car, S.brains[car.id], DT);
   }
   step(m, inputs);
   if (m.events.length) {
     for (const e of m.events) S.evLog.push([++S.evQ, m.tick, e]);
-    S.pending = (S.pending || []).concat(m.events);
+    // Drawn on the next frame. A hidden tab draws no frames, so keep only
+    // the latest: the round and parts are carried in the picture anyway.
+    const pend = (S.pending ||= []);
+    pend.push(...m.events);
+    if (pend.length > 400) {
+      const cut = pend.splice(0, pend.length - 400);
+      // A new round must still reach the renderer, or last round's dents stay.
+      const round = cut.filter(e => e.type === 'round').pop();
+      if (round && !pend.some(e => e.type === 'round')) pend.unshift(round);
+    }
     m.events = [];
   }
   while (S.evLog.length && S.evLog[0][1] < m.tick - 60) S.evLog.shift();
-  if (S.role !== 'host') return;
+  if (S.role !== 'host' || !S.net) return;
   const recent = () => S.evLog.filter(e => e[1] > m.tick - EVENT_KEEP);
   if (m.tick % SNAP_EVERY === 0) {
     const snap = snapshot(m);
-    snap.ak = S.ack; snap.wn = m.wins; snap.kl = m.kills;
+    snap.ak = S.ack; snap.wn = m.wins; snap.kl = m.kills; snap.mid = S.matchId;
     snap.e = recent();
     S.net.sendAllDirect('snap', snap);
   }
   if (m.tick % RELAY_EVERY === 0 && S.net.relayed() > 0) {
     const snap = snapshot(m);
-    snap.ak = S.ack; snap.wn = m.wins; snap.kl = m.kills;
+    snap.ak = S.ack; snap.wn = m.wins; snap.kl = m.kills; snap.mid = S.matchId;
     snap.e = S.evLog.filter(e => e[1] > m.tick - RELAY_EVERY * 3);
     S.net.send('snap', snap);
   }
@@ -1004,6 +1051,8 @@ function updateHud(v, time) {
   }
 
   if (v.phase === 'matchEnd' && $('over').hidden && !rp) showStandings(v);
+  // A rematch: on a guest nothing else takes the results card down.
+  if (v.phase !== 'matchEnd' && !$('over').hidden) $('over').hidden = true;
 }
 
 function followIdx(v) {
@@ -1047,12 +1096,14 @@ function showStandings(v) {
 // ── Leaving ────────────────────────────────────────────────
 
 function resetSession() {
+  S.session++;            // anything still opening from before now stands down
   clearTimeout(S.joinTimer);
   if (S.net) S.net.leave();
+  freeMatch();
   Object.assign(S, {
     role: null, net: null, myId: 'me', hostId: null, roomName: '', password: '', listed: false,
     humans: [], stage: 'lobby', roster: [], players: {}, m: null, brains: {}, inQ: {}, inTop: {}, inLast: {}, ack: {}, starve: {},
-    evLog: [], pending: [], room: null, paused: false, slow: 0,
+    evLog: [], pending: [], room: null, paused: false, slow: 0, snapMid: undefined,
   });
   resetClientView();
 }
@@ -1112,7 +1163,7 @@ let attractEvents = [];
 
 function newAttract() {
   const ps = BOT_NAMES.map((name, i) => ({ id: 'a' + i, name, cls: CLASS_IDS[(i + (Math.random() * 4 | 0)) % 4], bot: true }));
-  if (attract && attract.world) attract.world.free();
+  if (attract && attract.world) { attract.world.free(); attract.queue.free(); }
   attract = createMatch(R, { rounds: 99, hazards: true, pickups: true }, ps);
   attractBrains = Object.fromEntries(ps.map((p, i) => [p.id, makeBrain(i % 2 ? 'normal' : 'hard', i / 6)]));
   renderer.resetRound();
@@ -1155,14 +1206,21 @@ $('fsBtn').addEventListener('click', () => {
 });
 
 document.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => show(b.dataset.go)));
+/** Leaving the host or join screen drops a room that is still opening. */
+function cancelPending() {
+  if ((S.role === 'client' && !S.hostId) || (S.role === 'host' && !S.net)) resetSession();
+  $('hostBtn').disabled = false;
+  $('joinBtn').disabled = false;
+  $('hostErr').textContent = '';
+}
 document.querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', () => {
-  if (S.role === 'client' && !S.hostId) leave();
+  cancelPending();
   show('title');
 }));
 
 window.addEventListener('keydown', e => {
   if (S.screen === 'play') return;
-  if (e.key === 'Escape' && ['host', 'join', 'how'].includes(S.screen)) { show('title'); return; }
+  if (e.key === 'Escape' && ['host', 'join', 'how'].includes(S.screen)) { cancelPending(); show('title'); return; }
   if (S.screen === 'title' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     const items = [...document.querySelectorAll('#mainMenu .gbtn')];
     const at = items.indexOf(document.activeElement);
@@ -1211,6 +1269,7 @@ requestAnimationFrame(frame);
 // Test hook: where the host has every car (read from the console or a test).
 window.__derbyDebug = () => S.m && S.m.cars.map(c => { const p = c.body.translation(); return { id: c.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), out: c.out }; });
 window.__derbyStats = () => ({ ...S.dbg, hist: S.mirror && S.mirror.hist.length, tickN: S.tickN, ack: S.snaps.length });
+window.__derbyInfo = () => renderer.info();
 window.__derbyMine = () => { const v = S.lastView, i = myIdxIn(v); return i >= 0 ? v.cars[i] : null; };
 
 // ── Boot ───────────────────────────────────────────────────
