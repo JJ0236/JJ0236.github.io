@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=1';
-import * as A from './arena.js?v=1';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=2';
+import * as A from './arena.js?v=2';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -40,6 +40,8 @@ const HIT_WINDOW = 6;                // ticks a collision is gathered over befor
 const ENGINE_BY_ZONE = { front: 1.0, rear: 0.22, left: 0.3, right: 0.3, top: 0.65 };
 const TAKEN_BY_ZONE = { front: 0.85, rear: 0.85, left: 1.2, right: 1.2, top: 1.0 };
 const PART_WEAR = 2.3;               // parts wear faster than the engine
+const STUB_GRIP = 0.5;             // a lost wheel's stub: little grip,
+const STUB_DRAG = 12;              // and it drags
 const RAMMER = 0.55;
 const RAMMED = 1.2;
 const CRUSH_DMG = 78;
@@ -217,7 +219,6 @@ export function startRound(m) {
       steer: 0, flipCd: 0, stuck: 0,
       buffs: { armour: 0, plough: 0 },
       lastHit: null,
-      scrapes: [],
       input: { t: 0, s: 0, hb: 0, b: 0, f: 0 },
     };
     m.owners.set(built.chassis.handle, { car });
@@ -250,8 +251,8 @@ function damage(m, car, zone, amount, local, by) {
   }
   if (local && zone !== 'top') {
     const fx = local[0] / (car.C.L / 2), fz = local[2] / (car.C.W / 2);
-    if (Math.abs(fx) > 0.5 && Math.abs(fz) > 0.45) {
-      wearPart(m, car, (fx > 0 ? 'wheelF' : 'wheelR') + (fz > 0 ? 'R' : 'L'), dmg * 1.5);
+    if (Math.abs(fx) > 0.6 && Math.abs(fz) > 0.5) {
+      wearPart(m, car, (fx > 0 ? 'wheelF' : 'wheelR') + (fz > 0 ? 'R' : 'L'), dmg * 0.8);
     }
   }
   // Only a car still running gets the credit; ramming a wreck is not a kill.
@@ -275,19 +276,22 @@ function wearPart(m, car, pid, amount) {
   }
 }
 
-/** A wheel comes off: its corner drops and scrapes along the ground. */
+/**
+ * A wheel comes off: its corner drops and scrapes along the ground. The
+ * wheel stays in the controller as an invisible stub: a short suspension
+ * so the corner sags, no drive, and a drag for the scraping. (A collider
+ * dragged along the floor snags on the seams between floor triangles.)
+ */
 function loseWheel(m, car, i) {
   const vc = car.vc;
-  if (vc) {
-    vc.setWheelMaxSuspensionForce(i, 0);
-    vc.setWheelSuspensionStiffness(i, 0);
-    vc.setWheelFrictionSlip(i, 0);
-    vc.setWheelEngineForce(i, 0);
-  }
-  const [x, y, z] = wheelMounts(car.cls)[i];
-  const col = m.world.createCollider(m.R.ColliderDesc.ball(0.2).setTranslation(x, y - 0.12, z * 0.9)
-    .setDensity(0).setFriction(1.1).setCollisionGroups(CAR_GROUPS), car.body);
-  car.scrapes.push(col);
+  if (!vc) return;
+  const W = car.C.wheel;
+  vc.setWheelEngineForce(i, 0);
+  vc.setWheelSteering(i, 0);
+  vc.setWheelSuspensionRestLength(i, Math.max(0.05, W.rest - 0.2));
+  vc.setWheelFrictionSlip(i, STUB_GRIP);
+  vc.setWheelSideFrictionStiffness(i, 0.6);
+  vc.setWheelBrake(i, STUB_DRAG);
 }
 
 function eliminate(m, car, how) {
@@ -305,9 +309,10 @@ function eliminate(m, car, how) {
 
 // ── Driving ────────────────────────────────────────────────
 
+/** Full power until the engine is badly hurt, and never less than 70%. */
 export function enginePower(car) {
   const e = car.engine;
-  return e >= 60 ? 1 : 0.45 + 0.55 * (e / 60);
+  return e >= 40 ? 1 : 0.7 + 0.3 * (e / 40);
 }
 
 /** Apply one tick of input to a car's controller. Shared by host and guest. */
@@ -334,9 +339,11 @@ export function drive(car, inp, { frozen = false } = {}) {
   const target = dead ? car.steer : -clamp(inp.s || 0, -1, 1) * C.steer / (1 + Math.abs(speed) / 16);
   car.steer += clamp(target - car.steer, -3.2 * DT, 3.2 * DT);
   const hb = !dead && !frozen && inp.hb;
+  // The wheels left share the drive, so a car on three wheels still goes.
+  const wheels = WHEEL_PARTS.filter(w => car.parts[w] > 0).length || 1;
   for (let i = 0; i < 4; i++) {
-    if (car.parts[WHEEL_PARTS[i]] <= 0) continue;
-    vc.setWheelEngineForce(i, engine / 4);
+    if (car.parts[WHEEL_PARTS[i]] <= 0) { vc.setWheelBrake(i, hb ? 60 : STUB_DRAG); continue; }
+    vc.setWheelEngineForce(i, engine / wheels);
     vc.setWheelSteering(i, i < 2 ? car.steer : 0);
     const rear = i >= 2;
     vc.setWheelBrake(i, hb && rear ? 60 : brake);
@@ -721,7 +728,7 @@ export function createMirror(R, cls, pose, others) {
     cls, C: CLASSES[cls], ...built,
     parts: Object.fromEntries(PART_IDS.map(id => [id, 100])),
     engine: 100, boost: 1, out: null, steer: 0, flipCd: 0,
-    buffs: { armour: 0, plough: 0 }, scrapes: [], lostWheels: new Set(),
+    buffs: { armour: 0, plough: 0 }, lostWheels: new Set(),
   };
   const proxies = others.map(o => o ? buildCar(R, world, o.cls, o.pose, { kinematic: true }) : null);
   return { R, world, floor, cells, fallen: -1, me, proxies, boxes: new Map(), hist: [] };

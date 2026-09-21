@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import {
   createMatch, step, snapshot, unpackSnap, view, DT, yawQuat, rotate,
   createMirror, mirrorStep, mirrorCorrect, unpackCar, packCar,
-} from './sim.js?v=1';
-import { makeBrain, botInput } from './bots.js?v=1';
-import * as A from './arena.js?v=1';
-import { PART_IDS } from './cars.js?v=1';
+} from './sim.js?v=2';
+import { makeBrain, botInput } from './bots.js?v=2';
+import * as A from './arena.js?v=2';
+import { PART_IDS } from './cars.js?v=2';
 
 const mod = await import(process.env.RAPIER || '@dimforge/rapier3d-compat');
 const R = mod.default || mod;

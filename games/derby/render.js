@@ -8,8 +8,8 @@
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=1';
-import * as A from './arena.js?v=1';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=2';
+import * as A from './arena.js?v=2';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const tmpV = V(), tmpV2 = V(), tmpQ = new THREE.Quaternion();
