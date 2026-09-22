@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=5';
-import * as A from './arena.js?v=5';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=6';
+import * as A from './arena.js?v=6';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -36,7 +36,7 @@ const RAY_GROUPS = groups(G_CAR, G_WORLD | G_CAR | G_BOX);
 // the impulse above IMP_MIN turns into damage at DMG_K per N·s.
 const HIT_FORCE = 45000;
 const IMP_MIN = 900;
-const DMG_K = 0.0034;
+const DMG_K = 0.0042;
 const HIT_WINDOW = 6;                // ticks a collision is gathered over before it counts
 const ENGINE_BY_ZONE = { front: 1.0, rear: 0.22, left: 0.3, right: 0.3, top: 0.65 };
 const TAKEN_BY_ZONE = { front: 0.85, rear: 0.85, left: 1.2, right: 1.2, top: 1.0 };
@@ -44,6 +44,10 @@ const PART_WEAR = 2.3;               // parts wear faster than the engine
 const STUB_GRIP = 0.5;             // a lost wheel's stub: little grip,
 const STUB_DRAG = 4; // and it drags
 const SCENERY_CAP = 16;             // most damage one hit on scenery can do
+const HIT_CAP_RAMMER = 26;         // the most one crash can do, before zones and armour
+const HIT_CAP_EVEN = 38;
+const HIT_CAP_RAMMED = 50;
+const AFTER_TICKS = 25;            // contact this soon after a crash is a scrape
 const RAMMER = 0.55;
 const RAMMED = 1.2;
 const CRUSH_DMG = 78;
@@ -200,6 +204,7 @@ export function startRound(m) {
   m.floor = buildArena(R, m.world, m.cells);
   m.owners = new Map();            // collider handle -> { car } | { box }
   m.pending = new Map();           // pair key -> gathered hit
+  m.lastPair = new Map();          // pair key -> tick its last hit was counted
   m.boxes = [];
   m.boxId = 0;
   m.nextDrop = 6 + m.rand() * 3;
@@ -470,7 +475,9 @@ function gatherHits(m) {
     const key = k1 < k2 ? k1 + ':' + k2 : k2 + ':' + k1;
     let g = m.pending.get(key);
     if (!g) {
-      g = { o1, o2, imp: 0, p: [0, 0, 0], w: 0, until: m.tick + HIT_WINDOW, n: [nx, ny, nz], closing: closing(o1, o2) };
+      const lastHit = m.lastPair.get(key);
+      g = { o1, o2, imp: 0, p: [0, 0, 0], w: 0, until: m.tick + HIT_WINDOW, n: [nx, ny, nz], closing: closing(o1, o2),
+        after: lastHit !== undefined && m.tick - lastHit < AFTER_TICKS };
       m.pending.set(key, g);
     }
     g.imp += imp;
@@ -480,6 +487,7 @@ function gatherHits(m) {
   for (const [key, g] of m.pending) {
     if (m.tick < g.until) continue;
     m.pending.delete(key);
+    m.lastPair.set(key, m.tick);
     const p = g.p.map(v => v / g.w);
     const cars = [g.o1 && g.o1.car, g.o2 && g.o2.car];
     const boxes = [g.o1 && g.o1.box, g.o2 && g.o2.box];
@@ -497,9 +505,17 @@ function gatherHits(m) {
       if (imp <= 0) continue;
       const q = car.body.rotation(), cp = car.body.translation();
       const local = unrotate(q, [p[0] - cp.x, p[1] - cp.y, p[2] - cp.z]);
-      const upHit = box ? box.body.translation().y > cp.y + 0.3 : (other ? other.body.translation().y > cp.y + car.C.H * 0.7 : false);
+      // A roof hit needs something coming down on you, not just a taller car.
+      const vertical = Math.abs(g.n[1]) > 0.7;
+      const upHit = vertical && (box ? box.body.translation().y > cp.y + 0.3 : (other ? other.body.translation().y > cp.y + car.C.H * 0.7 : false));
       const zone = zoneOf(car.C, local, upHit);
-      let amt = imp * DMG_K * ramShare(g, s);
+      const share = ramShare(g, s);
+      let amt = imp * DMG_K * share;
+      // One crash can hurt a lot but never finish a healthy car on its own:
+      // least for the rammer, most for the car it rams.
+      amt = Math.min(amt, share < 1 ? HIT_CAP_RAMMER : share > 1 ? HIT_CAP_RAMMED : HIT_CAP_EVEN);
+      // Grinding on straight after a crash is a scrape, not a second crash.
+      if (g.after) amt *= 0.4;
       // A plough on the other car's nose doubles what it does to you.
       if (other && other.buffs.plough > 0) {
         const oq = other.body.rotation(), op = other.body.translation();

@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=5';
-import * as A from './arena.js?v=5';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=6';
+import * as A from './arena.js?v=6';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Materials the module-level builders share with the renderer that made them.
