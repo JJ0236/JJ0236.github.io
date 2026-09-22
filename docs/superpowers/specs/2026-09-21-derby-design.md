@@ -51,8 +51,10 @@ Tanks keeps its import path and its topics.
   The car doing the ramming takes less than the car being rammed, weighted by
   which zones touched.
 - **The engine is in the front.** Front hits hurt the engine a lot, others a
-  little. Under 60% it loses power, under 40% it smokes, under 15% it burns,
-  at 0 the car is wrecked. Driving in reverse into people protects the engine,
+  little. Under 25% it loses a little power (never below 88%), under 40% it
+  smokes, under 15% it burns, at 0 the car is wrecked.
+- Scenery (poles, ramp sides, landed containers) does a quarter of the
+  damage, and never more than about 14% of an engine in one hit. Driving in reverse into people protects the engine,
   as in real derbies.
 - Wrecks stay in the arena as heavy obstacles.
 - A lost wheel is removed from the controller and replaced by a low-friction

@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=4';
-import * as A from './arena.js?v=4';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=5';
+import * as A from './arena.js?v=5';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -42,7 +42,8 @@ const ENGINE_BY_ZONE = { front: 1.0, rear: 0.22, left: 0.3, right: 0.3, top: 0.6
 const TAKEN_BY_ZONE = { front: 0.85, rear: 0.85, left: 1.2, right: 1.2, top: 1.0 };
 const PART_WEAR = 2.3;               // parts wear faster than the engine
 const STUB_GRIP = 0.5;             // a lost wheel's stub: little grip,
-const STUB_DRAG = 12;              // and it drags
+const STUB_DRAG = 4; // and it drags
+const SCENERY_CAP = 16;             // most damage one hit on scenery can do
 const RAMMER = 0.55;
 const RAMMED = 1.2;
 const CRUSH_DMG = 78;
@@ -311,10 +312,10 @@ function eliminate(m, car, how) {
 
 // ── Driving ────────────────────────────────────────────────
 
-/** Full power until the engine is badly hurt, and never less than 70%. */
+/** Full power until the engine is nearly gone, and even then close to it. */
 export function enginePower(car) {
   const e = car.engine;
-  return e >= 40 ? 1 : 0.7 + 0.3 * (e / 40);
+  return e >= 25 ? 1 : 0.88 + 0.12 * (e / 25);
 }
 
 /** Apply one tick of input to a car's controller. Shared by host and guest. */
@@ -510,7 +511,9 @@ function gatherHits(m) {
         amt += BOX_CRUSH_DMG;
         m.events.push({ type: 'crush', c: car.idx, by: 'box' });
       }
-      if (worldHit) amt *= 0.6;
+      // Poles, ramp sides and landed containers hurt, but never finish a car
+      // in one go: a derby is decided by cars, not scenery.
+      if (worldHit || (box && !box.falling)) amt = Math.min(amt * 0.25, SCENERY_CAP);
       const before = car.out;
       damage(m, car, zone, amt, local, other);
       if (other && !before) other.dealt = (other.dealt || 0) + amt;

@@ -8,10 +8,13 @@
 
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=4';
-import * as A from './arena.js?v=4';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=5';
+import * as A from './arena.js?v=5';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+// Materials the module-level builders share with the renderer that made them.
+const SHARED = {};
 const tmpV = V(), tmpV2 = V(), tmpQ = new THREE.Quaternion();
 const GRAV = 9.81;
 const DEBRIS_MAX = 60;
@@ -27,7 +30,7 @@ export function createRenderer(canvas) {
   gl.toneMapping = THREE.ACESFilmicToneMapping;
   gl.toneMappingExposure = 1.05;
   // Checking every shader for errors makes the browser wait on each compile.
-  gl.debug.checkShaderErrors = false;
+  gl.debug.checkShaderErrors = !!window.__derbyShaderCheck || location.search.includes("debug");
   const MAX_RATIO = Math.min(1.75, window.devicePixelRatio || 1);
   let ratio = MAX_RATIO;
 
@@ -38,7 +41,7 @@ export function createRenderer(canvas) {
   camera.position.set(0, 40, 70);
 
   // ── Light: a low sun through dust ──
-  scene.add(new THREE.HemisphereLight('#F5D2A8', '#4A3A2A', 1.15));
+  scene.add(new THREE.HemisphereLight('#F5D2A8', '#4A3A2A', 0.85));
   const sun = new THREE.DirectionalLight('#FFD9A8', 2.6);
   sun.position.set(-60, 55, 30);
   sun.castShadow = true;
@@ -50,6 +53,15 @@ export function createRenderer(canvas) {
   scene.add(sun, sun.target);
 
   scene.add(sky());
+  // The dusk sky, reflected in paint, glass and chrome.
+  {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const envScene = new THREE.Scene();
+    envScene.add(sky(50));
+    scene.environment = pmrem.fromScene(envScene, 0.04).texture;
+    scene.environmentIntensity = 0.55;
+    pmrem.dispose();
+  }
   scene.add(quarry());
 
   // ── The platform ──
@@ -299,18 +311,23 @@ export function createRenderer(canvas) {
 
   // ── Cars ──
   const cars = [];          // by idx
-  const wheelGeo = new THREE.CylinderGeometry(1, 1, 1, 14);
-  wheelGeo.rotateX(Math.PI / 2);
-  const tyreMat = new THREE.MeshStandardMaterial({ color: '#1E1D1B', roughness: 0.9, flatShading: true });
-  const hubMat = new THREE.MeshStandardMaterial({ color: '#B8B4AA', roughness: 0.4, metalness: 0.7 });
-  const glassMat = new THREE.MeshStandardMaterial({ color: '#6F8697', roughness: 0.18, metalness: 0.35, flatShading: true, vertexColors: true });
-  const trimMat = new THREE.MeshStandardMaterial({ color: '#34322F', roughness: 0.7, metalness: 0.4, flatShading: true, vertexColors: true });
-  const headMat = new THREE.MeshStandardMaterial({ color: '#FFF4D6', emissive: '#FFE9B0', emissiveIntensity: 1.2 });
-  const tailMat = new THREE.MeshStandardMaterial({ color: '#8A1E14', emissive: '#E0301E', emissiveIntensity: 0.6 });
+  const tyreGeo = tyreGeometry();
+  const rimGeo = rimGeometry();
+  const tyreMat = new THREE.MeshStandardMaterial({ color: '#1C1B19', roughness: 0.92, flatShading: true });
+  const hubMat = new THREE.MeshStandardMaterial({ color: '#C9C6BE', roughness: 0.28, metalness: 0.9 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: '#1D2830', roughness: 0.06, metalness: 0.3, envMapIntensity: 1.6, side: THREE.DoubleSide });
+  SHARED.glass = glassMat;
+  const trimMat = new THREE.MeshStandardMaterial({ color: '#2E2C29', roughness: 0.6, metalness: 0.35, flatShading: true, vertexColors: true });
+  const blackMat = new THREE.MeshStandardMaterial({ color: '#151412', roughness: 0.75, metalness: 0.2 });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: '#DAD7CF', roughness: 0.18, metalness: 1 });
+  const headMat = new THREE.MeshStandardMaterial({ color: '#FFF4D6', emissive: '#FFE9B0', emissiveIntensity: 1.4, roughness: 0.2 });
+  const tailMat = new THREE.MeshStandardMaterial({ color: '#8A1E14', emissive: '#E0301E', emissiveIntensity: 0.7, roughness: 0.3 });
   const bladeMat = new THREE.MeshStandardMaterial({ color: '#B8BDC0', metalness: 0.85, roughness: 0.3, flatShading: true });
+  const licenceMat = new THREE.MeshStandardMaterial({ map: plateTexture(), roughness: 0.5 });
+  const stopMat = new THREE.MeshStandardMaterial({ color: '#B8261B', roughness: 0.5 });
 
   // Everything shared between cars, containers and pickups: never disposed.
-  const shared = new Set([wheelGeo, tyreMat, hubMat, glassMat, trimMat, headMat, tailMat, bladeMat,
+  const shared = new Set([tyreGeo, rimGeo, tyreMat, hubMat, glassMat, trimMat, blackMat, chromeMat, headMat, tailMat, bladeMat, licenceMat, licenceMat.map, stopMat,
     boxGeo, warnGeo, warnMat, shadowMat, corrugate, stripe, slabGeo, rock, steel]);
   /** Free the GPU memory of whatever a removed object owned itself. */
   function disposeTree(root, { materials = true } = {}) {
@@ -326,37 +343,42 @@ export function createRenderer(canvas) {
     });
   }
 
-  function segs(n) { return Math.max(1, Math.min(10, Math.round(n / 0.32))); }
+  function segs(n) { return Math.max(1, Math.min(10, Math.round(n / 0.3))); }
+  const box = (sx, sy, sz, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat); m.position.set(x, y, z); return m; };
 
+  /**
+   * One car, from its parts. Every panel is shaped (sloped hood, raked
+   * screens, tapered nose) before its resting shape is recorded, so dents
+   * work on the real outline. Small fittings ride on the part they belong
+   * to, so a door takes its mirror and handle with it when it comes off.
+   */
   function buildCar(v, players) {
     const C = CLASSES[v.cls];
+    const bus = v.cls === 'bus';
     const colour = CAR_COLOURS[v.idx % CAR_COLOURS.length];
-    const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.55, metalness: 0.2, flatShading: true, vertexColors: true });
+    const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.52, metalness: 0.12, envMapIntensity: 0.7, flatShading: true, vertexColors: true });
+    // The derby number, on the roof and both doors.
+    const numMat = new THREE.MeshStandardMaterial({ map: numberTexture(v.idx + 1, colour), roughness: 0.52, metalness: 0.12, envMapIntensity: 0.7, flatShading: true, vertexColors: true });
     const root = new THREE.Group();
     const parts = {};
+    const windows = [];
     const seed = v.idx * 97 + 13;
+    const hl = C.L / 2, hw = C.W / 2, hh = C.H / 2;
+    const cab = C.cabin;
+    const shape = cabShape(C, v.cls);
+
     for (const p of partsFor(v.cls)) {
       if (p.wheel) continue;
       const g = new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2], segs(p.size[0]), segs(p.size[1]), segs(p.size[2]));
+      shapePart(g, p, C, shape);
       weather(g, p.pos, seed, p.id === 'body' ? 0.55 : 0.3);
-      // A bus's long cabin is painted, with a band of windows; a car's is all glass.
-      const glass = p.glass && v.cls !== 'bus';
-      const mat = glass ? glassMat : p.id.startsWith('bumper') ? trimMat : paint;
-      const mesh = new THREE.Mesh(g, p.id === 'roof' ? roofMaterials(paint, v.idx + 1) : mat);
+      let mat = p.id.startsWith('bumper') ? trimMat : paint;
+      if (p.id === 'roof') mat = [paint, paint, numMat, paint, paint, paint];
+      else if (p.id === 'doorL') mat = [paint, paint, paint, paint, paint, numMat];
+      else if (p.id === 'doorR') mat = [paint, paint, paint, paint, numMat, paint];
+      const mesh = new THREE.Mesh(g, mat);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.userData.rest = g.attributes.position.array.slice();
-      if (p.glass && v.cls === 'bus') {
-        const [L, H, W] = p.size;
-        const band = H * 0.42;
-        for (const z of [-1, 1]) {
-          const w = new THREE.Mesh(new THREE.BoxGeometry(L * 0.92, band, 0.04), glassMat);
-          w.position.set(0, H * 0.12, z * (W / 2 + 0.01));
-          mesh.add(w);
-        }
-        const front = new THREE.Mesh(new THREE.BoxGeometry(0.04, band * 1.3, W * 0.86), glassMat);
-        front.position.set(L / 2 + 0.01, H * 0.1, 0);
-        mesh.add(front);
-      }
       const pivot = new THREE.Group();
       const h = p.hinge ? p.hinge.p : p.pos;
       pivot.position.set(...h);
@@ -364,43 +386,90 @@ export function createRenderer(canvas) {
       pivot.add(mesh);
       root.add(pivot);
       parts[p.id] = { def: p, pivot, mesh, state: 0, swing: 0, swingV: 0 };
+
+      if (p.id === 'cabin') addWindows(mesh, p, C, shape, bus, windows);
+      if (p.id === 'bumperF' || p.id === 'bumperR') {
+        const s = p.id === 'bumperF' ? 1 : -1;
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.13, 0.4), licenceMat);
+        plate.position.set(s * (p.size[0] / 2 + 0.01), 0, 0);
+        if (s < 0) plate.rotation.y = Math.PI;
+        mesh.add(plate);
+      }
+      if (p.id === 'doorL' || p.id === 'doorR') {
+        const out = p.id === 'doorL' ? -1 : 1;
+        const [dl, dh] = p.size;
+        const handle = box(0.16, 0.04, 0.04, chromeMat, -dl * 0.1, dh * 0.18, out * 0.04);
+        mesh.add(handle);
+        if (!bus) {
+          const mirror = box(0.12, 0.1, 0.16, paint, dl / 2 - 0.12, dh / 2 - 0.1, out * 0.1);
+          const glass = box(0.02, 0.07, 0.12, chromeMat, dl / 2 - 0.19, dh / 2 - 0.1, out * 0.11);
+          mesh.add(mirror, glass);
+        }
+      }
     }
-    // Lights on the tub, so they stay with the car.
-    const hl = C.L / 2, hw = C.W / 2, hh = C.H / 2;
+
+    // Fixed fittings on the tub.
+    const nose = hl - 0.01;
+    const lampY = hh - 0.2;
     for (const s of [-1, 1]) {
-      const h = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.3), headMat);
-      h.position.set(hl - 0.02, hh - 0.18, s * (hw - 0.3));
-      root.add(h);
-      const t = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.26), tailMat);
-      t.position.set(-hl + 0.02, hh - 0.16, s * (hw - 0.28));
-      root.add(t);
+      const lamp = new THREE.Mesh(new THREE.CylinderGeometry(bus ? 0.14 : 0.11, bus ? 0.14 : 0.11, 0.06, 14), headMat);
+      lamp.rotation.z = Math.PI / 2;
+      lamp.position.set(nose, lampY, s * (hw - 0.3));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(bus ? 0.15 : 0.12, 0.02, 6, 16), chromeMat);
+      ring.rotation.y = Math.PI / 2;
+      ring.position.set(nose + 0.02, lampY, s * (hw - 0.3));
+      root.add(lamp, ring);
+      root.add(box(0.05, 0.13, 0.36, tailMat, -hl + 0.005, hh - 0.15, s * (hw - 0.3)));
     }
+    // Grille between the lamps.
+    root.add(box(0.04, 0.2, Math.max(0.4, C.W - 1.0), blackMat, nose, lampY - 0.02, 0));
+    const bar = box(0.05, 0.03, Math.max(0.4, C.W - 1.0) + 0.04, chromeMat, nose + 0.01, lampY + 0.08, 0);
+    root.add(bar);
+    // Exhaust under the tail.
+    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 10), chromeMat);
+    pipe.rotation.z = Math.PI / 2;
+    pipe.position.set(-hl - 0.05, -hh + 0.05, hw * 0.55);
+    root.add(pipe);
+    if (C.bed) {
+      // Pickup: the bed walls and a tow bar across the back of the cab.
+      const bedL = hl + (cab.x - cab.L / 2) - 0.1;
+      const bedX = -hl + bedL / 2 + 0.05;
+      for (const s of [-1, 1]) root.add(box(bedL, 0.42, 0.07, paint, bedX, hh + 0.21, s * (hw - 0.04)));
+      root.add(box(0.07, 0.5, C.W - 0.3, blackMat, cab.x - cab.L / 2 - 0.15, hh + 0.5, 0));
+    }
+    if (bus) {
+      // Black rub rails down both sides, and the stop arm.
+      for (const s of [-1, 1]) for (const y of [-hh + 0.18, hh - 0.08]) root.add(box(C.L - 0.2, 0.07, 0.03, blackMat, 0, y, s * (hw + 0.01)));
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 8), stopMat);
+      arm.rotation.x = Math.PI / 2;
+      arm.position.set(hl - 1.6, hh + 0.2, -hw - 0.05);
+      root.add(arm);
+    }
+
     // The plough blade, shown while the pickup is active.
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.55, C.W + 0.5), bladeMat);
     blade.position.set(hl + C.bumper + 0.18, -hh + 0.3, 0);
     blade.rotation.z = -0.35;
     blade.visible = false;
-    blade.castShadow = true;
     root.add(blade);
     // Armour glow.
-    const shell = new THREE.Mesh(new THREE.BoxGeometry(C.L + 0.7, C.H + C.cabin.H + 0.5, C.W + 0.6), new THREE.MeshBasicMaterial({ color: '#6FA8E8', transparent: true, opacity: 0.16, depthWrite: false }));
-    shell.position.set(0, C.cabin.H / 2, 0);
+    const shell = new THREE.Mesh(new THREE.BoxGeometry(C.L + 0.7, C.H + cab.H + 0.5, C.W + 0.6), new THREE.MeshBasicMaterial({ color: '#6FA8E8', transparent: true, opacity: 0.16, depthWrite: false }));
+    shell.position.set(0, cab.H / 2, 0);
     shell.visible = false;
     root.add(shell);
 
-    const wheels = wheelMounts(v.cls).map((mt, i) => {
+    const wheels = wheelMounts(v.cls).map(mt => {
       const g = new THREE.Group();
-      const tyre = new THREE.Mesh(wheelGeo, tyreMat);
-      tyre.scale.set(C.wheel.r, C.wheel.r, C.wheel.r * 0.95);
-      const hub = new THREE.Mesh(wheelGeo, hubMat);
-      hub.scale.set(C.wheel.r * 0.55, C.wheel.r * 0.55, C.wheel.r * 1.0);
+      const r = C.wheel.r, w = r * 0.95;
+      const tyre = new THREE.Mesh(tyreGeo, tyreMat);
+      tyre.scale.set(r, r, w);
+      const rim = new THREE.Mesh(rimGeo, hubMat);
+      rim.scale.set(r, r, w);
+      // The rim faces outward on both sides of the car.
+      if (mt[2] < 0) rim.rotation.y = Math.PI;
       const spin = new THREE.Group();
-      spin.add(tyre, hub);
-      // A spoke so the spin shows.
-      const spoke = new THREE.Mesh(new THREE.BoxGeometry(C.wheel.r * 1.3, C.wheel.r * 0.2, C.wheel.r * 1.02), hubMat);
-      spin.add(spoke);
+      spin.add(tyre, rim);
       g.add(spin);
-      tyre.castShadow = true;
       g.position.set(mt[0], mt[1] - C.wheel.rest, mt[2] + Math.sign(mt[2]) * 0.12);
       root.add(g);
       return { g, spin, mount: mt, rot: 0, gone: false };
@@ -408,11 +477,24 @@ export function createRenderer(canvas) {
 
     const player = players && players[v.id];
     const tag = player && player.name ? nameTag(player.name, colour) : null;
-    if (tag) { tag.position.set(0, hh + C.cabin.H + 1.4, 0); root.add(tag); }
+    if (tag) { tag.position.set(0, hh + cab.H + 1.4, 0); root.add(tag); }
 
-    root.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    root.traverse(o => { if (o.isMesh && o !== shell) o.castShadow = true; });
     scene.add(root);
-    return { idx: v.idx, id: v.id, cls: v.cls, C, root, parts, wheels, paint, blade, shell, tag, smokeT: 0, dustT: 0, fireT: 0, speed: 0, lastPos: null, out: null, dents: 0 };
+    return { idx: v.idx, id: v.id, cls: v.cls, C, root, parts, wheels, windows, paint, numMat, blade, shell, tag, smokeT: 0, dustT: 0, fireT: 0, speed: 0, lastPos: null, out: null, dents: 0 };
+  }
+
+  /** Glass on a hit's side of the cabin breaks, with a spray of shards. */
+  function shatter(c, zone, at) {
+    for (const w of c.windows) {
+      if (!w.mesh.visible || (zone !== 'top' && w.zone !== zone)) continue;
+      w.mesh.visible = false;
+      w.mesh.getWorldPosition(tmpV);
+      for (let i = 0; i < 10; i++) {
+        const v = V(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).multiplyScalar(5);
+        glow.emit(tmpV, v, 0.09, [0.8, 0.9, 1, 0.9], 0.6 + Math.random() * 0.4, 0, 1);
+      }
+    }
   }
 
   function disposeCar(c) {
@@ -486,7 +568,7 @@ export function createRenderer(canvas) {
     const own = [];
     obj.traverse(o => {
       for (const mt of o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []) {
-        if (mt !== c.paint && !shared.has(mt) && !own.includes(mt)) own.push(mt);
+        if (mt !== c.paint && mt !== c.numMat && !shared.has(mt) && !own.includes(mt)) own.push(mt);
       }
     });
     const out = V().subVectors(obj.position, c.root.position).setY(0).normalize();
@@ -658,6 +740,7 @@ export function createRenderer(canvas) {
       const cv = view && e.c !== undefined ? view.cars[e.c] : null;
       if (e.type === 'hit' && c) {
         dent(c, e.p, e.d, e.s, e.wide);
+        if (e.big || e.wide) shatter(c, e.wide ? 'top' : e.zone);
         if (cv) {
           const wp = V(...e.p).applyQuaternion(tmpQ.set(...cv.quat)).add(V(...cv.pos));
           sparks(wp, e.big ? 22 : 7);
@@ -792,7 +875,7 @@ export function createRenderer(canvas) {
     opts = o;
     adapt(performance.now());
     players = o.players || players;
-    const dt = o.dt || 0;
+    const dt = Math.max(0, Math.min(0.1, o.dt || 0));
     const time = o.time || 0;
     if (!floorMesh) buildFloor();
     if (view) {
@@ -861,6 +944,44 @@ export function createRenderer(canvas) {
 
   buildFloor();
 
+  /** A picture of one kind of car, for the car picker. */
+  function thumbnail(cls, idx = 0, w = 320, h = 160) {
+    const rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const ts = new THREE.Scene();
+    ts.environment = scene.environment;
+    ts.environmentIntensity = 0.7;
+    ts.add(new THREE.HemisphereLight('#F5D2A8', '#4A3A2A', 1.1));
+    const key = new THREE.DirectionalLight('#FFE2BC', 2.6);
+    key.position.set(-3, 6, 5);
+    ts.add(key);
+    const car = buildCar({ cls, idx, id: '_thumb' }, {});
+    scene.remove(car.root);
+    ts.add(car.root);
+    const C = CLASSES[cls];
+    const cam = new THREE.PerspectiveCamera(26, w / h, 0.1, 100);
+    const d = C.L * 1.45 + 1.4;
+    cam.position.set(d * 0.62, d * 0.34, d * 0.78);
+    cam.lookAt(0, 0.15 + C.cabin.H * 0.2, 0);
+    const before = gl.getRenderTarget(), clear = gl.getClearColor(new THREE.Color()), alpha = gl.getClearAlpha();
+    gl.setRenderTarget(rt);
+    gl.setClearColor(0x000000, 0);
+    gl.clear();
+    gl.render(ts, cam);
+    const px = new Uint8Array(w * h * 4);
+    gl.readRenderTargetPixels(rt, 0, 0, w, h, px);
+    gl.setRenderTarget(before);
+    gl.setClearColor(clear, alpha);
+    disposeCar(car);
+    rt.dispose();
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const img = cv.getContext('2d').createImageData(w, h);
+    for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    cv.getContext('2d').putImageData(img, 0, 0);
+    return cv.toDataURL();
+  }
+
   /**
    * Compile every kind of material once, up front. Otherwise the first
    * container, pickup or name tag to appear stalls the game while its
@@ -898,14 +1019,15 @@ export function createRenderer(canvas) {
     replay: () => (replay.on ? replay.label : ''),
     stopReplay: () => { replay.on = false; },
     shake: k => { cam.shake = Math.min(1.5, cam.shake + k); },
-    info: () => ({ ...gl.info.memory, programs: gl.info.programs.length, ratio, debris: debris.length }),
+    thumbnail,
+    info: () => ({ cam: camera.position.toArray().map(v => +v.toFixed(2)), size: [gl.domElement.width, gl.domElement.height], calls: gl.info.render.calls, ...gl.info.memory, programs: gl.info.programs.length, ratio, debris: debris.length }),
   };
 }
 
 // ── Pieces of scenery ──────────────────────────────────────
 
-function sky() {
-  const g = new THREE.SphereGeometry(800, 32, 16);
+function sky(radius = 800) {
+  const g = new THREE.SphereGeometry(radius, 32, 16);
   const m = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: { top: { value: new THREE.Color('#5E7FA6') }, mid: { value: new THREE.Color('#E8B488') }, low: { value: new THREE.Color('#B57A55') } },
@@ -992,22 +1114,162 @@ function weather(g, offset, seed, amount) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
 }
 
-function roofMaterials(paint, n) {
+/** How far the top of a car's cabin sits back from its base: the screen rake. */
+function cabShape(C, cls) {
+  const H = C.cabin.H;
+  const k = { compact: [0.62, 0.62], sedan: [0.62, 0.42], pickup: [0.48, 0.06], bus: [0.1, 0.03] }[cls] || [0.5, 0.3];
+  const a = 1 - (H * (k[0] + k[1])) / C.cabin.L;
+  return { rakeF: H * k[0], rakeR: H * k[1], a, b: (H * k[1] - H * k[0]) / 2, narrow: cls === 'bus' ? 0.03 : 0.12 };
+}
+
+/** Where a point of the cabin box ends up once its top is raked and narrowed. */
+function cabPoint(sh, H, x, y, z) {
+  const t = (y + H / 2) / H;
+  return [x * (1 + (sh.a - 1) * t) + sh.b * t, y, z * (1 - sh.narrow * t)];
+}
+
+/** Turn a part's box into its real outline, in place. */
+function shapePart(g, p, C, sh) {
+  const pos = g.attributes.position;
+  const [, H, W] = p.size;
+  const hl = C.L / 2, hh = C.H / 2;
+  const cab = C.cabin, cabFront = cab.x + cab.L / 2, cabRear = cab.x - cab.L / 2;
+  const hoodDrop = C.bed ? 0.06 : C.L > 6 ? 0.03 : 0.1;
+  // The hood slopes down to the nose; a boot slopes a little to the tail.
+  const drop = cx => cx > cabFront ? hoodDrop * (cx - cabFront) / (hl - cabFront)
+    : (cx < cabRear && !C.bed ? 0.05 * (cabRear - cx) / (cabRear + hl) : 0);
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const cx = x + p.pos[0], cy = y + p.pos[1];
+    const top = y > H / 2 - 1e-4, bottom = y < -H / 2 + 1e-4;
+    if (p.id === 'body') {
+      const fx = Math.abs(cx) / hl;
+      if (fx > 0.8) z *= 1 - ((fx - 0.8) / 0.2) * 0.12;           // nose and tail taper
+      if (top) { z *= 0.965; y -= drop(cx); if (fx > 0.94) y -= 0.05; }
+      if (bottom) z *= 0.93;                                    // rolled sills
+    } else if (p.id === 'hood' || (p.id === 'trunk' && !C.bed)) {
+      y -= drop(cx);
+      z *= 0.975;
+    } else if (p.id === 'cabin') {
+      [x, y, z] = cabPoint(sh, H, x, y, z);
+    } else if (p.id === 'roof') {
+      x = x * sh.a + sh.b;
+      z *= 1 - sh.narrow;
+    } else if (p.id === 'bumperF' || p.id === 'bumperR') {
+      const fz = Math.abs(z) / (W / 2);
+      x -= Math.sign(p.pos[0]) * 0.16 * fz * fz * fz;             // wrap round the corners
+    } else if (p.id === 'doorL' || p.id === 'doorR') {
+      // Above the waist the door leans in with the cabin.
+      const above = cy - hh;
+      if (above > 0) z -= Math.sign(p.pos[2]) * (above / cab.H) * (cab.inset + cab.H * sh.narrow * 0.5 + 0.03);
+    }
+    pos.setXYZ(i, x, y, z);
+  }
+  pos.needsUpdate = true;
+}
+
+/** Glass on the cabin: screen, back light and side windows between pillars. */
+function addWindows(mesh, p, C, sh, bus, out) {
+  const [L, H, W] = p.size;
+  const m = 0.07, lift = 0.012;
+  const P = (x, y, z) => cabPoint(sh, H, x, y, z);
+  const y0 = bus ? -H / 2 + H * 0.42 : -H / 2 + m, y1 = H / 2 - m;
+  const add = (pts, zone) => {
+    const g = new THREE.BufferGeometry();
+    const [a, b, c, d] = pts;
+    g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c, ...a, ...c, ...d], 3));
+    g.computeVertexNormals();
+    const w = new THREE.Mesh(g, SHARED.glass);
+    mesh.add(w);
+    out.push({ mesh: w, zone });
+  };
+  const zi = W / 2 - m * 1.5;
+  // Screen and back light, nudged just off the frame.
+  const scr = [P(L / 2, -H / 2 + m, -zi), P(L / 2, -H / 2 + m, zi), P(L / 2, y1, zi), P(L / 2, y1, -zi)].map(q => [q[0] + lift, q[1], q[2]]);
+  add(scr, 'front');
+  const back = [P(-L / 2, -H / 2 + m, zi), P(-L / 2, -H / 2 + m, -zi), P(-L / 2, y1, -zi), P(-L / 2, y1, zi)].map(q => [q[0] - lift, q[1], q[2]]);
+  add(back, 'rear');
+  // Side windows, split by pillars.
+  const n = bus ? 7 : C.bed ? 1 : 2;
+  const gap = bus ? 0.14 : 0.12;
+  const span = L - m * 2;
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < n; k++) {
+      const xa = -L / 2 + m + (span / n) * k + (k ? gap / 2 : 0);
+      const xb = -L / 2 + m + (span / n) * (k + 1) - (k < n - 1 ? gap / 2 : 0);
+      const ta = P(xa, y1, s * W / 2), tb = P(xb, y1, s * W / 2);
+      const ba = P(xa, y0, s * W / 2), bb = P(xb, y0, s * W / 2);
+      const pts = [ba, bb, tb, ta].map(q => [q[0], q[1], q[2] + s * lift]);
+      add(pts, s < 0 ? 'left' : 'right');
+    }
+  }
+}
+
+/** A tyre with rounded shoulders: unit radius, unit width, axis along z. */
+function tyreGeometry() {
+  const prof = [[0.64, -0.5], [0.9, -0.5], [0.97, -0.44], [1, -0.3], [1, 0.3], [0.97, 0.44], [0.9, 0.5], [0.64, 0.5]]
+    .map(([r, y]) => new THREE.Vector2(r, y));
+  const g = new THREE.LatheGeometry(prof, 22);
+  g.rotateX(Math.PI / 2);
+  return g;
+}
+
+/** A steel rim with five spokes and a hub cap, facing +z. */
+function rimGeometry() {
+  const parts = [];
+  const drum = new THREE.CylinderGeometry(0.64, 0.64, 0.84, 18, 1, false);
+  drum.rotateX(Math.PI / 2);
+  parts.push(drum);
+  const dish = new THREE.CylinderGeometry(0.5, 0.58, 0.06, 18);
+  dish.rotateX(Math.PI / 2); dish.translate(0, 0, 0.38);
+  parts.push(dish);
+  const cap = new THREE.CylinderGeometry(0.16, 0.2, 0.12, 12);
+  cap.rotateX(Math.PI / 2); cap.translate(0, 0, 0.45);
+  parts.push(cap);
+  for (let k = 0; k < 5; k++) {
+    const sp = new THREE.BoxGeometry(0.1, 0.46, 0.06);
+    sp.translate(0, 0.3, 0.42);
+    sp.rotateZ((k / 5) * Math.PI * 2);
+    parts.push(sp);
+  }
+  const g = mergeGeometries(parts.map(q => q.toNonIndexed()));
+  for (const q of parts) q.dispose();
+  g.computeVertexNormals();
+  return g;
+}
+
+/** A derby number: a white roundel on the car's own colour. */
+function numberTexture(n, colour) {
   const cv = document.createElement('canvas');
-  cv.width = cv.height = 128;
+  cv.width = 256; cv.height = 128;
   const x = cv.getContext('2d');
-  x.fillStyle = '#ffffff'; x.fillRect(0, 0, 128, 128);
-  x.fillStyle = '#F2EEE4';
-  x.beginPath(); x.arc(64, 64, 46, 0, Math.PI * 2); x.fill();
+  x.fillStyle = colour; x.fillRect(0, 0, 256, 128);
+  x.fillStyle = '#F4F0E6';
+  x.beginPath(); x.arc(128, 64, 50, 0, Math.PI * 2); x.fill();
+  x.lineWidth = 5; x.strokeStyle = '#1B1A18'; x.stroke();
   x.fillStyle = '#1B1A18';
-  x.font = '900 64px "Public Sans", system-ui, sans-serif';
+  x.font = '900 70px "Public Sans", system-ui, sans-serif';
   x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(String(n), 64, 68);
+  x.fillText(String(n), 128, 70);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const top = paint.clone();
-  top.map = tex;
-  return [paint, paint, top, paint, paint, paint];
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function plateTexture() {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 40;
+  const x = cv.getContext('2d');
+  x.fillStyle = '#EDE8D8'; x.fillRect(0, 0, 128, 40);
+  x.strokeStyle = '#2A2824'; x.lineWidth = 3; x.strokeRect(2, 2, 124, 36);
+  x.fillStyle = '#2A2824';
+  x.font = '800 22px "Public Sans", system-ui, sans-serif';
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('DERBY', 64, 21);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 function nameTag(name, colour) {

@@ -5,18 +5,18 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=4';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=4';
-import { makeBrain, botInput } from './bots.js?v=4';
-import { createRenderer } from './render.js?v=4';
-import { openLobby, openGame } from '../shared/net.js?v=4';
+} from './sim.js?v=5';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=5';
+import { makeBrain, botInput } from './bots.js?v=5';
+import { createRenderer } from './render.js?v=5';
+import { openLobby, openGame } from '../shared/net.js?v=5';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
 const $ = id => document.getElementById(id);
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 4;
+const PROTOCOL = 5;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory', 'Sorrel', 'Tamarack'];
 const INTERP_MIN = 4;
@@ -658,9 +658,24 @@ function buildClassCards() {
     b.className = 'cls';
     b.dataset.cls = id;
     const bar = v => `<i><s style="width:${Math.round(v * 100)}%"></s></i>`;
-    b.innerHTML = `<b>${c.name}</b><span>${c.note}</span><div class="bars">speed ${bar(c.maxSpeed / max.speed)} armour ${bar(c.armour / max.tough)} weight ${bar(c.mass / max.mass)}</div>`;
+    b.innerHTML = `<img class="pic" alt="" hidden><b>${c.name}</b><span>${c.note}</span><div class="bars">speed ${bar(c.maxSpeed / max.speed)} armour ${bar(c.armour / max.tough)} weight ${bar(c.mass / max.mass)}</div>`;
     b.addEventListener('click', () => pickClass(id));
     box.appendChild(b);
+  }
+}
+
+/** Pictures of the cars, drawn the first time the room is opened. */
+let picsDrawn = false;
+function drawClassPictures() {
+  if (picsDrawn) return;
+  picsDrawn = true;
+  for (const img of document.querySelectorAll('#classes .cls')) {
+    const id = img.dataset.cls;
+    try {
+      const el = img.querySelector('.pic');
+      el.src = renderer.thumbnail(id, CLASS_IDS.indexOf(id));
+      el.hidden = false;
+    } catch { /* no picture, still a card */ }
   }
 }
 
@@ -678,6 +693,7 @@ function pickClass(id) {
 }
 
 function renderRoom() {
+  drawClassPictures();
   const boss = isBoss();
   const st = S.settings;
   const roster = S.role === 'client' ? (S.room ? S.room.roster : []) : S.roster;
@@ -1001,6 +1017,7 @@ function updateHud(v, time) {
     const e = Math.max(0, me.engine);
     const ec = e < 15 ? 'var(--gauge-bad)' : e < 40 ? 'var(--gauge-warn)' : 'var(--gauge-ok)';
     d += `<span class="gauge"><span class="lbl2">Engine</span><span class="meter"><i style="width:${e}%;background:${ec}"></i></span><b>${me.out ? '-' : Math.round(e) + '%'}</b></span>`;
+    d += `<span class="gauge"><span class="lbl2">Speed</span><b class="spd">${me.out ? '-' : Math.round(Math.hypot(me.vel[0], me.vel[2]) * 3.6)}</b><span class="unit">km/h</span></span>`;
     d += `<span class="gauge"><span class="lbl2">Boost</span><span class="meter boost"><i style="width:${Math.round(me.boost * 100)}%"></i></span></span>`;
     d += damageSvg(me.parts);
     const buffs = [];
@@ -1233,7 +1250,8 @@ window.addEventListener('keydown', e => {
 let last = performance.now();
 let hudT = 0;
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000);
+  // Never negative: a frame's timestamp can predate a long task that ran before it.
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000));
   last = now;
   const time = now / 1000;
   if (S.screen === 'play') {

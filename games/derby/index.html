@@ -97,6 +97,8 @@
     .meter.boost i { background: var(--boost); }
     .gauge b { font-variant-numeric: tabular-nums; min-width: 2.6em; text-align: right; font-weight: 700; }
     .dmg { width: 44px; height: 24px; }
+    .gauge .spd { min-width: 2em; font-size: 15px; }
+    .gauge .unit { font-size: 11px; color: var(--chrome-dim); margin-left: -4px; }
     .buffs { display: flex; gap: 12px; color: var(--chrome-ink); font-weight: 700; letter-spacing: 0.04em; }
     .muted { color: var(--chrome-dim); }
 
@@ -209,6 +211,7 @@
     .classes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
     .cls { border: 2px solid var(--hair); border-radius: 6px; padding: 8px 10px; background: var(--raised); cursor: pointer; text-align: left; color: var(--ink); font-family: var(--font-body); }
     .cls[aria-pressed=true] { border-color: var(--ink); box-shadow: 0 3px 0 var(--ink); background: var(--surface); }
+    .cls .pic { display: block; width: 100%; aspect-ratio: 2 / 1; object-fit: contain; margin: -4px 0 4px; }
     .cls b { display: block; font-family: var(--font-ui); font-size: 12px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
     .cls span { display: block; font-style: italic; font-size: 13px; color: var(--ink-soft); }
     .cls .bars { display: grid; grid-template-columns: auto 1fr; gap: 2px 6px; margin-top: 6px; font-family: var(--font-ui); font-size: 10px; letter-spacing: 0.08em; color: var(--label); text-transform: uppercase; align-items: center; }
@@ -427,6 +430,6 @@
   </div>
 </main>
 
-<script type="module" src="./game.js?v=4"></script>
+<script type="module" src="./game.js?v=5"></script>
 </body>
 </html>
