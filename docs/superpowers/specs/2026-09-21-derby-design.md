@@ -71,9 +71,10 @@ Tanks keeps its import path and its topics.
   other harder takes 0.55× and the one rammed 1.2×; near-equal closing
   speeds split evenly. A crash is gathered per car pair over 6 ticks, so a
   chassis and a cabin touching the same car count once.
-- **No one-crash kills.** One crash does at most 26 (rammer), 38 (even) or
-  50 (rammed) damage before zones and armour, so a full-speed sedan loses
-  about a fifth of its engine ramming a bus. Contact within 25 ticks of a
+- **Ramming never kills the rammer.** One crash does at most 26 damage to
+  the rammer before zones and armour (38 to each in an even head-on), so a
+  full-speed sedan loses about a fifth of its engine ramming a bus. The car
+  being rammed takes the full hit and can be wrecked by one. Contact within 25 ticks of a
   crash between the same pair is a scrape at 40%. A roof hit needs a
   vertical contact with something above you.
 - Engine share by zone: front 1.0, top 0.65, sides 0.3, rear 0.22. A side

@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=6';
-import * as A from './arena.js?v=6';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=7';
+import * as A from './arena.js?v=7';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -44,9 +44,8 @@ const PART_WEAR = 2.3;               // parts wear faster than the engine
 const STUB_GRIP = 0.5;             // a lost wheel's stub: little grip,
 const STUB_DRAG = 4; // and it drags
 const SCENERY_CAP = 16;             // most damage one hit on scenery can do
-const HIT_CAP_RAMMER = 26;         // the most one crash can do, before zones and armour
+const HIT_CAP_RAMMER = 26;         // the most one crash can do to the rammer, before zones and armour
 const HIT_CAP_EVEN = 38;
-const HIT_CAP_RAMMED = 50;
 const AFTER_TICKS = 25;            // contact this soon after a crash is a scrape
 const RAMMER = 0.55;
 const RAMMED = 1.2;
@@ -511,9 +510,10 @@ function gatherHits(m) {
       const zone = zoneOf(car.C, local, upHit);
       const share = ramShare(g, s);
       let amt = imp * DMG_K * share;
-      // One crash can hurt a lot but never finish a healthy car on its own:
-      // least for the rammer, most for the car it rams.
-      amt = Math.min(amt, share < 1 ? HIT_CAP_RAMMER : share > 1 ? HIT_CAP_RAMMED : HIT_CAP_EVEN);
+      // Ramming never finishes the rammer in one crash. The car it rams takes
+      // the full hit; in an even head-on both are ramming, so both are capped.
+      if (share < 1) amt = Math.min(amt, HIT_CAP_RAMMER);
+      else if (share === 1 && g.closing) amt = Math.min(amt, HIT_CAP_EVEN);
       // Grinding on straight after a crash is a scrape, not a second crash.
       if (g.after) amt *= 0.4;
       // A plough on the other car's nose doubles what it does to you.
