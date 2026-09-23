@@ -43,6 +43,13 @@ Tanks keeps its import path and its topics.
 - One rigid body per car: a cuboid chassis plus a smaller cabin cuboid. It is
   driven by Rapier's `DynamicRayCastVehicleController`: wheels are
   suspension rays, not bodies.
+- **What you see is built like a real derby car**, though the physics stays
+  one box: a steel frame (rails, cross members, floor pan, firewall,
+  engine, fuel cell), panels bolted to it (nose, tail, fenders, quarters,
+  rockers, doors, hood, boot), a cabin of pillars with glass between them,
+  and a roll cage with door bars. Take a door off and the cage shows.
+- A part can be several panels: `parts[id].meshes` all dent, and
+  `parts[id].group` is what flies off when the part detaches.
 - Parts: front bumper, rear bumper, hood, trunk, left doors, right doors,
   roof, four wheels. Each has health and a zone (front, rear, left, right,
   top).

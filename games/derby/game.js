@@ -5,11 +5,11 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=7';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=7';
-import { makeBrain, botInput } from './bots.js?v=7';
-import { createRenderer } from './render.js?v=7';
-import { openLobby, openGame } from '../shared/net.js?v=7';
+} from './sim.js?v=8';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=8';
+import { makeBrain, botInput } from './bots.js?v=8';
+import { createRenderer } from './render.js?v=8';
+import { openLobby, openGame } from '../shared/net.js?v=8';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
@@ -1288,6 +1288,7 @@ requestAnimationFrame(frame);
 window.__derbyDebug = () => S.m && S.m.cars.map(c => { const p = c.body.translation(); return { id: c.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), out: c.out }; });
 window.__derbyStats = () => ({ ...S.dbg, hist: S.mirror && S.mirror.hist.length, tickN: S.tickN, ack: S.snaps.length });
 window.__derbyInfo = () => renderer.info();
+window.__derbyShot = (cls, i) => renderer.thumbnail(cls, i, 900, 500);
 window.__derbyMine = () => { const v = S.lastView, i = myIdxIn(v); return i >= 0 ? v.cars[i] : null; };
 
 // ── Boot ───────────────────────────────────────────────────

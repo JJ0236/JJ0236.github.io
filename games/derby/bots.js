@@ -2,8 +2,8 @@
 // hurt they turn round and ram in reverse, as a real derby driver would.
 // They steer clear of edges, holes and a crusher about to come down.
 
-import * as A from './arena.js?v=7';
-import { rotate } from './sim.js?v=7';
+import * as A from './arena.js?v=8';
+import { rotate } from './sim.js?v=8';
 
 const LEVELS = {
   easy: { throttle: 0.72, aim: 1.6, lead: 0, boost: false, react: 0.9, careful: 0.6 },

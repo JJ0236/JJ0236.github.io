@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=7';
-import * as A from './arena.js?v=7';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=8';
+import * as A from './arena.js?v=8';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Materials the module-level builders share with the renderer that made them.
@@ -45,7 +45,7 @@ export function createRenderer(canvas) {
   const sun = new THREE.DirectionalLight('#FFD9A8', 2.6);
   sun.position.set(-60, 55, 30);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1536, 1536);
   const sc = sun.shadow.camera;
   sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60; sc.near = 10; sc.far = 220;
   sun.shadow.bias = -0.0006;
@@ -315,7 +315,7 @@ export function createRenderer(canvas) {
   const rimGeo = rimGeometry();
   const tyreMat = new THREE.MeshStandardMaterial({ color: '#1C1B19', roughness: 0.92, flatShading: true });
   const hubMat = new THREE.MeshStandardMaterial({ color: '#C9C6BE', roughness: 0.28, metalness: 0.9 });
-  const glassMat = new THREE.MeshStandardMaterial({ color: '#1D2830', roughness: 0.06, metalness: 0.3, envMapIntensity: 1.6, side: THREE.DoubleSide });
+  const glassMat = new THREE.MeshStandardMaterial({ color: '#41535F', roughness: 0.05, metalness: 0.15, envMapIntensity: 2.2, side: THREE.DoubleSide });
   SHARED.glass = glassMat;
   const trimMat = new THREE.MeshStandardMaterial({ color: '#2E2C29', roughness: 0.6, metalness: 0.35, flatShading: true, vertexColors: true });
   const blackMat = new THREE.MeshStandardMaterial({ color: '#151412', roughness: 0.75, metalness: 0.2 });
@@ -325,9 +325,12 @@ export function createRenderer(canvas) {
   const bladeMat = new THREE.MeshStandardMaterial({ color: '#B8BDC0', metalness: 0.85, roughness: 0.3, flatShading: true });
   const licenceMat = new THREE.MeshStandardMaterial({ map: plateTexture(), roughness: 0.5 });
   const stopMat = new THREE.MeshStandardMaterial({ color: '#B8261B', roughness: 0.5 });
+  const frameMat = new THREE.MeshStandardMaterial({ color: '#3A3733', roughness: 0.75, metalness: 0.5, flatShading: true });
+  const innerMat = new THREE.MeshStandardMaterial({ color: '#26241F', roughness: 0.85, metalness: 0.1, flatShading: true });
+  const cageMat = new THREE.MeshStandardMaterial({ color: '#A9ADA6', roughness: 0.45, metalness: 0.7, flatShading: true });
 
   // Everything shared between cars, containers and pickups: never disposed.
-  const shared = new Set([tyreGeo, rimGeo, tyreMat, hubMat, glassMat, trimMat, blackMat, chromeMat, headMat, tailMat, bladeMat, licenceMat, licenceMat.map, stopMat,
+  const shared = new Set([tyreGeo, rimGeo, tyreMat, hubMat, glassMat, trimMat, blackMat, chromeMat, headMat, tailMat, bladeMat, licenceMat, licenceMat.map, stopMat, frameMat, innerMat, cageMat,
     boxGeo, warnGeo, warnMat, shadowMat, corrugate, stripe, slabGeo, rock, steel]);
   /** Free the GPU memory of whatever a removed object owned itself. */
   function disposeTree(root, { materials = true } = {}) {
@@ -347,17 +350,19 @@ export function createRenderer(canvas) {
   const box = (sx, sy, sz, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat); m.position.set(x, y, z); return m; };
 
   /**
-   * One car, from its parts. Every panel is shaped (sloped hood, raked
-   * screens, tapered nose) before its resting shape is recorded, so dents
-   * work on the real outline. Small fittings ride on the part they belong
-   * to, so a door takes its mirror and handle with it when it comes off.
+   * One car, built the way a derby car is: a steel frame with a floor pan,
+   * firewall and engine; panels bolted to it (nose, tail, fenders, quarters,
+   * rockers, doors, hood, boot); a cabin of pillars with glass between them;
+   * and a roll cage with door bars. Take a door off and the cage shows.
+   *
+   * Every panel is shaped before its resting shape is recorded, so dents
+   * work on the real outline.
    */
   function buildCar(v, players) {
     const C = CLASSES[v.cls];
     const bus = v.cls === 'bus';
     const colour = CAR_COLOURS[v.idx % CAR_COLOURS.length];
     const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.52, metalness: 0.12, envMapIntensity: 0.7, flatShading: true, vertexColors: true });
-    // The derby number, on the roof and both doors.
     const numMat = new THREE.MeshStandardMaterial({ map: numberTexture(v.idx + 1, colour), roughness: 0.52, metalness: 0.12, envMapIntensity: 0.7, flatShading: true, vertexColors: true });
     const root = new THREE.Group();
     const parts = {};
@@ -365,52 +370,94 @@ export function createRenderer(canvas) {
     const seed = v.idx * 97 + 13;
     const hl = C.L / 2, hw = C.W / 2, hh = C.H / 2;
     const cab = C.cabin;
-    const shape = cabShape(C, v.cls);
+    const cabFront = cab.x + cab.L / 2, cabRear = cab.x - cab.L / 2;
+    const sh = cabShape(C, v.cls);
 
-    for (const p of partsFor(v.cls)) {
-      if (p.wheel) continue;
-      const g = new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2], segs(p.size[0]), segs(p.size[1]), segs(p.size[2]));
-      shapePart(g, p, C, shape);
-      weather(g, p.pos, seed, p.id === 'body' ? 0.55 : 0.3);
-      let mat = p.id.startsWith('bumper') ? trimMat : paint;
-      if (p.id === 'roof') mat = [paint, paint, numMat, paint, paint, paint];
-      else if (p.id === 'doorL') mat = [paint, paint, paint, paint, paint, numMat];
-      else if (p.id === 'doorR') mat = [paint, paint, paint, paint, numMat, paint];
-      const mesh = new THREE.Mesh(g, mat);
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      mesh.userData.rest = g.attributes.position.array.slice();
+    /** A panel that dents: shaped, weathered, and remembering its rest shape. */
+    const panel = (size, pos, mat, shapeId, amount = 0.3) => {
+      const g = new THREE.BoxGeometry(size[0], size[1], size[2], segs(size[0]), segs(size[1]), segs(size[2]));
+      if (shapeId) shapePart(g, { id: shapeId, size, pos }, C, sh);
+      weather(g, pos, seed, amount);
+      const m = new THREE.Mesh(g, mat);
+      m.castShadow = true; m.receiveShadow = true;
+      m.userData.rest = g.attributes.position.array.slice();
+      m.userData.off = pos;
+      return m;
+    };
+
+    /** Hang a part's panels off its hinge, and remember them for denting. */
+    const addPart = (def, meshes, extras = []) => {
       const pivot = new THREE.Group();
-      const h = p.hinge ? p.hinge.p : p.pos;
+      const group = new THREE.Group();
+      const h = def.hinge ? def.hinge.p : [0, 0, 0];
       pivot.position.set(...h);
-      mesh.position.set(p.pos[0] - h[0], p.pos[1] - h[1], p.pos[2] - h[2]);
-      pivot.add(mesh);
+      for (const m of [...meshes, ...extras]) {
+        const o = m.userData.off || [0, 0, 0];
+        m.position.set(o[0] - h[0], o[1] - h[1], o[2] - h[2]);
+        group.add(m);
+      }
+      pivot.add(group);
       root.add(pivot);
-      parts[p.id] = { def: p, pivot, mesh, state: 0, swing: 0, swingV: 0 };
+      parts[def.id] = { def, pivot, group, meshes, mesh: meshes[0], state: 0, swing: 0, swingV: 0 };
+      return parts[def.id];
+    };
 
-      if (p.id === 'cabin') addWindows(mesh, p, C, shape, bus, windows);
-      if (p.id === 'bumperF' || p.id === 'bumperR') {
-        const s = p.id === 'bumperF' ? 1 : -1;
+    for (const def of partsFor(v.cls)) {
+      if (def.wheel) continue;
+      if (def.id === 'body') {
+        // The panels bolted to the frame, with the door opening left clear.
+        const skin = 0.09, sideZ = hw - skin / 2 - 0.005;
+        const fenderL = Math.max(0.5, hl - cabFront), quarterL = Math.max(0.5, cabRear + hl);
+        const meshes = [
+          panel([0.15, C.H - 0.14, C.W - 0.12], [hl - 0.075, -0.02, 0], paint, 'body', 0.45),
+          panel([0.15, C.H - 0.14, C.W - 0.12], [-hl + 0.075, -0.02, 0], paint, 'body', 0.45),
+        ];
+        for (const s of [-1, 1]) {
+          meshes.push(panel([fenderL, C.H - 0.08, skin], [(hl + cabFront) / 2, 0, s * sideZ], paint, 'body', 0.5));
+          meshes.push(panel([quarterL, C.H - 0.08, skin], [(cabRear - hl) / 2, 0, s * sideZ], paint, 'body', 0.5));
+          meshes.push(panel([Math.max(0.6, cab.L * 0.95), 0.2, skin + 0.02], [cab.x, -hh + 0.11, s * sideZ], paint, 'body', 0.6));
+        }
+        addPart(def, meshes);
+        continue;
+      }
+      if (def.id === 'cabin') {
+        addPart(def, cabinPanels(C, cab, sh, bus, panel, paint), cabinFrame(C, cab, sh, bus, windows, glassMat, paint));
+        continue;
+      }
+      let mat = def.id.startsWith('bumper') ? trimMat : paint;
+      if (def.id === 'roof') mat = [paint, paint, numMat, paint, paint, paint];
+      else if (def.id === 'doorL') mat = [paint, paint, paint, paint, paint, numMat];
+      else if (def.id === 'doorR') mat = [paint, paint, paint, paint, numMat, paint];
+      const mesh = panel(def.size, def.pos, mat, def.id);
+      addPart(def, [mesh]);
+
+      if (def.id === 'bumperF' || def.id === 'bumperR') {
+        const s = def.id === 'bumperF' ? 1 : -1;
         const plate = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.13, 0.4), licenceMat);
-        plate.position.set(s * (p.size[0] / 2 + 0.01), 0, 0);
+        plate.position.set(s * (def.size[0] / 2 + 0.01), 0, 0);
         if (s < 0) plate.rotation.y = Math.PI;
         mesh.add(plate);
       }
-      if (p.id === 'doorL' || p.id === 'doorR') {
-        const out = p.id === 'doorL' ? -1 : 1;
-        const [dl, dh] = p.size;
-        const handle = box(0.16, 0.04, 0.04, chromeMat, -dl * 0.1, dh * 0.18, out * 0.04);
-        mesh.add(handle);
+      if (def.id === 'doorL' || def.id === 'doorR') {
+        const out = def.id === 'doorL' ? -1 : 1;
+        const [dl, dh] = def.size;
+        mesh.add(box(0.16, 0.04, 0.04, chromeMat, -dl * 0.1, dh * 0.18, out * 0.04));
         if (!bus) {
-          const mirror = box(0.12, 0.1, 0.16, paint, dl / 2 - 0.12, dh / 2 - 0.1, out * 0.1);
-          const glass = box(0.02, 0.07, 0.12, chromeMat, dl / 2 - 0.19, dh / 2 - 0.1, out * 0.11);
-          mesh.add(mirror, glass);
+          mesh.add(box(0.12, 0.1, 0.16, paint, dl / 2 - 0.12, dh / 2 - 0.1, out * 0.1));
+          mesh.add(box(0.02, 0.07, 0.12, chromeMat, dl / 2 - 0.19, dh / 2 - 0.1, out * 0.11));
         }
       }
     }
 
-    // Fixed fittings on the tub.
-    const nose = hl - 0.01;
-    const lampY = hh - 0.2;
+    // The frame, the cage and what is inside: one mesh each, shared by class.
+    const chassis = chassisGeometry(v.cls);
+    const frame = new THREE.Mesh(chassis.frame, frameMat);
+    const inner = new THREE.Mesh(chassis.inner, innerMat);
+    root.add(frame, inner);
+    if (chassis.cage) root.add(new THREE.Mesh(chassis.cage, cageMat));
+
+    // Lamps, grille and exhaust.
+    const nose = hl - 0.01, lampY = hh - 0.2;
     for (const s of [-1, 1]) {
       const lamp = new THREE.Mesh(new THREE.CylinderGeometry(bus ? 0.14 : 0.11, bus ? 0.14 : 0.11, 0.06, 14), headMat);
       lamp.rotation.z = Math.PI / 2;
@@ -418,27 +465,19 @@ export function createRenderer(canvas) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(bus ? 0.15 : 0.12, 0.02, 6, 16), chromeMat);
       ring.rotation.y = Math.PI / 2;
       ring.position.set(nose + 0.02, lampY, s * (hw - 0.3));
-      root.add(lamp, ring);
-      root.add(box(0.05, 0.13, 0.36, tailMat, -hl + 0.005, hh - 0.15, s * (hw - 0.3)));
+      root.add(lamp, ring, box(0.05, 0.13, 0.36, tailMat, -hl + 0.005, hh - 0.15, s * (hw - 0.3)));
     }
-    // Grille between the lamps.
     root.add(box(0.04, 0.2, Math.max(0.4, C.W - 1.0), blackMat, nose, lampY - 0.02, 0));
-    const bar = box(0.05, 0.03, Math.max(0.4, C.W - 1.0) + 0.04, chromeMat, nose + 0.01, lampY + 0.08, 0);
-    root.add(bar);
-    // Exhaust under the tail.
+    root.add(box(0.05, 0.03, Math.max(0.4, C.W - 1.0) + 0.04, chromeMat, nose + 0.01, lampY + 0.08, 0));
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 10), chromeMat);
     pipe.rotation.z = Math.PI / 2;
     pipe.position.set(-hl - 0.05, -hh + 0.05, hw * 0.55);
     root.add(pipe);
     if (C.bed) {
-      // Pickup: the bed walls and a tow bar across the back of the cab.
-      const bedL = hl + (cab.x - cab.L / 2) - 0.1;
-      const bedX = -hl + bedL / 2 + 0.05;
+      const bedL = hl + cabRear - 0.1, bedX = -hl + bedL / 2 + 0.05;
       for (const s of [-1, 1]) root.add(box(bedL, 0.42, 0.07, paint, bedX, hh + 0.21, s * (hw - 0.04)));
-      root.add(box(0.07, 0.5, C.W - 0.3, blackMat, cab.x - cab.L / 2 - 0.15, hh + 0.5, 0));
     }
     if (bus) {
-      // Black rub rails down both sides, and the stop arm.
       for (const s of [-1, 1]) for (const y of [-hh + 0.18, hh - 0.08]) root.add(box(C.L - 0.2, 0.07, 0.03, blackMat, 0, y, s * (hw + 0.01)));
       const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 8), stopMat);
       arm.rotation.x = Math.PI / 2;
@@ -465,8 +504,7 @@ export function createRenderer(canvas) {
       tyre.scale.set(r, r, w);
       const rim = new THREE.Mesh(rimGeo, hubMat);
       rim.scale.set(r, r, w);
-      // The rim faces outward on both sides of the car.
-      if (mt[2] < 0) rim.rotation.y = Math.PI;
+      if (mt[2] < 0) rim.rotation.y = Math.PI;       // the rim faces outward on both sides
       const spin = new THREE.Group();
       spin.add(tyre, rim);
       g.add(spin);
@@ -479,9 +517,111 @@ export function createRenderer(canvas) {
     const tag = player && player.name ? nameTag(player.name, colour) : null;
     if (tag) { tag.position.set(0, hh + cab.H + 1.4, 0); root.add(tag); }
 
-    root.traverse(o => { if (o.isMesh && o !== shell) o.castShadow = true; });
+    // Only the outside of the car casts a shadow: the cage, the interior and
+    // the small fittings are not worth a second pass through the shadow map.
+    root.traverse(o => { if (o.isMesh) o.castShadow = false; });
+    for (const id in parts) for (const m of parts[id].meshes) m.castShadow = true;
+    for (const w of wheels) w.spin.children[0].castShadow = true;
     scene.add(root);
     return { idx: v.idx, id: v.id, cls: v.cls, C, root, parts, wheels, windows, paint, numMat, blade, shell, tag, smokeT: 0, dustT: 0, fireT: 0, speed: 0, lastPos: null, out: null, dents: 0 };
+  }
+
+  /** The frame, engine, seats and cage of one class, merged and kept. */
+  const chassisCache = new Map();
+  function chassisGeometry(cls) {
+    let made = chassisCache.get(cls);
+    if (made) return made;
+    const C = CLASSES[cls], cab = C.cabin, bus = cls === 'bus';
+    const hl = C.L / 2, hw = C.W / 2, hh = C.H / 2;
+    const cabFront = cab.x + cab.L / 2, cabRear = cab.x - cab.L / 2;
+    const top = hh;
+    const frame = [], inner = [], cage = [];
+    const put = (list, sx, sy, sz, x, y, z) => { const g = new THREE.BoxGeometry(sx, sy, sz); g.translate(x, y, z); list.push(g); };
+    // Frame: two rails, cross members and the floor pan.
+    for (const s of [-1, 1]) put(frame, C.L - 0.06, 0.14, 0.15, 0, -hh - 0.02, s * hw * 0.52);
+    for (const x of [hl * 0.62, 0, -hl * 0.62]) put(frame, 0.12, 0.12, C.W - 0.4, x, -hh - 0.02, 0);
+    put(frame, C.L - 0.3, 0.08, C.W - 0.34, 0, -hh + 0.06, 0);
+    // Firewall, engine and a bulkhead behind the cabin.
+    put(frame, 0.09, C.H * 0.95, C.W - 0.3, cabFront, 0, 0);
+    const engL = Math.max(0.5, (hl - cabFront) * 0.62);
+    put(frame, engL, C.H * 0.8, C.W * 0.46, cabFront + engL / 2 + 0.14, 0.02, 0);
+    put(frame, 0.09, C.H * 0.8, C.W - 0.34, cabRear, 0, 0);
+    if (!C.bed) put(frame, 0.5, 0.36, 0.52, -hl + 0.55, -0.02, 0);          // fuel cell
+    // Inside: seats, dash and wheel.
+    const seatZ = bus ? 0 : -C.W * 0.16;
+    const rows = bus ? [1.6, 0.4, -0.8, -2] : [0];
+    for (const r of rows) for (const s of (bus ? [-1, 1] : [0])) {
+      const x = cab.x + r, z = bus ? s * C.W * 0.24 : seatZ;
+      put(inner, 0.42, 0.12, 0.44, x, top + 0.12, z);
+      put(inner, 0.12, 0.46, 0.44, x - 0.22, top + 0.36, z);
+    }
+    if (!bus) {
+      put(inner, 0.22, 0.2, C.W - 0.5, cabFront - 0.16, top + 0.18, 0);      // dash
+      const wheelG = new THREE.TorusGeometry(0.13, 0.03, 6, 14);
+      wheelG.rotateY(Math.PI / 2);
+      wheelG.rotateZ(0.5);
+      wheelG.translate(cabFront - 0.36, top + 0.36, seatZ);
+      inner.push(wheelG);
+      // Roll cage: main hoop, screen bars, door bars and a roof cross. The
+      // roof bars stay inside the roof panel, which narrows toward the top.
+      const sh = cabShape(C, cls);
+      const zc = hw - cab.inset - 0.06, hTop = top + cab.H - 0.14;
+      const zTop = Math.min(zc, (C.W - cab.inset * 2) * (1 - sh.narrow) / 2 - 0.06);
+      for (const s of [-1, 1]) {
+        put(cage, 0.07, cab.H, 0.07, cabRear + 0.12, top + cab.H / 2, s * zc);
+        // The screen bar leans back with the windscreen.
+        const rake = sh_rake(C, cls), len = Math.hypot(cab.H, rake);
+        const bar = new THREE.BoxGeometry(0.07, len * 0.94, 0.07);
+        bar.rotateZ(Math.asin(Math.max(-1, Math.min(1, rake / len))));
+        bar.translate(cabFront - 0.12 - rake / 2, top + cab.H / 2, s * zc);
+        cage.push(bar);
+        // Door bars, seen through the side windows.
+        put(cage, cab.L * 0.86, 0.07, 0.07, cab.x, top + 0.09, s * (zc + 0.03));
+        put(cage, cab.L * 0.82, 0.06, 0.06, cab.x, top + 0.3, s * (zc + 0.03));
+      }
+      put(cage, 0.07, 0.07, zTop * 2, cabRear + 0.12, hTop, 0);   // hoop top
+      put(cage, 0.07, 0.07, zTop * 2, cab.x, hTop, 0);            // roof cross
+    }
+    const join = list => { const g = mergeGeometries(list.map(q => q.toNonIndexed())); for (const q of list) q.dispose(); g.computeVertexNormals(); return g; };
+    made = { frame: join(frame), inner: join(inner), cage: cage.length ? join(cage) : null };
+    for (const g of Object.values(made)) if (g) shared.add(g);
+    chassisCache.set(cls, made);
+    return made;
+  }
+
+  /** The cabin's painted parts: the waist band and the header rail. */
+  function cabinPanels(C, cab, sh, bus, panel, paint) {
+    const top = C.H / 2;
+    const Wc = C.W - cab.inset * 2;
+    const bandH = bus ? cab.H * 0.42 : 0.13;
+    const out = [panel([cab.L, bandH, Wc], [cab.x, top + bandH / 2, 0], paint, null, 0.4)];
+    const topL = cab.L * sh.a, topW = Wc * (1 - sh.narrow);
+    out.push(panel([topL, 0.08, topW], [cab.x + sh.b, top + cab.H - 0.05, 0], paint, null, 0.4));
+    return out;
+  }
+
+  /** Pillars and glass: the cabin is a frame, not a block. */
+  function cabinFrame(C, cab, sh, bus, windows, glass, pillarMat) {
+    const top = C.H / 2, Wc = C.W - cab.inset * 2;
+    const bandH = bus ? cab.H * 0.42 : 0.13;
+    const y0 = -cab.H / 2 + bandH, y1 = cab.H / 2 - 0.08;
+    const h = y1 - y0;
+    const out = [];
+    const spans = windowSpans(cab.L, bus, C.bed);
+    const xs = [...new Set(spans.flat().map(x => +x.toFixed(3)))];
+    for (const s of [-1, 1]) {
+      for (const x of xs) {
+        const xTop = x * sh.a + sh.b;
+        const g = new THREE.BoxGeometry(0.07, h, 0.07);
+        g.rotateZ(Math.asin(Math.max(-1, Math.min(1, -(xTop - x) / Math.hypot(h, xTop - x)))));
+        const m = new THREE.Mesh(g, pillarMat);
+        m.userData.off = [cab.x + (x + xTop) / 2, top + cab.H / 2 + (y0 + y1) / 2, s * (Wc / 2 - 0.02)];
+        out.push(m);
+      }
+    }
+    // Glass in the openings.
+    addWindows(out, { size: [cab.L, cab.H, Wc], pos: [cab.x, top + cab.H / 2, 0] }, C, sh, bus, windows, glass, spans);
+    return out;
   }
 
   /** Glass on a hit's side of the cabin breaks, with a spray of shards. */
@@ -509,10 +649,11 @@ export function createRenderer(canvas) {
     for (const id in c.parts) {
       const part = c.parts[id];
       if (part.state === 2) continue;
-      const g = part.mesh.geometry;
+      for (const mesh of part.meshes) {
+      const g = mesh.geometry;
       const pos = g.attributes.position;
-      const a = pos.array, rest = part.mesh.userData.rest;
-      const o = part.def.pos;
+      const a = pos.array, rest = mesh.userData.rest;
+      const o = mesh.userData.off;
       let touched = false;
       for (let i = 0; i < a.length; i += 3) {
         const x = a[i] + o[0], y = a[i + 1] + o[1], z = a[i + 2] + o[2];
@@ -529,6 +670,7 @@ export function createRenderer(canvas) {
         touched = true;
       }
       if (touched) { pos.needsUpdate = true; g.computeBoundingSphere(); }
+      }
     }
     c.dents++;
   }
@@ -554,7 +696,7 @@ export function createRenderer(canvas) {
       const part = c.parts[pid];
       if (!part || part.state === 2) return;
       part.state = 2;
-      obj = part.mesh;
+      obj = part.group;
       obj.updateWorldMatrix(true, false);
       obj.getWorldPosition(tmpV);
       obj.getWorldQuaternion(tmpQ);
@@ -1114,6 +1256,9 @@ function weather(g, offset, seed, amount) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
 }
 
+/** The screen rake of one class, for the cage's screen bars. */
+function sh_rake(C, cls) { return cabShape(C, cls).rakeF; }
+
 /** How far the top of a car's cabin sits back from its base: the screen rake. */
 function cabShape(C, cls) {
   const H = C.cabin.H;
@@ -1168,8 +1313,19 @@ function shapePart(g, p, C, sh) {
   pos.needsUpdate = true;
 }
 
-/** Glass on the cabin: screen, back light and side windows between pillars. */
-function addWindows(mesh, p, C, sh, bus, out) {
+/** Where the side windows start and stop along the cabin. */
+function windowSpans(L, bus, bed) {
+  const m = 0.07, n = bus ? 7 : bed ? 1 : 2, gap = bus ? 0.14 : 0.12;
+  const span = L - m * 2;
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    out.push([-L / 2 + m + (span / n) * k + (k ? gap / 2 : 0), -L / 2 + m + (span / n) * (k + 1) - (k < n - 1 ? gap / 2 : 0)]);
+  }
+  return out;
+}
+
+/** Glass in the cabin's openings: screen, back light and the side windows. */
+function addWindows(list, p, C, sh, bus, out, glassMat, spans) {
   const [L, H, W] = p.size;
   const m = 0.07, lift = 0.012;
   const P = (x, y, z) => cabPoint(sh, H, x, y, z);
@@ -1179,8 +1335,9 @@ function addWindows(mesh, p, C, sh, bus, out) {
     const [a, b, c, d] = pts;
     g.setAttribute('position', new THREE.Float32BufferAttribute([...a, ...b, ...c, ...a, ...c, ...d], 3));
     g.computeVertexNormals();
-    const w = new THREE.Mesh(g, SHARED.glass);
-    mesh.add(w);
+    const w = new THREE.Mesh(g, glassMat || SHARED.glass);
+    w.userData.off = p.pos;
+    list.push(w);
     out.push({ mesh: w, zone });
   };
   const zi = W / 2 - m * 1.5;
@@ -1189,14 +1346,9 @@ function addWindows(mesh, p, C, sh, bus, out) {
   add(scr, 'front');
   const back = [P(-L / 2, -H / 2 + m, zi), P(-L / 2, -H / 2 + m, -zi), P(-L / 2, y1, -zi), P(-L / 2, y1, zi)].map(q => [q[0] - lift, q[1], q[2]]);
   add(back, 'rear');
-  // Side windows, split by pillars.
-  const n = bus ? 7 : C.bed ? 1 : 2;
-  const gap = bus ? 0.14 : 0.12;
-  const span = L - m * 2;
+  // Side windows, in the openings between the pillars.
   for (const s of [-1, 1]) {
-    for (let k = 0; k < n; k++) {
-      const xa = -L / 2 + m + (span / n) * k + (k ? gap / 2 : 0);
-      const xb = -L / 2 + m + (span / n) * (k + 1) - (k < n - 1 ? gap / 2 : 0);
+    for (const [xa, xb] of spans) {
       const ta = P(xa, y1, s * W / 2), tb = P(xb, y1, s * W / 2);
       const ba = P(xa, y0, s * W / 2), bb = P(xb, y0, s * W / 2);
       const pts = [ba, bb, tb, ta].map(q => [q[0], q[1], q[2] + s * lift]);
