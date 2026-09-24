@@ -98,7 +98,25 @@ Tanks keeps its import path and its topics.
 | pickup | heavy | medium | 1.25 | tough, slow to turn |
 | bus | very heavy | low | 1.6 | a battering ram |
 
-## Arena: "The Quarry"
+## Sound
+
+Made in the browser, nothing to download: engines are detuned saws through
+a filter (the note follows the revs, the tone dulls as the engine is hurt),
+crashes are noise bursts over a thump, parts ring as they come off, plus
+crushers, containers, crumbling floor, fire, pickups, countdown beeps and a
+round-over chime. The nearest four cars are heard, placed left or right and
+quieter with distance. Volume and mute live in the status bar.
+
+## Arenas
+
+`arena.js` holds the arenas as data and `makeArena(id)` hands the sim and
+the renderer the same numbers: cell grid, floor height, ramps, pits,
+crushers, grip, and how the floor is taken away. The renderer keeps a theme
+per arena (sky, light, floor and surroundings) and rebuilds when the arena
+changes. Snapshots carry the arena id, and the ice's holes as events plus
+the whole list once a second so a lost event heals.
+
+### The Quarry
 
 - A raised square platform, 120 m across (30 cells of 4 m), over a drop. A car below
   `y = -8` is out.
@@ -114,6 +132,14 @@ Tanks keeps its import path and its topics.
 - **Crushers.** Four hydraulic presses near the corners on a cycle: up,
   shaking warning, slam, hold, rise. A car under the plate at the bottom
   takes heavy top damage and a flattened roof.
+
+### Frozen lake
+
+A round sheet of ice, 112 m across, with low grip (0.6) and no crushers.
+Ice thins where cars drive: about four seconds of standing on one cell,
+faster under a heavy car, and a hard hit breaks it too. A cell creaks (and
+shows) at 45%, then drops away and weakens its neighbours. Cars that go
+through fall into the water, so most rounds end in falls, not wrecks.
 
 ## Driving
 

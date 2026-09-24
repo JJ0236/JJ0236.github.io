@@ -2,8 +2,7 @@
 // hurt they turn round and ram in reverse, as a real derby driver would.
 // They steer clear of edges, holes and a crusher about to come down.
 
-import * as A from './arena.js?v=9';
-import { rotate } from './sim.js?v=9';
+import { rotate } from './sim.js?v=10';
 
 const LEVELS = {
   easy: { throttle: 0.72, aim: 1.6, lead: 0, boost: false, react: 0.9, careful: 0.6 },
@@ -20,6 +19,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 /** m: the match (host side). Returns one tick of input. */
 export function botInput(m, car, brain, dt) {
+  const A = m.A;
   const inp = { t: 0, s: 0, hb: 0, b: 0, f: 0 };
   if (car.out || m.phase === 'countdown') return inp;
   const L = brain.L;
@@ -100,7 +100,9 @@ export function botInput(m, car, brain, dt) {
   const cracking = A.crumbleRing(m.t).cracking;
   const edgeRing = Math.max(m.fallen + 1, cracking >= 0 ? cracking + 1 : 0);
   const cellRing = A.ringOf(A.cellOf(ax), A.cellOf(az));
-  const danger = !A.cellAlive(m.cells, ax, az) || (cellRing < edgeRing);
+  // Cracked ice counts as no floor at all: bots steer off it.
+  const cracked = m.cracked && m.cracked.has(A.cellIndex(ax, az));
+  const danger = !A.cellAlive(m.cells, ax, az) || (cellRing < edgeRing) || cracked;
   if (danger) {
     // Steer for the middle and ease off.
     const a = angleTo(fx * dir, fz * dir, -p.x, -p.z);

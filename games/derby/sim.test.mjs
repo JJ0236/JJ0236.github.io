@@ -5,10 +5,12 @@ import assert from 'node:assert/strict';
 import {
   createMatch, step, snapshot, unpackSnap, view, DT, yawQuat, rotate,
   createMirror, mirrorStep, mirrorCorrect, unpackCar, packCar,
-} from './sim.js?v=9';
-import { makeBrain, botInput } from './bots.js?v=9';
-import * as A from './arena.js?v=9';
-import { PART_IDS } from './cars.js?v=9';
+} from './sim.js?v=10';
+import { makeBrain, botInput } from './bots.js?v=10';
+import { makeArena, ARENAS } from './arena.js?v=10';
+
+const A = makeArena('quarry');
+import { PART_IDS } from './cars.js?v=10';
 
 const mod = await import(process.env.RAPIER || '@dimforge/rapier3d-compat');
 const R = mod.default || mod;
@@ -25,8 +27,8 @@ function match(classes, settings = {}) {
   return m;
 }
 
-function place(car, x, z, yaw, speed = 0) {
-  const y = A.heightAt(x, z) + car.C.wheel.r + car.C.wheel.rest + car.C.H / 2;
+function place(car, x, z, yaw, speed = 0, A2 = A) {
+  const y = A2.heightAt(x, z) + car.C.wheel.r + car.C.wheel.rest + car.C.H / 2;
   car.body.setTranslation({ x, y, z }, true);
   car.body.setRotation(yawQuat(yaw), true);
   const f = rotate(yawQuat(yaw), [1, 0, 0]);
@@ -202,7 +204,7 @@ test("a guest's own world tracks the host's car", () => {
   place(b, 30, 30, FACE_X);
   run(m, 20);
   const p = a.body.translation(), q = a.body.rotation();
-  const mr = createMirror(R, 'sedan', { x: p.x, y: p.y, z: p.z, q }, [null, { cls: 'sedan', pose: { x: 30, y: 1, z: 30, yaw: 0 } }]);
+  const mr = createMirror(R, 'quarry', 'sedan', { x: p.x, y: p.y, z: p.z, q }, [null, { cls: 'sedan', pose: { x: 30, y: 1, z: 30, yaw: 0 } }]);
   const inputs = i => ({ t: 1, s: i > 60 && i < 100 ? 0.6 : 0, hb: 0, b: 0, f: 0 });
   let worst = 0;
   for (let i = 1; i <= 180; i++) {
@@ -233,4 +235,43 @@ test('once every person is out, the healthiest bot takes the round', () => {
   const end = ev.find(e => e.type === 'roundEnd');
   assert.ok(end, 'the round ended');
   assert.equal(end.winner, 'b2');
+});
+
+test('the ice cracks under a car and then gives way', () => {
+  const ice = makeArena('lake');
+  const m = createMatch(R, { hazards: true, pickups: false, arena: 'lake' }, [
+    { id: 'p0', name: 'P0', cls: 'bus' }, { id: 'p1', name: 'P1', cls: 'sedan' }], 9);
+  m.phase = 'play'; m.t = 0;
+  m.nextDrop = 1e9;
+  place(m.cars[0], 6, 0, FACE_X, 0, ice);
+  place(m.cars[1], -30, 0, FACE_X, 0, ice);
+  const ev = run(m, 60 * 20, {}, e => e.some(x => x.type === 'cellFall'));
+  const crack = ev.find(e => e.type === 'crack');
+  const fell = ev.find(e => e.type === 'cellFall');
+  assert.ok(crack, 'it creaked first');
+  assert.equal(fell.cell, crack.cell, 'the cell that creaked is the one that went');
+  assert.equal(m.cells[fell.cell], 0);
+  assert.ok(m.gone.includes(fell.cell));
+  // It was the ice under the bus that went.
+  const [cx, cz] = ice.cellPos(fell.cell);
+  const p = m.cars[0].body.translation();
+  assert.ok(Math.hypot(cx - p.x, cz - p.z) < 5, 'the hole is under the car');
+  // A snapshot carries the arena and, now and then, every hole.
+  m.tick = 60;
+  const s = JSON.parse(JSON.stringify(snapshot(m)));
+  assert.equal(s.a, 'lake');
+  assert.deepEqual(s.cl, m.gone);
+  assert.equal(unpackSnap(s).arena, 'lake');
+});
+
+test('an arena brings its own floor, grip and hazards', () => {
+  const ice = makeArena('lake'), pit = makeArena('quarry');
+  assert.ok(ice.grip < pit.grip, 'the ice is slippery');
+  assert.equal(ice.CRUSHERS.length, 0, 'no crushers on the lake');
+  assert.equal(pit.CRUSHERS.length, 4);
+  assert.equal(ice.crumbleRing(500).fallen, -1, 'the lake has no crumbling rings');
+  // The lake is round: its corners were never there.
+  const cells = ice.startCells();
+  assert.equal(ice.cellAlive(cells, 0, 0), true);
+  assert.equal(ice.cellAlive(cells, ice.HALF - 2, ice.HALF - 2), false);
 });

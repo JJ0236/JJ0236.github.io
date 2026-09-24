@@ -9,8 +9,24 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=9';
-import * as A from './arena.js?v=9';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=10';
+import { makeArena } from './arena.js?v=10';
+
+// How each arena looks. The sim knows none of this.
+const THEMES = {
+  quarry: {
+    sky: ['#5E7FA6', '#E8B488', '#B57A55'], horizon: '#D7A07A', fog: [90, 330],
+    sun: ['#FFD9A8', 2.6], hemi: ['#F5D2A8', '#4A3A2A', 0.85],
+    floor: ['#A3805A', '#7D5F42', '#C29C70'], rock: '#7A6350', ramp: '#8C7456',
+    crack: '#B8321E', env: 0.55,
+  },
+  ice: {
+    sky: ['#8FB6D8', '#D8E6F0', '#AFC3D2'], horizon: '#CFDDE8', fog: [70, 300],
+    sun: ['#EAF2FF', 2.2], hemi: ['#DCEAF6', '#5B6E7E', 1.1],
+    floor: ['#CFE2EC', '#A9C6D6', '#EAF4FA'], rock: '#9FC0D2', ramp: '#DCE9F1',
+    crack: '#1F3B52', env: 0.8, water: '#123043', ice: true,
+  },
+};
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Materials the module-level builders share with the renderer that made them.
@@ -34,14 +50,17 @@ export function createRenderer(canvas) {
   const MAX_RATIO = Math.min(1.75, window.devicePixelRatio || 1);
   let ratio = MAX_RATIO;
 
+  let A = makeArena('quarry');
+  let arenaId = 'quarry';
+  let theme = THEMES.quarry;
   const scene = new THREE.Scene();
-  const HORIZON = new THREE.Color('#D7A07A');
-  scene.fog = new THREE.Fog(HORIZON, 90, 330);
+  scene.fog = new THREE.Fog(new THREE.Color(theme.horizon), 90, 330);
   const camera = new THREE.PerspectiveCamera(62, 1, 0.2, 900);
   camera.position.set(0, 40, 70);
 
   // ── Light: a low sun through dust ──
-  scene.add(new THREE.HemisphereLight('#F5D2A8', '#4A3A2A', 0.85));
+  const hemi = new THREE.HemisphereLight('#F5D2A8', '#4A3A2A', 0.85);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight('#FFD9A8', 2.6);
   sun.position.set(-60, 55, 30);
   sun.castShadow = true;
@@ -52,24 +71,31 @@ export function createRenderer(canvas) {
   sun.shadow.normalBias = 0.04;
   scene.add(sun, sun.target);
 
-  scene.add(sky());
-  // The dusk sky, reflected in paint, glass and chrome.
-  {
+  let skyMesh = null, surrounds = null;
+  /** The sky, what surrounds the arena, and the reflections off both. */
+  function buildSky() {
+    if (skyMesh) { scene.remove(skyMesh); skyMesh.geometry.dispose(); skyMesh.material.dispose(); }
+    skyMesh = sky(800, theme.sky);
+    scene.add(skyMesh);
+    if (surrounds) { scene.remove(surrounds); disposeTree(surrounds); }
+    surrounds = theme.ice ? lake(A, theme) : quarry();
+    scene.add(surrounds);
     const pmrem = new THREE.PMREMGenerator(gl);
     const envScene = new THREE.Scene();
-    envScene.add(sky(50));
+    envScene.add(sky(50, theme.sky));
+    if (scene.environment) scene.environment.dispose();
     scene.environment = pmrem.fromScene(envScene, 0.04).texture;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = theme.env;
     pmrem.dispose();
   }
-  scene.add(quarry());
 
   // ── The platform ──
   const dirt = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0, flatShading: true });
   const rock = new THREE.MeshStandardMaterial({ color: '#7A6350', roughness: 1, flatShading: true });
   let floorMesh = null, cliffMesh = null, crackMesh = null;
   let cells = A.startCells();
-  let fallenShown = -1, crackShown = -1;
+  let fallenShown = -1, crackShown = -1, crackKey = '';
+  const cracked = new Set();          // ice: the cells that are creaking
   const crackMat = new THREE.MeshBasicMaterial({ color: '#B8321E', transparent: true, opacity: 0.35, depthWrite: false });
 
   function buildFloor() {
@@ -80,7 +106,8 @@ export function createRenderer(canvas) {
     g.setAttribute('position', new THREE.BufferAttribute(vertices.slice(), 3));
     g.setIndex(new THREE.BufferAttribute(indices, 1));
     const col = new Float32Array(vertices.length);
-    const base = new THREE.Color('#A3805A'), dark = new THREE.Color('#7D5F42'), pale = new THREE.Color('#C29C70');
+    const [baseC, darkC, paleC] = theme.floor;
+    const base = new THREE.Color(baseC), dark = new THREE.Color(darkC), pale = new THREE.Color(paleC);
     const c = new THREE.Color();
     for (let i = 0; i < vertices.length / 3; i++) {
       const x = vertices[i * 3], y = vertices[i * 3 + 1], z = vertices[i * 3 + 2];
@@ -94,21 +121,25 @@ export function createRenderer(canvas) {
     floorMesh = new THREE.Mesh(g, dirt);
     floorMesh.receiveShadow = true;
     scene.add(floorMesh);
-    cliffMesh = new THREE.Mesh(cliffGeometry(cells), rock);
+    cliffMesh = new THREE.Mesh(cliffGeometry(cells, A), rock);
     cliffMesh.receiveShadow = true;
     scene.add(cliffMesh);
   }
 
-  function buildCracks(ring) {
+  /** Marks on the floor: a whole ring about to crumble, or cracked ice. */
+  function buildCracks(ring, cellSet) {
     if (crackMesh) { scene.remove(crackMesh); crackMesh.geometry.dispose(); crackMesh = null; }
-    if (ring < 0) return;
+    if (ring < 0 && !(cellSet && cellSet.size)) return;
     const pos = [];
     for (let j = 0; j < A.N; j++) for (let i = 0; i < A.N; i++) {
-      if (!cells[j * A.N + i] || A.ringOf(i, j) !== ring) continue;
+      const k = j * A.N + i;
+      const want = cellSet ? cellSet.has(k) : A.ringOf(i, j) === ring;
+      if (!cells[k] || !want) continue;
       const x0 = -A.HALF + i * A.CELL, z0 = -A.HALF + j * A.CELL;
       const y = A.heightAt(x0 + 2, z0 + 2) + 0.05;
-      pos.push(x0 + 0.15, y, z0 + 0.15, x0 + 0.15, y, z0 + 3.85, x0 + 3.85, y, z0 + 0.15,
-        x0 + 3.85, y, z0 + 0.15, x0 + 0.15, y, z0 + 3.85, x0 + 3.85, y, z0 + 3.85);
+      const m = A.CELL * 0.04, e = A.CELL - m;
+      pos.push(x0 + m, y, z0 + m, x0 + m, y, z0 + e, x0 + e, y, z0 + m,
+        x0 + e, y, z0 + m, x0 + m, y, z0 + e, x0 + e, y, z0 + e);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -136,31 +167,51 @@ export function createRenderer(canvas) {
     }
   }
 
-  function setFallen(fallen) {
-    if (fallen === fallenShown) return;
-    const removed = [];
-    if (fallen < fallenShown) cells = A.startCells();
-    for (let r = 0; r <= fallen; r++) removed.push(...A.dropRings(cells, r));
-    const animate = fallen > fallenShown && fallenShown >= -1 && removed.length < 200;
-    fallenShown = fallen;
+  /** Take the floor from the match: whatever has gone, drops away here too. */
+  function setCells(next) {
+    if (!next) return;
+    let removed = [];
+    let changed = next.length !== cells.length;
+    if (!changed) {
+      for (let i = 0; i < next.length; i++) {
+        if (next[i] === cells[i]) continue;
+        changed = true;
+        if (!next[i]) removed.push(i); else { removed = []; break; }   // a new round: nothing falls
+      }
+    }
+    if (!changed) return;
+    const grew = next.length !== cells.length || removed.length === 0;
+    cells = Uint8Array.from(next);
     buildFloor();
-    if (animate) dropSlabs(removed);
+    if (!grew && removed.length && removed.length < 200) dropSlabs(removed);
     crackShown = -2;
+    crackKey = '';
   }
 
   // ── Ramps, crushers ──
   const rampMat = new THREE.MeshStandardMaterial({ color: '#8C7456', roughness: 0.9, flatShading: true });
   const stripe = stripeTexture();
-  for (const r of A.RAMPS) {
-    const g = new ConvexGeometry(A.rampPoints(r).map(p => V(...p)));
-    const m = new THREE.Mesh(g, rampMat);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
+  let rampGroup = null;
+  function buildRamps() {
+    if (rampGroup) { scene.remove(rampGroup); disposeTree(rampGroup); }
+    rampGroup = new THREE.Group();
+    for (const r of A.RAMPS) {
+      const m = new THREE.Mesh(new ConvexGeometry(A.rampPoints(r).map(p => V(...p))), rampMat);
+      m.castShadow = m.receiveShadow = true;
+      rampGroup.add(m);
+    }
+    scene.add(rampGroup);
   }
   const steel = new THREE.MeshStandardMaterial({ color: '#5E6468', roughness: 0.55, metalness: 0.6, flatShading: true });
   const plateMat = [steel, steel, new THREE.MeshStandardMaterial({ color: '#4A4F52', roughness: 0.6, metalness: 0.5 }), new THREE.MeshStandardMaterial({ map: stripe, roughness: 0.7 }), steel, steel];
   const padMat = new THREE.MeshStandardMaterial({ map: stripe, roughness: 0.8, transparent: true, opacity: 0.85, depthWrite: false });
-  const crushers = A.CRUSHERS.map(c => {
+  let crushers = [];
+  let crusherGroup = null;
+  function buildCrushers() {
+    if (crusherGroup) { scene.remove(crusherGroup); disposeTree(crusherGroup); }
+    crusherGroup = new THREE.Group();
+    scene.add(crusherGroup);
+    crushers = A.CRUSHERS.map(c => {
     const g = new THREE.Group();
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.45, 12, 8), steel);
@@ -182,9 +233,41 @@ export function createRenderer(canvas) {
     pad.position.set(c.x, A.heightAt(c.x, c.z) + 0.04, c.z);
     pad.renderOrder = 1;
     g.add(pad);
-    scene.add(g);
+    crusherGroup.add(g);
     return { c, plate, rod, pad, lastPhase: 'idle' };
-  });
+    });
+  }
+
+  /** Move to another arena: its floor, its ramps, its sky and its light. */
+  function setArena(id) {
+    if (id === arenaId && floorMesh) return;
+    arenaId = id;
+    A = makeArena(id);
+    theme = THEMES[A.theme] || THEMES.quarry;
+    scene.fog.color.set(theme.horizon);
+    scene.fog.near = theme.fog[0];
+    scene.fog.far = theme.fog[1];
+    sun.color.set(theme.sun[0]);
+    sun.intensity = theme.sun[1];
+    hemi.color.set(theme.hemi[0]);
+    hemi.groundColor.set(theme.hemi[1]);
+    hemi.intensity = theme.hemi[2];
+    rock.color.set(theme.rock);
+    rampMat.color.set(theme.ramp);
+    crackMat.color.set(theme.crack);
+    crackMat.opacity = theme.ice ? 0.5 : 0.35;
+    dirt.roughness = theme.ice ? 0.25 : 0.95;
+    dirt.metalness = theme.ice ? 0.05 : 0;
+    cells = A.startCells();
+    cracked.clear();
+    fallenShown = -1; crackShown = -2; crackKey = '';
+    slabList.length = 0;
+    buildSky();
+    buildRamps();
+    buildCrushers();
+    buildFloor();
+    buildCracks(-1);
+  }
 
   function updateCrushers(t) {
     for (const k of crushers) {
@@ -878,6 +961,13 @@ export function createRenderer(canvas) {
   function addEvents(events, view, opts = {}) {
     for (const e of events) {
       if (e.type === 'round') resetRound();
+      if (e.type === 'crack' && e.cell !== undefined) { cracked.add(e.cell); crackShown = -1; }
+      if (e.type === 'cellFall' && e.cell !== undefined) {
+        cracked.delete(e.cell);
+        crackShown = -1;
+        const [cx, cz] = A.cellPos(e.cell);
+        puff(theme.ice ? 'grey' : 'dust', V(cx, A.heightAt(cx, cz) + 0.3, cz), 8, 3);
+      }
       const c = e.c !== undefined ? cars[e.c] : null;
       const cv = view && e.c !== undefined ? view.cars[e.c] : null;
       if (e.type === 'hit' && c) {
@@ -912,7 +1002,9 @@ export function createRenderer(canvas) {
     for (const [, o] of pickupObjs) { scene.remove(o.root); disposeTree(o.root); }
     pickupObjs.clear();
     cells = A.startCells();
+    cracked.clear();
     fallenShown = -1;
+    crackKey = '';
     buildFloor();
     buildCracks(-1);
     history.length = 0;
@@ -1019,11 +1111,18 @@ export function createRenderer(canvas) {
     players = o.players || players;
     const dt = Math.max(0, Math.min(0.1, o.dt || 0));
     const time = o.time || 0;
-    if (!floorMesh) buildFloor();
+    if (!floorMesh) setArena(arenaId);
     if (view) {
-      setFallen(view.fallen ?? -1);
-      const crack = A.crumbleRing(view.t).cracking;
-      if (crack !== crackShown) { crackShown = crack; buildCracks(crack); }
+      setArena(view.arena || 'quarry');
+      setCells(view.cells);
+      if (A.wear) {
+        // Ice: the cells that are creaking, redrawn when the set changes.
+        const key = cracked.size + ':' + crackShown;
+        if (key !== crackKey) { crackKey = key; buildCracks(-1, cracked); }
+      } else {
+        const crack = A.crumbleRing(view.t).cracking;
+        if (crack !== crackShown) { crackShown = crack; buildCracks(crack); }
+      }
       if (crackMesh) crackMat.opacity = 0.25 + Math.sin(time * 9) * 0.15;
       record(view, time);
       syncCars(view, dt, time);
@@ -1084,7 +1183,7 @@ export function createRenderer(canvas) {
     camera.updateProjectionMatrix();
   }
 
-  buildFloor();
+  setArena('quarry');
 
   /** A picture of one kind of car, for the car picker. */
   function thumbnail(cls, idx = 0, w = 320, h = 160) {
@@ -1173,11 +1272,11 @@ export function createRenderer(canvas) {
 
 // ── Pieces of scenery ──────────────────────────────────────
 
-function sky(radius = 800) {
+function sky(radius = 800, colours = ['#5E7FA6', '#E8B488', '#B57A55']) {
   const g = new THREE.SphereGeometry(radius, 32, 16);
   const m = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color('#5E7FA6') }, mid: { value: new THREE.Color('#E8B488') }, low: { value: new THREE.Color('#B57A55') } },
+    uniforms: { top: { value: new THREE.Color(colours[0]) }, mid: { value: new THREE.Color(colours[1]) }, low: { value: new THREE.Color(colours[2]) } },
     vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 low; varying vec3 vp;
       void main(){ float h = vp.y; vec3 c = h > 0.0 ? mix(mid, top, pow(clamp(h*1.6,0.0,1.0), 0.7)) : mix(mid, low, clamp(-h*3.0,0.0,1.0));
@@ -1222,8 +1321,43 @@ function quarry() {
   return group;
 }
 
+/** The frozen lake: dark water under the ice, snow banks and pines. */
+function lake(A, theme) {
+  const group = new THREE.Group();
+  const water = new THREE.Mesh(new THREE.CircleGeometry(400, 48), new THREE.MeshStandardMaterial({ color: theme.water, roughness: 0.12, metalness: 0.5 }));
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = -1.4;
+  group.add(water);
+  // A snowy bank all the way round, beyond the ice.
+  const bankGeo = new THREE.CylinderGeometry(150, 190, 26, 48, 3, true);
+  const pos = bankGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const a = Math.atan2(z, x);
+    const k = 1 + (Math.sin(a * 5) * 4 + Math.sin(a * 13 + y * 0.1) * 3 + (hash(i) - 0.5) * 6) / 180;
+    pos.setXYZ(i, x * k, y + (hash(i + 5) - 0.5) * 3, z * k);
+  }
+  bankGeo.computeVertexNormals();
+  const bank = new THREE.Mesh(bankGeo, new THREE.MeshStandardMaterial({ color: '#E7EFF5', roughness: 0.9, flatShading: true, side: THREE.BackSide }));
+  bank.position.y = 2;
+  group.add(bank);
+  // Pines along the bank.
+  const trunk = new THREE.MeshStandardMaterial({ color: '#4A3A2E', roughness: 1, flatShading: true });
+  const needle = new THREE.MeshStandardMaterial({ color: '#2F4A38', roughness: 1, flatShading: true });
+  for (let i = 0; i < 90; i++) {
+    const a = (i / 90) * Math.PI * 2 + hash(i) * 0.06, r = 120 + hash(i + 2) * 45;
+    const h = 8 + hash(i + 7) * 9;
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, h * 0.35, 5), trunk);
+    const c = new THREE.Mesh(new THREE.ConeGeometry(2.4 + hash(i + 3) * 1.6, h, 7), needle);
+    t.position.set(Math.cos(a) * r, h * 0.18, Math.sin(a) * r);
+    c.position.set(t.position.x, h * 0.62, t.position.z);
+    group.add(t, c);
+  }
+  return group;
+}
+
 /** Rock faces under every edge of the floor, down into the dark. */
-function cliffGeometry(cells) {
+function cliffGeometry(cells, A) {
   const pos = [];
   const depth = -9;
   const alive = (i, j) => i >= 0 && j >= 0 && i < A.N && j < A.N && cells[j * A.N + i] === 1;

@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=9';
-import * as A from './arena.js?v=9';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=10';
+import { makeArena, ARENAS } from './arena.js?v=10';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;
@@ -22,7 +22,7 @@ export const PICKUPS = {
   plough: { name: 'Plough', note: 'your front hits twice as hard for 15 s' },
   boost: { name: 'Boost', note: 'fills the boost meter' },
 };
-export const DEFAULT_SETTINGS = { rounds: 3, bots: 5, botLevel: 'normal', hazards: true, pickups: true };
+export const DEFAULT_SETTINGS = { rounds: 3, bots: 5, botLevel: 'normal', hazards: true, pickups: true, arena: 'quarry' };
 
 // Collision groups: membership in the high 16 bits, what it collides with in the low.
 const G_WORLD = 1, G_CAR = 2, G_BOX = 4;
@@ -88,14 +88,14 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  * The arena's colliders. Used by the host's world and by a guest's
  * prediction world alike.
  */
-export function buildArena(R, world, cells) {
+export function buildArena(R, world, cells, A) {
   const fixed = world.createRigidBody(R.RigidBodyDesc.fixed());
   const floor = { body: fixed, collider: null };
-  setFloor(R, world, floor, cells);
+  setFloor(R, world, floor, cells, A);
   for (const r of A.RAMPS) {
     const pts = new Float32Array(A.rampPoints(r).flat());
     const d = R.ColliderDesc.convexHull(pts);
-    if (d) world.createCollider(d.setCollisionGroups(WORLD_GROUPS).setFriction(0.9), fixed);
+    if (d) world.createCollider(d.setCollisionGroups(WORLD_GROUPS).setFriction(0.9 * A.floorFriction), fixed);
   }
   // Crusher pillars: the plates themselves are handled by rule, not contact.
   for (const c of A.CRUSHERS) {
@@ -108,15 +108,15 @@ export function buildArena(R, world, cells) {
   return floor;
 }
 
-export function setFloor(R, world, floor, cells) {
+export function setFloor(R, world, floor, cells, A) {
   if (floor.collider) world.removeCollider(floor.collider, true);
   const { vertices, indices } = A.floorMesh(cells);
   floor.collider = world.createCollider(
-    R.ColliderDesc.trimesh(vertices, indices).setCollisionGroups(WORLD_GROUPS).setFriction(1.0), floor.body);
+    R.ColliderDesc.trimesh(vertices, indices).setCollisionGroups(WORLD_GROUPS).setFriction(A.floorFriction), floor.body);
 }
 
 /** A car's body, colliders and vehicle controller. */
-export function buildCar(R, world, clsId, pose, { kinematic = false } = {}) {
+export function buildCar(R, world, clsId, pose, { kinematic = false, grip = 1 } = {}) {
   const C = CLASSES[clsId];
   // Cars never sleep: the vehicle controller's engine force does not wake a
   // body, so a car parked through the countdown would ignore the throttle.
@@ -143,19 +143,19 @@ export function buildCar(R, world, clsId, pose, { kinematic = false } = {}) {
     for (const [x, y, z] of wheelMounts(clsId)) {
       vc.addWheel({ x, y, z }, { x: 0, y: -1, z: 0 }, { x: 0, y: 0, z: 1 }, C.wheel.rest, C.wheel.r);
     }
-    for (let i = 0; i < 4; i++) tuneWheel(vc, i, C);
+    for (let i = 0; i < 4; i++) tuneWheel(vc, i, C, grip);
   }
   return { body, chassis, cabin, vc };
 }
 
-function tuneWheel(vc, i, C) {
+function tuneWheel(vc, i, C, grip = 1) {
   vc.setWheelSuspensionStiffness(i, 30);
   vc.setWheelSuspensionCompression(i, 2.4);
   vc.setWheelSuspensionRelaxation(i, 3.2);
   vc.setWheelMaxSuspensionTravel(i, 0.3);
   vc.setWheelMaxSuspensionForce(i, C.mass * 40);
-  vc.setWheelFrictionSlip(i, 2.2);
-  vc.setWheelSideFrictionStiffness(i, 1.0);
+  vc.setWheelFrictionSlip(i, 2.2 * grip);
+  vc.setWheelSideFrictionStiffness(i, 1.0 * grip);
 }
 
 // ── A match ────────────────────────────────────────────────
@@ -177,10 +177,12 @@ export function createMatch(R, settings, players, seed = (Math.random() * 2 ** 3
     round: 0,
     phase: 'countdown',
     rand: rng(seed),
+    arena: ARENAS[settings && settings.arena] ? settings.arena : 'quarry',
     events: [],
     tick: 0,
     world: null,
   };
+  m.A = makeArena(m.arena);
   for (const p of m.players) { m.wins[p.id] = 0; m.kills[p.id] = 0; }
   startRound(m);
   return m;
@@ -198,9 +200,13 @@ export function startRound(m) {
   m.world = new R.World({ x: 0, y: -9.81, z: 0 });
   m.world.timestep = DT;
   m.queue = new R.EventQueue(true);
+  const A = m.A;
   m.cells = A.startCells();
   m.fallen = -1;
-  m.floor = buildArena(R, m.world, m.cells);
+  m.wear = A.wear ? new Float32Array(A.N * A.N) : null;
+  m.cracked = new Set();
+  m.gone = [];
+  m.floor = buildArena(R, m.world, m.cells, A);
   m.owners = new Map();            // collider handle -> { car } | { box }
   m.pending = new Map();           // pair key -> gathered hit
   m.lastPair = new Map();          // pair key -> tick its last hit was counted
@@ -218,9 +224,9 @@ export function startRound(m) {
     const s = spawns[order[i]];
     const C = CLASSES[p.cls];
     const y = A.heightAt(s.x, s.z) + C.wheel.r + C.wheel.rest + C.H / 2 - 0.05;
-    const built = buildCar(R, m.world, p.cls, { x: s.x, y, z: s.z, yaw: s.yaw });
+    const built = buildCar(R, m.world, p.cls, { x: s.x, y, z: s.z, yaw: s.yaw }, { grip: A.grip });
     const car = {
-      id: p.id, idx: i, cls: p.cls, C, ...built,
+      id: p.id, idx: i, cls: p.cls, C, grip: A.grip, ...built,
       parts: Object.fromEntries(PART_IDS.map(id => [id, 100])),
       engine: 100, boost: 1, out: null, outAt: 0,
       steer: 0, flipCd: 0, stuck: 0,
@@ -264,6 +270,12 @@ function damage(m, car, zone, amount, local, by) {
   }
   // Only a car still running gets the credit; ramming a wreck is not a kill.
   if (by && by !== car && !by.out) car.lastHit = { id: by.id, t: m.t };
+  // On ice, a hard landing or a shunt breaks the surface under the car.
+  if (m.A.wear && dmg > 5) {
+    const p = car.body.translation();
+    const k = m.A.cellIndex(p.x, p.z);
+    if (k >= 0 && m.cells[k]) m.wear[k] += m.A.wear.takes * Math.min(0.5, dmg * 0.012);
+  }
   if (car.engine <= 0) eliminate(m, car, 'wreck');
   return eng;
 }
@@ -350,12 +362,14 @@ export function drive(car, inp, { frozen = false } = {}) {
   const wheels = WHEEL_PARTS.filter(w => car.parts[w] > 0).length || 1;
   for (let i = 0; i < 4; i++) {
     if (car.parts[WHEEL_PARTS[i]] <= 0) { vc.setWheelBrake(i, hb ? 60 : STUB_DRAG); continue; }
+
     vc.setWheelEngineForce(i, engine / wheels);
     vc.setWheelSteering(i, i < 2 ? car.steer : 0);
     const rear = i >= 2;
     vc.setWheelBrake(i, hb && rear ? 60 : brake);
-    vc.setWheelFrictionSlip(i, hb && rear ? 0.75 : 2.2);
-    vc.setWheelSideFrictionStiffness(i, hb && rear ? 0.45 : 1.0);
+    const grip = car.grip || 1;
+    vc.setWheelFrictionSlip(i, (hb && rear ? 0.75 : 2.2) * grip);
+    vc.setWheelSideFrictionStiffness(i, (hb && rear ? 0.45 : 1.0) * grip);
   }
 
   // Boost: a push along the car's nose.
@@ -391,6 +405,7 @@ export function drive(car, inp, { frozen = false } = {}) {
 
 /** inputs: { [playerId]: { t, s, hb, b, f } } */
 export function step(m, inputs) {
+  const A = m.A;
   m.tick++;
   if (m.phase === 'matchEnd') return;
   const frozen = m.phase === 'countdown';
@@ -411,6 +426,7 @@ export function step(m, inputs) {
   gatherHits(m);
   if (m.phase === 'play' || m.phase === 'roundEnd') {
     if (m.settings.hazards) { crushers(m); crumble(m); drops(m); }
+    if (A.wear) thinIce(m);
     if (m.settings.pickups) pickups(m);
   }
   boxesUpkeep(m);
@@ -574,6 +590,7 @@ function ramShare(g, s) {
 // ── Hazards ────────────────────────────────────────────────
 
 function crushers(m) {
+  const A = m.A;
   for (const c of A.CRUSHERS) {
     const st = A.crusherState(c.k, m.t);
     if (st.phase !== 'hold' && !(st.phase === 'slam' && st.y < 2)) {
@@ -600,7 +617,40 @@ function crushers(m) {
   }
 }
 
+/**
+ * Ice: every car wears the cell under it. Past the cracking point it
+ * creaks and shows, and at the end it drops away, taking a little of the
+ * strength of the cells around it with it.
+ */
+function thinIce(m) {
+  const A = m.A, W = A.wear;
+  for (const car of m.cars) {
+    if (car.out === 'fell') continue;
+    const p = car.body.translation();
+    if (p.y > 4) continue;                          // in the air over a jump
+    const k = A.cellIndex(p.x, p.z);
+    if (k < 0 || !m.cells[k]) continue;
+    m.wear[k] += DT * (car.C.mass / 1500) * (car.out ? 0.6 : 1);
+    const w = m.wear[k];
+    if (w > W.takes * W.crack && !m.cracked.has(k)) {
+      m.cracked.add(k);
+      m.events.push({ type: 'crack', cell: k });
+    }
+    if (w > W.takes) {
+      m.cells[k] = 0;
+      m.cracked.delete(k);
+      m.gone.push(k);
+      m.events.push({ type: 'cellFall', cell: k });
+      for (const n of A.neighbours(k)) if (m.cells[n]) m.wear[n] += W.takes * W.spread;
+      setFloor(m.R, m.world, m.floor, m.cells, A);
+      for (const c of m.cars) c.body.wakeUp();
+      for (const b of m.boxes) b.body.wakeUp();
+    }
+  }
+}
+
 function crumble(m) {
+  const A = m.A;
   const { fallen, cracking } = A.crumbleRing(m.t);
   if (cracking >= 0 && m.cracking !== cracking) {
     m.cracking = cracking;
@@ -612,13 +662,14 @@ function crumble(m) {
       m.events.push({ type: 'crumble', ring: r, n: gone.length });
     }
     m.fallen = fallen;
-    setFloor(m.R, m.world, m.floor, m.cells);
+    setFloor(m.R, m.world, m.floor, m.cells, A);
     for (const car of m.cars) car.body.wakeUp();
     for (const b of m.boxes) b.body.wakeUp();
   }
 }
 
 function drops(m) {
+  const A = m.A;
   if (m.phase !== 'play' || m.t < m.nextDrop) return;
   m.nextDrop = m.t + 7 + m.rand() * 3;
   const alive = m.cars.filter(c => !c.out);
@@ -677,6 +728,7 @@ function boxesUpkeep(m) {
 }
 
 function pickups(m) {
+  const A = m.A;
   if (m.phase === 'play' && m.t >= m.nextPickup && m.pickups.length < 3) {
     m.nextPickup = m.t + 8 + m.rand() * 4;
     for (let tries = 0; tries < 10; tries++) {
@@ -747,30 +799,43 @@ function recolour(m) {
 // kinematic stand-ins moved to where the host says they are. The host stays
 // the judge; this only makes your own driving feel immediate.
 
-export function createMirror(R, cls, pose, others) {
+export function createMirror(R, arenaId, cls, pose, others) {
+  const A = makeArena(arenaId);
   const world = new R.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = DT;
   const cells = A.startCells();
-  const floor = buildArena(R, world, cells);
-  const built = buildCar(R, world, cls, pose);
+  const floor = buildArena(R, world, cells, A);
+  const built = buildCar(R, world, cls, pose, { grip: A.grip });
   const me = {
-    cls, C: CLASSES[cls], ...built,
+    cls, C: CLASSES[cls], grip: A.grip, ...built,
     parts: Object.fromEntries(PART_IDS.map(id => [id, 100])),
     engine: 100, boost: 1, out: null, steer: 0, flipCd: 0,
     buffs: { armour: 0, plough: 0 }, lostWheels: new Set(),
   };
   const proxies = others.map(o => o ? buildCar(R, world, o.cls, o.pose, { kinematic: true }) : null);
-  return { R, world, floor, cells, fallen: -1, me, proxies, boxes: new Map(), hist: [] };
+  return { R, A, world, floor, cells, fallen: -1, gone: new Set(), me, proxies, boxes: new Map(), hist: [] };
 }
 
 export function freeMirror(mr) { if (mr) mr.world.free(); }
 
 /** Bring the guest's world in line with a snapshot: floor, lost wheels, stand-ins. */
 export function mirrorSync(mr, v, myIdx) {
+  const A = mr.A;
+  let floorChanged = false;
   if (v.fallen > mr.fallen) {
     for (let r = mr.fallen + 1; r <= v.fallen; r++) A.dropRings(mr.cells, r);
     mr.fallen = v.fallen;
-    setFloor(mr.R, mr.world, mr.floor, mr.cells);
+    floorChanged = true;
+  }
+  // Ice: the holes the host has told us about.
+  for (const k of v.holes || []) {
+    if (mr.gone.has(k)) continue;
+    mr.gone.add(k);
+    mr.cells[k] = 0;
+    floorChanged = true;
+  }
+  if (floorChanged) {
+    setFloor(mr.R, mr.world, mr.floor, mr.cells, A);
     mr.me.body.wakeUp();
   }
   const mine = v.cars[myIdx];
@@ -924,7 +989,9 @@ export function unpackCar(a) {
 /** Everything a client needs to draw a moment of the match. */
 export function snapshot(m) {
   return {
-    k: m.tick, t: r3(m.t), ph: m.phase, r: m.round,
+    k: m.tick, t: r3(m.t), ph: m.phase, r: m.round, a: m.arena,
+    // The ice's holes: the whole list now and then, so a lost event heals.
+    cl: m.gone && m.gone.length && m.tick % 60 === 0 ? m.gone.slice() : undefined,
     p: m.cars.map(c => [c.id, c.cls]),
     c: m.cars.map(packCar),
     b: m.boxes.map(b => {
@@ -941,6 +1008,7 @@ export function snapshot(m) {
 export function unpackSnap(s) {
   return {
     tick: s.k, t: s.t, phase: s.ph, round: s.r, fallen: s.f, winner: s.w,
+    arena: s.a || 'quarry', cellsGone: s.cl,
     cars: s.c.map((a, i) => ({ id: s.p[i][0], idx: i, cls: s.p[i][1], ...unpackCar(a) })),
     boxes: s.b.map(b => ({ id: b[0], pos: [b[1], b[2], b[3]], quat: [b[4], b[5], b[6], b[7]], vy: b[8] })),
     pickups: s.pk.map(p => ({ id: p[0], kind: p[1], x: p[2], y: p[3], z: p[4] })),
@@ -951,6 +1019,7 @@ export function unpackSnap(s) {
 export function view(m) {
   return {
     t: m.t, phase: m.phase, round: m.round, fallen: m.fallen,
+    arena: m.arena, cells: m.cells,
     winner: m.winner,
     cars: m.cars.map(car => ({ id: car.id, idx: car.idx, cls: car.cls, ...unpackCar(packCar(car)) })),
     boxes: m.boxes.map(b => {

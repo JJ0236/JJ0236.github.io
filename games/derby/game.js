@@ -5,19 +5,20 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=9';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=9';
-import { makeBrain, botInput } from './bots.js?v=9';
-import { createRenderer } from './render.js?v=9';
-import { createAudio } from './audio.js?v=9';
-import { openLobby, openGame } from '../shared/net.js?v=9';
+} from './sim.js?v=10';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=10';
+import { ARENAS, ARENA_IDS, makeArena } from './arena.js?v=10';
+import { makeBrain, botInput } from './bots.js?v=10';
+import { createRenderer } from './render.js?v=10';
+import { createAudio } from './audio.js?v=10';
+import { openLobby, openGame } from '../shared/net.js?v=10';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
 const $ = id => document.getElementById(id);
 // Bump when host and guest code stop being compatible. Browsers can hold an
 // old copy for a few minutes after a deploy, so the two sides check.
-const PROTOCOL = 7;
+const PROTOCOL = 8;
 const REFRESH = 'Refresh the page (Ctrl+Shift+R, or Cmd+Shift+R on a Mac)';
 const BOT_NAMES = ['Rook', 'Bramble', 'Flint', 'Hickory', 'Sorrel', 'Tamarack'];
 const INTERP_MIN = 4;
@@ -496,9 +497,30 @@ function clientHandlers() {
   };
 }
 
+/** A guest's floor: the holes the host has reported, as cells. */
+function clientCells(v) {
+  const arena = v.arena || 'quarry';
+  const A = makeArena(arena);
+  if (!S.cells || S.cellsArena !== arena || S.cellsRound !== v.round) {
+    S.cells = A.startCells();
+    S.cellsArena = arena;
+    S.cellsRound = v.round;
+    S.holes = new Set();
+    S.fallenShown = -1;
+  }
+  if (v.cellsGone) for (const k of v.cellsGone) { if (!S.holes.has(k)) { S.holes.add(k); S.cells[k] = 0; } }
+  const { fallen } = A.crumbleRing(v.t);
+  if (fallen > S.fallenShown) {
+    for (let r = S.fallenShown + 1; r <= fallen; r++) for (const k of A.dropRings(S.cells, r)) S.holes.add(k);
+    S.fallenShown = fallen;
+  }
+  return S.cells;
+}
+
 function resetClientView() {
   S.snaps = []; S.evq = []; S.lastQ = 0; S.offset = null; S.jit = 2; S.snapGap = 2;
   freeMirror(S.mirror); S.mirror = null; S.mirrorRound = 0;
+  S.cells = null; S.holes = new Set(); S.fallenShown = -1; S.cellsRound = -1;
   S.lastView = null; S.spect = -1; S.lastOut = null;
 }
 
@@ -530,6 +552,8 @@ function clientSnap(data) {
     if (q <= S.lastQ) continue;
     S.lastQ = q;
     S.evq.push({ tick: k, e });
+    // A hole in the ice applies at once: it is what you drive on.
+    if (e.type === 'cellFall' && S.cells && !S.holes.has(e.cell)) { S.holes.add(e.cell); S.cells[e.cell] = 0; }
   }
   trimEvents(300);
 
@@ -539,10 +563,11 @@ function clientSnap(data) {
   if (!S.mirror || S.mirrorRound !== v.round) {
     freeMirror(S.mirror);
     const pose = c => ({ x: c.pos[0], y: c.pos[1], z: c.pos[2], q: { x: c.quat[0], y: c.quat[1], z: c.quat[2], w: c.quat[3] } });
-    S.mirror = createMirror(R, v.cars[me].cls, pose(v.cars[me]), v.cars.map((c, i) => (i === me ? null : { cls: c.cls, pose: pose(c) })));
+    S.mirror = createMirror(R, v.arena || 'quarry', v.cars[me].cls, pose(v.cars[me]), v.cars.map((c, i) => (i === me ? null : { cls: c.cls, pose: pose(c) })));
     S.mirrorRound = v.round;
   }
-  mirrorSync(S.mirror, v, me);
+  clientCells(v);
+  mirrorSync(S.mirror, { ...v, holes: [...S.holes] }, me);
   const ack = data.ak && data.ak[S.myId];
   if (ack && !v.cars[me].out) {
     const r = mirrorCorrect(S.mirror, v.cars[me], ack);
@@ -639,6 +664,7 @@ function clientView(now) {
   }
   const v = {
     t: lerp(s0.t, s1.t), phase: latest.phase, round: latest.round, fallen: s1.fallen, winner: latest.winner,
+    arena: latest.arena, cells: clientCells(latest),
     cars, boxes, pickups: s1.pickups, wins: latest.wins, kills: latest.kills,
   };
   S.lastView = v;
@@ -648,6 +674,10 @@ function clientView(now) {
 // ── Room screen ────────────────────────────────────────────
 
 const isBoss = () => S.role === 'host' || S.role === 'solo';
+
+function buildArenaSelect() {
+  $('setArena').innerHTML = ARENA_IDS.map(id => `<option value="${id}">${esc(ARENAS[id].name)}</option>`).join('');
+}
 
 function buildClassCards() {
   const box = $('classes');
@@ -739,7 +769,7 @@ function renderRoom() {
     box.appendChild(row);
   }
 
-  for (const [id, v] of [['setRounds', String(st.rounds)], ['setBots', String(st.bots)], ['setLevel', st.botLevel]]) {
+  for (const [id, v] of [['setArena', st.arena || 'quarry'], ['setRounds', String(st.rounds)], ['setBots', String(st.bots)], ['setLevel', st.botLevel]]) {
     $(id).value = v;
     $(id).disabled = !boss;
   }
@@ -760,6 +790,7 @@ function changeSetting(k, v) {
   if (S.role === 'solo') store.set('derby-solo', JSON.stringify(S.settings));
   roomChanged();
 }
+$('setArena').addEventListener('change', e => changeSetting('arena', e.target.value));
 $('setRounds').addEventListener('change', e => changeSetting('rounds', +e.target.value));
 $('setBots').addEventListener('change', e => changeSetting('bots', +e.target.value));
 $('setLevel').addEventListener('change', e => changeSetting('botLevel', e.target.value));
@@ -1050,7 +1081,11 @@ function updateHud(v, time) {
 
   // Banner
   let title = '', sub = '';
-  if (v.phase === 'countdown') { title = `Round ${v.round}`; sub = me ? `${CLASSES[me.cls].name} · last car running wins` : 'You are in from next round'; }
+  if (v.phase === 'countdown') {
+    const where = ARENAS[v.arena] ? ARENAS[v.arena].name : '';
+    title = `Round ${v.round}`;
+    sub = me ? `${where} · ${CLASSES[me.cls].name}` : `${where} · you are in from next round`;
+  }
   else if (v.phase === 'roundEnd' || v.phase === 'matchEnd') {
     const w = v.winner ? nameOf(v.winner) : null;
     title = w ? (w === 'You' ? 'You take the round' : `${w} takes the round`) : 'Nobody left running';
@@ -1183,8 +1218,9 @@ let attractEvents = [];
 
 function newAttract() {
   const ps = BOT_NAMES.map((name, i) => ({ id: 'a' + i, name, cls: CLASS_IDS[(i + (Math.random() * 4 | 0)) % 4], bot: true }));
+  const where = ARENA_IDS[(Math.random() * ARENA_IDS.length) | 0];
   if (attract && attract.world) { attract.world.free(); attract.queue.free(); }
-  attract = createMatch(R, { rounds: 99, hazards: true, pickups: true }, ps);
+  attract = createMatch(R, { rounds: 99, hazards: true, pickups: true, arena: where }, ps);
   attractBrains = Object.fromEntries(ps.map((p, i) => [p.id, makeBrain(i % 2 ? 'normal' : 'hard', i / 6)]));
   renderer.resetRound();
 }
@@ -1297,6 +1333,8 @@ requestAnimationFrame(frame);
 window.__derbyDebug = () => S.m && S.m.cars.map(c => { const p = c.body.translation(); return { id: c.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), out: c.out }; });
 window.__derbyStats = () => ({ ...S.dbg, hist: S.mirror && S.mirror.hist.length, tickN: S.tickN, ack: S.snaps.length });
 window.__derbyInfo = () => renderer.info();
+window.__derbyHoles = () => (S.holes ? S.holes.size : -1);
+window.__derbyHostHoles = () => (S.m && S.m.gone ? S.m.gone.length : -1);
 window.__derbyAudio = () => audio.debug();
 window.__derbyShot = (cls, i) => renderer.thumbnail(cls, i, 900, 500);
 window.__derbyMine = () => { const v = S.lastView, i = myIdxIn(v); return i >= 0 ? v.cars[i] : null; };
@@ -1324,6 +1362,7 @@ function buildVolume() {
 // ── Boot ───────────────────────────────────────────────────
 
 buildClassCards();
+buildArenaSelect();
 buildVolume();
 fit();
 show('title');

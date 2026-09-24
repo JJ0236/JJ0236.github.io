@@ -65,8 +65,8 @@
               <span class="spec-dim">1–6 players</span>
             </div>
             <span class="spec-note">A demolition derby over a quarry, in 3D.</span>
-            <p>Last car running takes the round. Panels dent where you hit them, doors and bumpers hang loose and then come off, and a car that loses a wheel drags. The engine sits in the nose, so the old hands ram in reverse. The platform crumbles from the edges, containers drop from the sky and four crushers slam down on anyone parked underneath.</p>
-            <div class="facts">4 cars from compact to school bus · crushers, containers, crumbling edges · kill-cam</div>
+            <p>Last car running takes the round. Panels dent where you hit them, doors and bumpers hang loose and then come off, and a car that loses a wheel drags. The engine sits in the nose, so the old hands ram in reverse. Fight in a quarry where the edge crumbles, containers drop from the sky and four crushers slam down on anyone parked underneath, or out on a frozen lake where the ice gives way under the cars that drive over it.</p>
+            <div class="facts">2 arenas · 4 cars from compact to school bus · crushers, containers, cracking ice · kill-cam</div>
             <span class="btn btn-primary go">Play Derby</span>
           </div>
         </a>
@@ -106,7 +106,8 @@
   </script>
   <script type="module">
     // The Derby platform from above: floor cells, the bowl, pits, ramps and crushers.
-    import * as A from '/games/derby/arena.js?v=9';
+    import { makeArena } from '/games/derby/arena.js?v=10';
+    const A = makeArena('quarry');
     const cv = document.getElementById('derbyMap');
     const ctx = cv.getContext('2d');
     function draw() {
