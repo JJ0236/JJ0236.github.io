@@ -70,6 +70,19 @@
             <span class="btn btn-primary go">Play Derby</span>
           </div>
         </a>
+        <a href="/games/barrage/" class="game fade-up">
+          <canvas class="plate-map" id="barrageMap" width="420" height="300" aria-hidden="true"></canvas>
+          <div>
+            <div class="spec-head">
+              <span class="spec-name">Barrage</span>
+              <span class="spec-dim">1–4 players</span>
+            </div>
+            <span class="spec-note">Turn-based artillery, and ground that does not last.</span>
+            <p>Three guns each, taking turns across a hillside. Set the angle, hold to charge, and let go. Every shell takes a bite out of the land, so the cover you hid behind this turn may not be there the next. Dig someone out with a burrowing shell, leave a mine where they will walk, or save the big one for when it counts.</p>
+            <div class="facts">8 weapons · crates by parachute · squads of three · bots or friends</div>
+            <span class="btn btn-primary go">Play Barrage</span>
+          </div>
+        </a>
       </div>
     </main>
   </div>
@@ -103,6 +116,68 @@
     }
     draw();
     window.siteTheme && window.siteTheme.onChange(draw);
+  </script>
+  <script type="module">
+    // A slice of Barrage's ground, drawn from the game's own generator.
+    import { generate, W as BW, H as BH } from '/games/barrage/terrain.js?v=1';
+    const bv = document.getElementById('barrageMap');
+    const bctx = bv.getContext('2d');
+    function drawBarrage() {
+      const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      let a = 20260924;
+      const rand = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const { top } = generate(rand);
+      const s = bv.width / BW;
+      bctx.fillStyle = css('--canvas-bg');
+      bctx.fillRect(0, 0, bv.width, bv.height);
+      // The hillside, with two craters bitten out of it.
+      bctx.save();
+      bctx.beginPath();
+      bctx.moveTo(0, bv.height);
+      for (let x = 0; x < BW; x += 8) bctx.lineTo(x * s, top[x] * s + 30);
+      bctx.lineTo(bv.width, bv.height);
+      bctx.closePath();
+      bctx.clip();
+      bctx.fillStyle = css('--line');
+      bctx.fillRect(0, 0, bv.width, bv.height);
+      bctx.fillStyle = css('--canvas-bg');
+      for (const [cx, r] of [[0.42, 34], [0.68, 24]]) {
+        bctx.beginPath();
+        bctx.arc(bv.width * cx, top[Math.round(BW * cx)] * s + 34, r, 0, Math.PI * 2);
+        bctx.fill();
+      }
+      bctx.restore();
+      bctx.strokeStyle = css('--rule');
+      bctx.lineWidth = 2;
+      bctx.beginPath();
+      for (let x = 0; x < BW; x += 8) bctx.lineTo(x * s, top[x] * s + 30);
+      bctx.stroke();
+      // Two little guns and an arc between them.
+      const cols = ['#C2452F', '#2F6FA8'];
+      const at = [0.18, 0.86];
+      at.forEach((f, i) => {
+        const x = bv.width * f, y = top[Math.round(BW * f)] * s + 30;
+        bctx.fillStyle = cols[i];
+        bctx.fillRect(x - 6, y - 7, 12, 7);
+        bctx.fillStyle = css('--head');
+        bctx.fillRect(x - 7, y, 14, 3);
+      });
+      bctx.strokeStyle = css('--head');
+      bctx.setLineDash([4, 5]);
+      bctx.lineWidth = 1.5;
+      bctx.beginPath();
+      const x0 = bv.width * at[0], y0 = top[Math.round(BW * at[0])] * s + 22;
+      const x1 = bv.width * 0.42, y1 = top[Math.round(BW * 0.42)] * s + 30;
+      for (let t = 0; t <= 1; t += 0.05) {
+        const x = x0 + (x1 - x0) * t;
+        const y = y0 + (y1 - y0) * t - Math.sin(t * Math.PI) * 90;
+        t ? bctx.lineTo(x, y) : bctx.moveTo(x, y);
+      }
+      bctx.stroke();
+      bctx.setLineDash([]);
+    }
+    drawBarrage();
+    window.siteTheme && window.siteTheme.onChange(drawBarrage);
   </script>
   <script type="module">
     // The Derby platform from above: floor cells, the bowl, pits, ramps and crushers.
