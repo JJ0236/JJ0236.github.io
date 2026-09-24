@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=8';
-import * as A from './arena.js?v=8';
+import { CLASSES, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=9';
+import * as A from './arena.js?v=9';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 // Materials the module-level builders share with the renderer that made them.
@@ -1161,6 +1161,11 @@ export function createRenderer(canvas) {
     replay: () => (replay.on ? replay.label : ''),
     stopReplay: () => { replay.on = false; },
     shake: k => { cam.shake = Math.min(1.5, cam.shake + k); },
+    /** Where the camera is and which way it faces, for placing sounds. */
+    camera: () => {
+      camera.getWorldDirection(tmpV);
+      return { pos: camera.position.toArray(), yaw: Math.atan2(tmpV.z, tmpV.x) };
+    },
     thumbnail,
     info: () => ({ cam: camera.position.toArray().map(v => +v.toFixed(2)), size: [gl.domElement.width, gl.domElement.height], calls: gl.info.render.calls, ...gl.info.memory, programs: gl.info.programs.length, ratio, debris: debris.length }),
   };

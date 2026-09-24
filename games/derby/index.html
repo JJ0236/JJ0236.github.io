@@ -101,6 +101,11 @@
     .gauge .unit { font-size: 11px; color: var(--chrome-dim); margin-left: -4px; }
     .buffs { display: flex; gap: 12px; color: var(--chrome-ink); font-weight: 700; letter-spacing: 0.04em; }
     .muted { color: var(--chrome-dim); }
+    .vol { display: flex; align-items: center; gap: 4px; }
+    .vol.off { opacity: 0.5; }
+    .vol input[type=range] { width: 72px; accent-color: var(--boost); height: 14px; }
+    .vol .iconbtn { font-size: 13px; }
+    @media (max-width: 760px) { .vol input[type=range] { width: 46px; } }
 
     /* Screens inside the window */
     .screen {
@@ -425,11 +430,15 @@
 
     <div class="bar">
       <div class="grow"><div class="dash" id="dash"></div></div>
+      <span class="vol" id="vol">
+        <button class="iconbtn" id="volBtn" type="button" title="Sound">🔊</button>
+        <input type="range" id="volRange" min="0" max="100" step="5" aria-label="Volume" />
+      </span>
       <span class="dim" id="netLabel"></span>
     </div>
   </div>
 </main>
 
-<script type="module" src="./game.js?v=8"></script>
+<script type="module" src="./game.js?v=9"></script>
 </body>
 </html>

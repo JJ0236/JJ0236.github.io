@@ -6,8 +6,8 @@
 // player needs to see comes out as a view (for drawing) and as events (for
 // dents, parts flying off and effects).
 
-import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=8';
-import * as A from './arena.js?v=8';
+import { CLASSES, CLASS_IDS, PART_IDS, WHEEL_PARTS, partsFor, wheelMounts, CAR_COLOURS } from './cars.js?v=9';
+import * as A from './arena.js?v=9';
 
 export const DT = 1 / 60;
 export const MAX_CARS = 6;

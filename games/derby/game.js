@@ -5,11 +5,12 @@
 import {
   createMatch, step, snapshot, unpackSnap, view as matchView, DT, MAX_CARS, DEFAULT_SETTINGS, PICKUPS,
   addPlayer, removePlayer, createMirror, freeMirror, mirrorSync, mirrorPlace, mirrorStep, mirrorCorrect,
-} from './sim.js?v=8';
-import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=8';
-import { makeBrain, botInput } from './bots.js?v=8';
-import { createRenderer } from './render.js?v=8';
-import { openLobby, openGame } from '../shared/net.js?v=8';
+} from './sim.js?v=9';
+import { CLASSES, CLASS_IDS, CAR_COLOURS, PART_IDS } from './cars.js?v=9';
+import { makeBrain, botInput } from './bots.js?v=9';
+import { createRenderer } from './render.js?v=9';
+import { createAudio } from './audio.js?v=9';
+import { openLobby, openGame } from '../shared/net.js?v=9';
 
 const RAPIER_URL = 'https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.20.0/dist/rapier.mjs';
 const NET_ROOT = 'joshhicks-info/derby/v1';
@@ -83,6 +84,7 @@ const S = {
 };
 
 const input = { up: 0, down: 0, left: 0, right: 0, hb: 0, boost: 0, flip: 0, back: 0 };
+const audio = createAudio(store);
 let lobby = null;
 let ads = [];
 let hudKey = '';
@@ -952,6 +954,7 @@ function onEvents(events, v, time) {
   if (!events.length || !v) return;
   renderer.addEvents(events, v);
   const me = myIdxIn(v);
+  audio.events(events, v, renderer.camera(), me);
   for (const e of events) {
     if (e.type === 'round') { S.spect = -1; S.lastOut = null; S.outShown = 0; }
     if (e.type === 'go') S.goAt = time;
@@ -1273,9 +1276,15 @@ function frame(now) {
       dt: S.paused ? 0 : dt * slowK, time, players: S.players,
       follow: v ? followIdx(v) : -1, back: !!input.back && me >= 0 && v && !v.cars[me].out, meIdx: me,
     });
+    audio.update(v, renderer.camera(), me);
+    if (v && v.phase === 'countdown') {
+      const n = Math.max(0, Math.ceil(-v.t));
+      if (n !== S.beeped) { S.beeped = n; audio.beep(n); }
+    } else if (S.beeped !== undefined && v && v.phase !== 'countdown') S.beeped = undefined;
     hudT -= dt;
     if (hudT <= 0) { updateHud(v, time); hudT = 0.08; }
   } else {
+    audio.silence();
     const v = R ? stepAttract(dt) : null;
     if (attractEvents.length) { renderer.addEvents(attractEvents, v); attractEvents = []; }
     renderer.draw(v, { dt, time, players: {}, follow: -1, labels: false });
@@ -1288,12 +1297,34 @@ requestAnimationFrame(frame);
 window.__derbyDebug = () => S.m && S.m.cars.map(c => { const p = c.body.translation(); return { id: c.id, x: +p.x.toFixed(2), z: +p.z.toFixed(2), out: c.out }; });
 window.__derbyStats = () => ({ ...S.dbg, hist: S.mirror && S.mirror.hist.length, tickN: S.tickN, ack: S.snaps.length });
 window.__derbyInfo = () => renderer.info();
+window.__derbyAudio = () => audio.debug();
 window.__derbyShot = (cls, i) => renderer.thumbnail(cls, i, 900, 500);
 window.__derbyMine = () => { const v = S.lastView, i = myIdxIn(v); return i >= 0 ? v.cars[i] : null; };
+
+// Sound waits for the first click or key, as browsers require.
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => audio.wake(), { once: true });
+
+// Volume, in the status bar.
+function buildVolume() {
+  const wrap = $('vol');
+  const slider = $('volRange');
+  const btn = $('volBtn');
+  const paint = () => {
+    btn.textContent = audio.muted || audio.volume === 0 ? '🔇' : '🔊';
+    btn.setAttribute('aria-label', audio.muted ? 'Sound off' : 'Sound on');
+    slider.value = String(Math.round(audio.volume * 100));
+    wrap.classList.toggle('off', audio.muted);
+  };
+  btn.addEventListener('click', () => { audio.wake(); audio.set(audio.volume || 0.7, !audio.muted); paint(); });
+  slider.addEventListener('input', () => { audio.wake(); audio.set(+slider.value / 100, false); paint(); });
+  audio.onChange(paint);
+  paint();
+}
 
 // ── Boot ───────────────────────────────────────────────────
 
 buildClassCards();
+buildVolume();
 fit();
 show('title');
 for (const b of document.querySelectorAll('#mainMenu .gbtn')) b.disabled = true;
